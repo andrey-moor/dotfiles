@@ -21,7 +21,6 @@ let cfg = config.modules.shell.fish;
     };
 
     fishConfig = ''
-      bind \t accept-autosuggestion
       set fish_greeting !
     '' + fzfConfig;
 in {
