@@ -1,4 +1,4 @@
-{ config, options, lib, home-manager, ... }:
+{ config, options, lib, home-manager, pkgs, ... }:
 
 with lib;
 with lib.my;
@@ -15,7 +15,7 @@ with lib.my;
       binDir     = mkOpt path "${config.dotfiles.dir}/bin";
       configDir  = mkOpt path "${config.dotfiles.dir}/config";
       modulesDir = mkOpt path "${config.dotfiles.dir}/modules";
-      themesDir  = mkOpt path "${config.dotfiles.modulesDir}/themes";
+      # themesDir  = mkOpt path "${config.dotfiles.modulesDir}/themes";
     };
 
     home = {
@@ -38,12 +38,13 @@ with lib.my;
   config = {
     user =
       let user = builtins.getEnv "USER";
-          name = if elem user [ "" "root" ] then "hlissner" else user;
+          name = if elem user [ "" "root" ] then "andreym" else user;
       in {
         inherit name;
         description = "The primary user account";
-        extraGroups = [ "wheel" ];
+        extraGroups = [ "wheel" "docker" ];
         isNormalUser = true;
+        shell = pkgs.fish;
         home = "/home/${name}";
         group = "users";
         uid = 1000;
@@ -56,12 +57,12 @@ with lib.my;
 
       # I only need a subset of home-manager's capabilities. That is, access to
       # its home.file, home.xdg.configFile and home.xdg.dataFile so I can deploy
-      # files easily to my $HOME, but 'home-manager.users.hlissner.home.file.*'
+      # files easily to my $HOME, but 'home-manager.users.andreym.home.file.*'
       # is much too long and harder to maintain, so I've made aliases in:
       #
-      #   home.file        ->  home-manager.users.hlissner.home.file
-      #   home.configFile  ->  home-manager.users.hlissner.home.xdg.configFile
-      #   home.dataFile    ->  home-manager.users.hlissner.home.xdg.dataFile
+      #   home.file        ->  home-manager.users.andreym.home.file
+      #   home.configFile  ->  home-manager.users.andreym.home.xdg.configFile
+      #   home.dataFile    ->  home-manager.users.andreym.home.xdg.dataFile
       users.${config.user.name} = {
         home = {
           file = mkAliasDefinitions options.home.file;
@@ -74,6 +75,7 @@ with lib.my;
           dataFile   = mkAliasDefinitions options.home.dataFile;
         };
       };
+
     };
 
     users.users.${config.user.name} = mkAliasDefinitions options.user;

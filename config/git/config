@@ -1,14 +1,14 @@
 [user]
-	name = Henrik Lissner
-	email = henrik@lissner.net
+	name = Andrey Moor
+	email = moor.andrey@gmail.com
 [core]
 	whitespace = trailing-space
 [init]
 	defaultBranch = main
 [github]
-	user = hlissner
+	user = andrey-moor
 [gitlab]
-	user = hlissner
+	user = andrey-moor
 [rebase]
 	autosquash = true
 [push]
@@ -30,7 +30,7 @@
     insteadOf = gh:
 [url "git@github.com:"]
     insteadOf = ssh+gh:
-[url "git@github.com:hlissner/"]
+[url "git@github.com:andrey-moor/"]
     insteadOf = gh:/
 [url "https://gitlab.com/"]
     insteadOf = gl:

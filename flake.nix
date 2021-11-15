@@ -1,7 +1,7 @@
 # flake.nix --- the heart of my dotfiles
 #
 # Author:  Henrik Lissner <henrik@lissner.net>
-# URL:     https://github.com/hlissner/dotfiles
+# URL:     https://github.com/andrey-moor/dotfiles
 # License: MIT
 #
 # Welcome to ground zero. Where the whole flake gets set up and all its modules
@@ -10,18 +10,29 @@
 {
   description = "A grossly incandescent nixos config.";
 
-  inputs = 
+  inputs =
     {
       # Core dependencies.
       nixpkgs.url = "nixpkgs/nixos-unstable";             # primary nixpkgs
       nixpkgs-unstable.url = "nixpkgs/nixpkgs-unstable";  # for packages on the edge
-      home-manager.url = "github:rycee/home-manager/master";
-      home-manager.inputs.nixpkgs.follows = "nixpkgs";
+      # home-manager.url = "github:rycee/home-manager/master";
+      # home-manager.inputs.nixpkgs.follows = "nixpkgs";
       agenix.url = "github:ryantm/agenix";
       agenix.inputs.nixpkgs.follows = "nixpkgs";
+      home-manager-unstable = {
+        url = "github:nix-community/home-manager/release-21.05";
+        inputs.nixpkgs.follows = "nixpkgs-unstable";
+      };
+
+      home-manager = {
+        url = "github:nix-community/home-manager/release-21.05";
+
+        # We want home-manager to use the same set of nixpkgs as our system.
+        inputs.nixpkgs.follows = "nixpkgs";
+      };
+
 
       # Extras
-      emacs-overlay.url  = "github:nix-community/emacs-overlay";
       nixos-hardware.url = "github:nixos/nixos-hardware";
     };
 
@@ -62,8 +73,8 @@
       nixosConfigurations =
         mapHosts ./hosts {};
 
-      devShell."${system}" =
-        import ./shell.nix { inherit pkgs; };
+      # devShell."${system}" =
+      #   import ./shell.nix { inherit pkgs; };
 
       templates = {
         full = {

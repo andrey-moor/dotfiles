@@ -2,7 +2,7 @@
   description = "A grossly incandescent nixos config.";
 
   inputs = {
-    dotfiles.url = "github:hlissner/dotfiles";
+    dotfiles.url = "github:andrey-moor/dotfiles";
   };
 
   outputs = inputs @ { dotfiles, ... }: {
