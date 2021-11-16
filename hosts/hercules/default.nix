@@ -1,4 +1,4 @@
-{ pkgs, config, lib, ... }:
+{ self, pkgs, config, lib, ... }:
 {
   imports = [
     ../home.nix
@@ -7,7 +7,14 @@
 
   virtualisation.vmware.guest.enable = true;
 
-  users.users.andreym.hashedPassword = "$5$nw148GYjnRcBJihu$DHJVly9snAijKAKPhQKhgi/AUeHPXNpZWKey0WHp99B";
+  age.secrets = {
+    valts.file = "${self}/secrets/hercules.age";
+  };
+
+  options.user.passwordFile = "/run/secrets/hercules";
+
+  users.users.andreym.hashedPassword = "$5$DjiUYXo9Q3RTiIkv$TYUHX6H4RnxcwxFZlyqzZpJNLqfYEw0tWx.9YsSypt8";
+  # user.hashedPassword = "$5$DjiUYXo9Q3RTiIkv$TYUHX6H4RnxcwxFZlyqzZpJNLqfYEw0tWx.9YsSypt8";
 
   ## Modules
   modules = {
