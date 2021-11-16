@@ -12,6 +12,12 @@
     kernelModules = [ ];
   };
 
+  environment.systemPackages = with pkgs; [
+    open-vm-tools
+  ];
+
+  virtualisation.vmware.guest.enable = true;
+
   # We expect to run the VM on hidpi machines.
   hardware.video.hidpi.enable = true;
 

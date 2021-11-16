@@ -15,6 +15,12 @@ with lib;
         hostName = config.networking.hostName;
     in mkIf (builtins.elem hostName hosts) hostConfig;
 
+  nixpkgs.overlays = [
+    (import (builtins.fetchTarball {
+      url = https://github.com/nix-community/neovim-nightly-overlay/archive/master.tar.gz;
+    }))
+  ];
+
   ## Location config -- since Toronto is my 127.0.0.1
   time.timeZone = mkDefault "America/Los_Angeles";
   i18n.defaultLocale = mkDefault "en_US.UTF-8";

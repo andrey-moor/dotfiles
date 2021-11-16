@@ -32,6 +32,7 @@
       git.enable    = true;
       gnupg.enable  = true;
       tmux.enable   = true;
+      neovim.enable   = true;
     };
     services = {
       ssh.enable = true;
