@@ -62,6 +62,7 @@
   boot.kernelModules = [ "tcp_bbr" ];
 
   # Change me later!
+  # user.passwordFile = config.age.secrets.hercules.path;
   user.initialPassword = "nixos";
   users.users.root.initialPassword = "nixos";
 

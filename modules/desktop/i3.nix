@@ -31,9 +31,10 @@ in {
         '';
       };
 
+      # i3: realpath(/etc/i3/config): No such file or directory
       windowManager.i3 = {
         enable = true;
-        configFile = "${configDir}/i3/i3";
+        # configFile = path "$XDG_CONFIG_HOME/i3/config";
         extraPackages = with pkgs; [
           # rofi #application launcher most people use
           i3status # gives you the default i3 status bar

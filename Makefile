@@ -58,17 +58,21 @@ vm/bootstrap:
 # copy our secrets into the VM
 vm/secrets:
 	# GPG keyring
-	rsync -av -e 'ssh $(SSH_OPTIONS)' \
-		--exclude='.#*' \
-		--exclude='S.*' \
-		--exclude='*.conf' \
-		$(HOME)/.gnupg/ $(NIXUSER)@$(NIXADDR):/home/andreym/.gnupg
+	# rsync -av -e 'ssh $(SSH_OPTIONS)' \
+	# 	--exclude='.#*' \
+	# 	--exclude='S.*' \
+	# 	--exclude='*.conf' \
+	# 	$(HOME)/.gnupg/ $(NIXUSER)@$(NIXADDR):/home/andreym/.gnupg
 	# SSH keys
+	# rsync -av -e 'ssh $(SSH_OPTIONS)' \
+	# 	--exclude='environment' \
+	# 	$(HOME)/.ssh/ $(NIXUSER)@$(NIXADDR):/home/andreym/.ssh
+
 	rsync -av -e 'ssh $(SSH_OPTIONS)' \
 		--exclude='environment' \
-		$(HOME)/.ssh/ $(NIXUSER)@$(NIXADDR):/home/andreym/.ssh
+		$(HOME)/.ssh/ $(NIXUSER)@$(NIXADDR):/root/.ssh
 
-# copy the Nix configurations into the VM.
+# copy the Nix configurations into the VM. /home/andreym/nixos /mnt/etc/nixos
 vm/copy:
 	rsync -av -e 'ssh $(SSH_OPTIONS) -p$(NIXPORT)' \
 		--exclude='vendor/' \
@@ -76,7 +80,7 @@ vm/copy:
 		--exclude='.git-crypt/' \
 		--exclude='iso/' \
 		--rsync-path="sudo rsync" \
-		$(MAKEFILE_DIR)/ $(NIXUSER)@$(NIXADDR):/home/andreym/nixos
+		$(MAKEFILE_DIR)/ $(NIXUSER)@$(NIXADDR):/mnt/etc/nixos
 
 # run the nixos-rebuild switch command. This does NOT copy files so you
 # have to run vm/copy before.

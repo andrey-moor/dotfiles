@@ -16,6 +16,11 @@ in {
 
       shortcut = "l";
 
+      extraConfig = ''
+        set -g lock-after-time 300
+        set -g lock-command "pipes.sh"
+      '';
+
       plugins = with pkgs.tmuxPlugins; [
         pain-control
         nord # theme

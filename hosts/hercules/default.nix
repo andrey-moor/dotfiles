@@ -1,20 +1,12 @@
-{ self, pkgs, config, lib, ... }:
+{ config, lib, ... }:
 {
   imports = [
     ../home.nix
     ./hardware-configuration.nix
+    ./modules/user.nix
   ];
 
   virtualisation.vmware.guest.enable = true;
-
-  age.secrets = {
-    valts.file = "${self}/secrets/hercules.age";
-  };
-
-  options.user.passwordFile = "/run/secrets/hercules";
-
-  users.users.andreym.hashedPassword = "$5$DjiUYXo9Q3RTiIkv$TYUHX6H4RnxcwxFZlyqzZpJNLqfYEw0tWx.9YsSypt8";
-  # user.hashedPassword = "$5$DjiUYXo9Q3RTiIkv$TYUHX6H4RnxcwxFZlyqzZpJNLqfYEw0tWx.9YsSypt8";
 
   ## Modules
   modules = {
@@ -24,7 +16,7 @@
         default = "brave";
         brave.enable = true;
       };
-      rider.enable = true;
+      rider.enable = false;
     };
     editors = {
       default = "nvim";
