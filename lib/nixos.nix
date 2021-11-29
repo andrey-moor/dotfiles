@@ -2,7 +2,7 @@
 
 with lib;
 with lib.my;
-let sys = "x86_64-linux";
+let sys = "aarch64-linux";
 in {
   mkHost = path: attrs @ { system ? sys, ... }:
     nixosSystem {

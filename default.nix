@@ -66,6 +66,8 @@ with lib.my;
     killall
     rxvt_unicode
     xclip
+    jdk11
+
 
     # TODO: Review
     feh
@@ -86,7 +88,7 @@ with lib.my;
       xrandr -s 6016x3384_60.00
     '')
     (writeShellScriptBin "xrandr-mbp" ''
-      xrandr -s 2880x1800
+      xrandr -s 3024x1964
     '')
   ];
 }

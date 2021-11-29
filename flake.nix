@@ -17,8 +17,8 @@
       nixpkgs-unstable.url = "nixpkgs/nixpkgs-unstable";  # for packages on the edge
       # home-manager.url = "github:rycee/home-manager/master";
       # home-manager.inputs.nixpkgs.follows = "nixpkgs";
-      agenix.url = "github:ryantm/agenix";
-      agenix.inputs.nixpkgs.follows = "nixpkgs";
+      #agenix.url = "github:ryantm/agenix";
+      #agenix.inputs.nixpkgs.follows = "nixpkgs";
       home-manager-unstable = {
         url = "github:nix-community/home-manager/release-21.05";
         inputs.nixpkgs.follows = "nixpkgs-unstable";
@@ -40,7 +40,7 @@
     let
       inherit (lib.my) mapModules mapModulesRec mapHosts;
 
-      system = "x86_64-linux";
+      system = "aarch64-linux";
 
       mkPkgs = pkgs: extraOverlays: import pkgs {
         inherit system;

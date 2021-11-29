@@ -3,7 +3,6 @@
   imports = [
     ../home.nix
     ./hardware-configuration.nix
-    ./modules/user.nix
     ./modules/vmware-guest.nix
   ];
 
@@ -52,7 +51,7 @@
     };
     shell = {
       alacritty.enable = true;
-      kitty.enable = false;
+      kitty.enable = true;
       fish.enable = true;
       rofi.enable = true;
       direnv.enable = true;
@@ -77,5 +76,7 @@
   # The global useDHCP flag is deprecated, therefore explicitly set to false
   # here. Per-interface useDHCP will be mandatory in the future, so this
   # generated config replicates the default behaviour.
+  # M1
   networking.useDHCP = false;
+  #networking.interfaces.ens160.useDHCP = true;
 }

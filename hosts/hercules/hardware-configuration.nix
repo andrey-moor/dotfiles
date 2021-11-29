@@ -3,7 +3,13 @@
 {
   imports = [
     "${modulesPath}/installer/scan/not-detected.nix"
+    #./modules/parallels-guest.nix
   ];
+
+  #hardware.parallels = {
+  #  enable = true;
+  #  package = (config.boot.kernelPackages.callPackage ./modules/prl-tools.nix {});
+  #};
 
   boot = {
     initrd.availableKernelModules = [ "ata_piix" "mptspi" "uhci_hcd" "ehci_pci" "sd_mod" "sr_mod" ];
@@ -16,7 +22,8 @@
     open-vm-tools
   ];
 
-  virtualisation.vmware.guest.enable = true;
+  # virtualisation.vmware.guest.enable = true;
+  #disabledModules = [ "virtualisation/parallels-guest.nix" ];
 
   # We expect to run the VM on hidpi machines.
   hardware.video.hidpi.enable = true;

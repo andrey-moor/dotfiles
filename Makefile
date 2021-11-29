@@ -1,7 +1,7 @@
 # Connectivity info for Linux VM
 NIXADDR ?= unset
 NIXPORT ?= 22
-NIXUSER ?= mitchellh
+NIXUSER ?= andreym 
 
 # Settings
 NIXBLOCKDEVICE ?= sda
@@ -37,7 +37,7 @@ vm/bootstrap0:
 		parted /dev/$(NIXBLOCKDEVICE) -- mkpart ESP fat32 1MiB 512MiB; \
 		parted /dev/$(NIXBLOCKDEVICE) -- set 3 esp on; \
 		mkfs.ext4 -L nixos /dev/$(NIXBLOCKDEVICE)1; \
-		mkswap -L swap /dev/$(NIXBLOCKDEVICE)2; \
+		mkswap  -f -L swap /dev/$(NIXBLOCKDEVICE)2; \
 		mkfs.fat -F 32 -n boot /dev/$(NIXBLOCKDEVICE)3; \
 		mount /dev/disk/by-label/nixos /mnt; \
 		mkdir -p /mnt/boot; \
@@ -80,7 +80,7 @@ vm/copy:
 		--exclude='.git-crypt/' \
 		--exclude='iso/' \
 		--rsync-path="sudo rsync" \
-		$(MAKEFILE_DIR)/ $(NIXUSER)@$(NIXADDR):/mnt/etc/nixos
+		$(MAKEFILE_DIR)/ $(NIXUSER)@$(NIXADDR):/home/andreym/nixos
 
 # run the nixos-rebuild switch command. This does NOT copy files so you
 # have to run vm/copy before.

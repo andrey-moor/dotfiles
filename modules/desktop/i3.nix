@@ -13,7 +13,7 @@ in {
     services.xserver = {
       enable = true;
       layout = "us";
-      dpi = 160;
+      dpi = 250;
 
       desktopManager = {
         xterm.enable = false;
@@ -28,7 +28,7 @@ in {
         # display resolution. This is a known issue with VMware Fusion.
         sessionCommands = ''
           ${pkgs.xlibs.xset}/bin/xset r rate 200 40
-          ${pkgs.xorg.xrandr}/bin/xrandr -s '2880x1800'
+          ${pkgs.xorg.xrandr}/bin/xrandr -s '3840x2400'
         '';
       };
 

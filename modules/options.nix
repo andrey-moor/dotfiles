@@ -42,7 +42,7 @@ with lib.my;
       in {
         inherit name;
         description = "The primary user account";
-        extraGroups = [ "wheel" "docker" ];
+        extraGroups = [ "wheel" "docker" "video" ];
         isNormalUser = true;
         shell = pkgs.fish;
         home = "/home/${name}";
