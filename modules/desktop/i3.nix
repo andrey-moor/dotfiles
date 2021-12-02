@@ -44,22 +44,22 @@ in {
       };
     };
 
-    fonts = {
-        fonts = with pkgs; [
-          (nerdfonts.override { fonts = [ "FiraCode" "JetBrainsMono" ]; })
-        ];
-        fontconfig.defaultFonts = {
-          sansSerif = ["Fira Sans"];
-          monospace = ["JetBrains Mono"];
-        };
-      };
+    #fonts = {
+    #    fonts = with pkgs; [
+    #      (nerdfonts.override { fonts = [ "FiraCode" "JetBrainsMono" ]; })
+    #    ];
+    #    fontconfig.defaultFonts = {
+    #      sansSerif = ["Fira Sans"];
+    #      monospace = ["JetBrains Mono"];
+    #    };
+    #  };
 
     # link recursively so other modules can link files in their folders
-    home.configFile = {
-      "i3" = {
-        source = "${configDir}/i3";
-        recursive = true;
-      };
-    };
+    #home.configFile = {
+    #  "i3" = {
+    #    source = "${configDir}/i3";
+    #    recursive = true;
+    #  };
+    #};
   };
 }

@@ -46,11 +46,10 @@ with lib.my;
 
   # Use the latest kernel
   boot = {
-    kernelPackages = mkDefault pkgs.linuxPackages_5_14;
+    kernelPackages = mkDefault pkgs.linuxPackages_5_15;
     loader = {
-      efi.canTouchEfiVariables = mkDefault true;
-      systemd-boot.configurationLimit = 10;
-      systemd-boot.enable = mkDefault true;
+      efi.canTouchEfiVariables = true;
+      systemd-boot.enable = true;
     };
   };
 

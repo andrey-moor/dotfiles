@@ -20,9 +20,7 @@ let cfg = config.modules.shell.fish;
       src = pkgs.fishPlugins.fzf-fish.src;
     };
 
-    fishConfig = ''
-      set fish_greeting !
-    '' + fzfConfig;
+    fishConfig = fzfConfig;
 in {
   options.modules.shell.fish = with types; {
     enable = mkBoolOpt false;
@@ -70,6 +68,7 @@ in {
         '';
 
         shellAliases = {
+          g = "git";
           ga = "git add";
           gc = "git commit";
           gco = "git checkout";
