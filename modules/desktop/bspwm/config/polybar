@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set UID $(id -u $$whoami)
+
 pkill -u $UID -x polybar
 while pgrep -u $UID -x polybar >/dev/null; do sleep 1; done
 
