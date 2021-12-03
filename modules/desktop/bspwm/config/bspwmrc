@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-export MONITOR=$(xrandr -q | grep primary | cut -d' ' -f1)
-export MONITORS=( $(xrandr -q | grep ' connected' | cut -d' ' -f1) )
+export MONITOR=(xrandr -q | grep primary | cut -d' ' -f1)
+export MONITORS=(xrandr -q | grep ' connected' | cut -d' ' -f1)
 set MONITOR ${MONITOR:-${MONITORS[0]}}
 
 # Only have workspaces for primary monitor
