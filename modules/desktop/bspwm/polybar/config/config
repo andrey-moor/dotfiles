@@ -19,7 +19,7 @@ bwhite = ${xrdb:color15}
 bg = ${xrdb:background}
 fg = ${xrdb:color6}
 bg-alt = #1E2029
-fg-alt = #373844
+fg-alt = ${xrdb:color8}
 bg-dark = #181a23
 
 alert = ${colors.yellow}
@@ -62,9 +62,10 @@ padding-right = 2
 module-margin-left = 0
 module-margin-right = 0
 
-font-0 = "Fira Code:pixelsize=16;2"
-font-1 = "Wuncon Siji:pixelsize=12;2"
-font-2 = "Siji:pixelsize=10;2"
+font-0 = "Fira Code:pixelsize=18;2"
+font-1 = "JetBrainsMono Nerd Font Mono:style=Regular:pixelsize=32;6"
+#font-1 = "Wuncon Siji:pixelsize=16:size=12;2"
+#font-2 = "Siji:pixelsize=16:size=12;2"
 
 ; modules-left = volume pad cpu memory pad pkg mail
 modules-left = cpu memory pad 
@@ -87,7 +88,7 @@ enable-click = true
 # ws-icon-3 = 4;
 # ws-icon-4 = 5;
 # ws-icon-5 = 6;
-ws-icon-default = 
+ws-icon-default = ""
 
 format = <label-state> <label-mode>
 label-padding = 1
@@ -121,7 +122,7 @@ date = %A, %h %d
 date-alt = %Y-%m-%d
 time = %I:%M %p
 time-alt = %H:%M:%S
-format-prefix = ""
+format-prefix = ""
 format-prefix-padding = 1
 ; format-prefix-background = ${colors.bg-alt}
 format-prefix-foreground = ${colors.accent}
@@ -202,7 +203,7 @@ label-padding-left = 2
 type = internal/cpu
 interval = 2
 format = <bar-load>
-format-prefix = ""
+format-prefix = ""
 format-foreground = ${colors.accent}
 ; format-underline = #f90000
 ; label = %percentage%%
@@ -223,7 +224,7 @@ bar-load-empty-foreground = ${colors.fg-alt}
 type = internal/memory
 interval = 3
 format = <bar-used>
-format-prefix = ""
+format-prefix = ""
 format-prefix-foreground = ${colors.accent}
 ; format-underline = #4bffdc
 ; label = %percentage_used%%
@@ -376,3 +377,4 @@ format-foreground = ${colors.fg}
 interval = 30
 
 ; vim:ft=dosini
+
