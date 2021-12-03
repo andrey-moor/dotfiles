@@ -32,6 +32,8 @@ in {
         vim-nix                 # nix support (highlighting, etc)
         vim-devicons
         nord-nvim               # Nord theme
+        dashboard-nvim          # dashboard
+        bufferline-nvim
 
         lightline-vim
 
