@@ -67,9 +67,9 @@ font-1 = "Wuncon Siji:pixelsize=12;2"
 font-2 = "Siji:pixelsize=10;2"
 
 ; modules-left = volume pad cpu memory pad pkg mail
-modules-left = pulseaudio pad cpu memory pad fs
+modules-left = cpu memory pad fs
 modules-center = bspwm
-modules-right = syncthing redshift wlan pad network-up pad network-down pad battery pad date
+modules-right = syncthing wlan pad network-up pad network-down pad battery pad date
 
 ;tray-position = center
 ;tray-padding = 2

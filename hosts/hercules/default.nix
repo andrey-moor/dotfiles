@@ -14,6 +14,7 @@
 
   ## Modules
   modules = {
+    theme.active = "nord";
     desktop = {
       bspwm.enable = true;
       i3.enable = false;
