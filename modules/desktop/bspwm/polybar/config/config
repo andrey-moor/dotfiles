@@ -17,18 +17,18 @@ white = ${xrdb:color7}
 bwhite = ${xrdb:color15}
 
 bg = ${xrdb:background}
-fg = ${colors.magenta}
+fg = ${xrdb:color6}
 bg-alt = #1E2029
 fg-alt = #373844
 bg-dark = #181a23
 
 alert = ${colors.yellow}
-accent = #604c7e
+accent = ${xrdb:color6}
 
 
 [global/wm]
 margin-top = 0
-margin-bottom = 34
+margin-bottom = 64 
 
 [bar/main]
 monitor = ${env:MONITOR}
@@ -43,7 +43,7 @@ background = ${colors.bg}
 foreground = ${colors.fg}
 
 width = 100%
-height = 34
+height = 64
 offset-x = 0
 offset-y = 0
 bottom = true
@@ -62,7 +62,7 @@ padding-right = 2
 module-margin-left = 0
 module-margin-right = 0
 
-font-0 = "Fira Code:pixelsize=9;2"
+font-0 = "Fira Code:pixelsize=16;2"
 font-1 = "Wuncon Siji:pixelsize=12;2"
 font-2 = "Siji:pixelsize=10;2"
 

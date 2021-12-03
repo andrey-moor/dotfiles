@@ -62,7 +62,7 @@ in {
     home.configFile = {
       "sxhkd".source = "${configDir}/sxhkd/config";
       "bspwm/rc.d/polybar".source = ./config/polybar;
-      "bspwm/rc.d/theme".source = ./config/bspwmrc;
+      "bspwm/rc.d/theme".source = ./config/bspwm_theme;
       "bspwm" = {
         source = "${configDir}/bspwm/config";
         recursive = true;
