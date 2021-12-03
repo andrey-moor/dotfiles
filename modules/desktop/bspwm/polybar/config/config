@@ -69,7 +69,7 @@ font-2 = "Siji:pixelsize=10;2"
 ; modules-left = volume pad cpu memory pad pkg mail
 modules-left = cpu memory pad fs
 modules-center = bspwm
-modules-right = syncthing wlan pad network-up pad network-down pad battery pad date
+modules-right = syncthing pad date
 
 ;tray-position = center
 ;tray-padding = 2
@@ -130,8 +130,8 @@ format-prefix-foreground = ${colors.accent}
 [module/fs]
 type = internal/fs
 mount-0 = /
-mount-1 = /mnt/projects  ; for desktops
-mount-2 = /home          ; for laptop
+mount-1 = /home/andreym/Projects  ; for desktops
+; mount-2 = /home                   ; for laptop
 interval = 30
 
 ; Available tags:
