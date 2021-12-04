@@ -87,5 +87,5 @@ autocmd BufEnter * if bufname('#') =~ 'NERD_tree_\d\+' && bufname('%') !~ 'NERD_
 " Mirror the NERDTree before showing it. This makes it the same on all tabs.
 nnoremap <C-n> :NERDTreeMirror<CR>:NERDTreeFocus<CR>
 
-# NerdTree
+" NerdTree
 let g:NERDTreeGitStatusUseNerdFonts = 1
