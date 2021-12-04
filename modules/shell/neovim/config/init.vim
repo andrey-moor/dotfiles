@@ -89,3 +89,4 @@ nnoremap <C-n> :NERDTreeMirror<CR>:NERDTreeFocus<CR>
 
 " NerdTree
 let g:NERDTreeGitStatusUseNerdFonts = 1
+
