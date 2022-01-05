@@ -75,7 +75,6 @@ with lib.my;
           dataFile   = mkAliasDefinitions options.home.dataFile;
         };
       };
-
     };
 
     users.users.${config.user.name} = mkAliasDefinitions options.user;

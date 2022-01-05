@@ -38,7 +38,7 @@ in {
           # display resolution. This is a known issue with VMware Fusion.
           sessionCommands = ''
             ${pkgs.xlibs.xset}/bin/xset r rate 200 40
-            ${pkgs.xorg.xrandr}/bin/xrandr -s '3840x2160'
+            ${pkgs.xorg.xrandr}/bin/xrandr -s '3840x2400'
           '';
 
         };
@@ -57,7 +57,7 @@ in {
     #  serviceConfig.RestartSec = 2;
     #  serviceConfig.ExecStart = "${pkgs.dunst}/bin/dunst";
     #};
-
+    
     # link recursively so other modules can link files in their folders
     home.configFile = {
       "sxhkd".source = "${configDir}/sxhkd/config";

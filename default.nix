@@ -66,6 +66,15 @@ with lib.my;
     rxvt_unicode
     xclip
 
+    # JetBrains stuff
+    jetbrains.jdk
+    dotnet-sdk_5
+
+    _jetbrains.rider
+
+    # dev
+    kubectl
+    awscli
 
     # TODO: Review
     feh
