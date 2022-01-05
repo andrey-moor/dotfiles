@@ -77,9 +77,9 @@ let
       };
     }).overrideAttrs (attrs: {
       postPatch = lib.optionalString (!stdenv.isDarwin) (attrs.postPatch + ''
-        rm -rf lib/ReSharperHost/linux-x64/dotnet
-        mkdir -p lib/ReSharperHost/linux-x64/dotnet/
-        ln -s ${dotnet-sdk_5}/bin/dotnet lib/ReSharperHost/linux-x64/dotnet/dotnet
+        rm -rf lib/ReSharperHost/linux-arm64/dotnet
+        mkdir -p lib/ReSharperHost/linux-arm64/dotnet/
+        ln -s ${dotnet-sdk_5}/bin/dotnet lib/ReSharperHost/linux-arm64/dotnet/dotnet
       '');
     });
 in
