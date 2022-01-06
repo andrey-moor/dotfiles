@@ -46,6 +46,9 @@ with stdenv; lib.makeOverridable mkDerivation (rec {
     mkdir -p $out/{bin,$name,share/pixmaps,libexec/${name}}
     cp -a . $out/$name
     ln -s $out/$name/bin/${loName}.png $out/share/pixmaps/${mainProgram}.png
+    
+    cp fsnotifier $out/libexec/${name}/.
+    
     jdk=${jdk.home}
     item=${desktopItem}
     makeWrapper "$out/$name/bin/${loName}.sh" "$out/bin/${mainProgram}" \
