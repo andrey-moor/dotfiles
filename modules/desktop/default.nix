@@ -31,11 +31,12 @@ in {
     fonts = {
       fontDir.enable = true;
       fonts = with pkgs; [
-        (nerdfonts.override { fonts = [ "FiraCode" "JetBrainsMono" ]; })
+        (nerdfonts.override { fonts = [ "SourceCodePro" "FiraCode" "JetBrainsMono" ]; })
       ];
       fontconfig.defaultFonts = {
-        sansSerif = ["Fira Sans"];
-        monospace = ["JetBrains Mono"];
+        monospace = [ "Source Code Pro" ];
+        sansSerif = [ "Source Sans Pro" ];
+        serif     = [ "Source Serif Pro" ];
       };
     };
 

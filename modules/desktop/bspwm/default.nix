@@ -27,6 +27,12 @@ in {
     services = {
       picom.enable = false;
       #redshift.enable = true;
+      
+      xrdp = {
+        enable = true;
+        #defaultWindowManager = "none+bspwm";
+      };
+
       xserver = {
         enable = true;
         displayManager = {
@@ -48,6 +54,8 @@ in {
         };
       };
     };
+
+    networking.firewall.allowedTCPPorts = [ 5900 ];
 
     #systemd.user.services."dunst" = {
     #  enable = true;

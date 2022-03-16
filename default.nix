@@ -70,7 +70,7 @@ with lib.my;
     jetbrains.jdk
     dotnet-sdk_5
 
-    my.jetbrains.rider
+    # my.jetbrains.rider
 
     # dev
     kubectl

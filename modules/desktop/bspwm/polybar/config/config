@@ -28,7 +28,7 @@ accent = ${xrdb:color6}
 
 [global/wm]
 margin-top = 0
-margin-bottom = 64 
+margin-bottom = 96 
 
 [bar/main]
 monitor = ${env:MONITOR}
@@ -43,7 +43,7 @@ background = ${colors.bg}
 foreground = ${colors.fg}
 
 width = 100%
-height = 64
+height = 96
 offset-x = 0
 offset-y = 0
 bottom = true
@@ -62,7 +62,7 @@ padding-right = 2
 module-margin-left = 0
 module-margin-right = 0
 
-font-0 = "Fira Code:pixelsize=18;4"
+font-0 = "Sauce Code Pro Nerd Font Complete Mono:pixelsize=24;4"
 font-1 = "JetBrainsMono Nerd Font Mono:style=Regular:pixelsize=32;6"
 #font-1 = "Wuncon Siji:pixelsize=16:size=12;2"
 #font-2 = "Siji:pixelsize=16:size=12;2"

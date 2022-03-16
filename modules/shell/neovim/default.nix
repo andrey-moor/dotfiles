@@ -31,11 +31,22 @@ in {
         vim-fugitive            # git plugin
         vim-nix                 # nix support (highlighting, etc)
         vim-devicons
-        nord-nvim               # Nord theme
+        nord-vim                # Nord theme
         dashboard-nvim          # dashboard
         bufferline-nvim
 
+
+        coc-nvim
+        coc-tsserver
+        coc-prettier
+        coc-eslint
+        auto-pairs
+        nerdcommenter
+
+        vim-gitgutter
+
         lightline-vim
+        indentLine
 
         nerdtree                # tree explorer
         nerdtree-git-plugin     # shows files git status on the NerdTree
