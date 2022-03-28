@@ -17,7 +17,7 @@ in {
       shortcut = "l";
 
       extraConfig = ''
-        set -g lock-after-time 600
+        set -g lock-after-time 3600
         set -g lock-command "pipes.sh"
       '';
 

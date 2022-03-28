@@ -34,7 +34,7 @@ in {
         (nerdfonts.override { fonts = [ "SourceCodePro" "FiraCode" "JetBrainsMono" ]; })
       ];
       fontconfig.defaultFonts = {
-        monospace = [ "Source Code Pro" ];
+        monospace = [ "Sauce Code Pro Medium Nerd Font Complete Mono" ];
         sansSerif = [ "Source Sans Pro" ];
         serif     = [ "Source Serif Pro" ];
       };

@@ -65,12 +65,15 @@ with lib.my;
     killall
     rxvt_unicode
     xclip
+    
+    gopls
 
     # JetBrains stuff
     jetbrains.jdk
     dotnet-sdk_5
 
     # my.jetbrains.rider
+    x11vnc
 
     # dev
     kubectl

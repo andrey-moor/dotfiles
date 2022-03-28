@@ -40,13 +40,19 @@ in {
         coc-tsserver
         coc-prettier
         coc-eslint
+        coc-lists
         auto-pairs
         nerdcommenter
 
         vim-gitgutter
 
-        lightline-vim
+        #lightline-vim
+        vim-airline
+        vim-airline-themes
         indentLine
+
+        nvim-lspconfig
+
 
         nerdtree                # tree explorer
         nerdtree-git-plugin     # shows files git status on the NerdTree
