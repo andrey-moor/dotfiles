@@ -103,7 +103,8 @@ let g:coc_global_extensions = [
   \ 'coc-css', 
   \ 'coc-html', 
   \ 'coc-json', 
-  \ 'coc-prettier'
+  \ 'coc-prettier',
+  \ 'coc-go'
   \ ]
 
 
@@ -334,8 +335,3 @@ let g:airline#extensions#tabline#left_sep = ' '
 let g:airline#extensions#tabline#left_alt_sep = '|'
 let g:airline#extensions#tabline#formatter = 'default'
 
-" lsp config
-lua require("lsp_config")
-
-autocmd BufWritePre *.go lua vim.lsp.buf.formatting()
-autocmd BufWritePre *.go lua goimports(1000)

@@ -3,7 +3,7 @@
 with lib;
 with lib.my;
 let cfg = config.modules.shell.neovim;
-    configDir = "${config.dotfiles.modulesDir}/shell/neovim/config";
+    configDir = "${config.dotfiles.modulesDir}/shell";
 in {
   options.modules.shell.neovim = with types; {
     enable = mkBoolOpt false;
@@ -51,8 +51,9 @@ in {
         vim-airline-themes
         indentLine
 
-        nvim-lspconfig
-
+        # nvim-lspconfig
+        # nvim-cmp
+        # cmp-nvim-lsp
 
         nerdtree                # tree explorer
         nerdtree-git-plugin     # shows files git status on the NerdTree
