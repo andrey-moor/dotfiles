@@ -26,6 +26,7 @@ in {
       # ];
 
       plugins = with pkgs.vimPlugins; [
+        plenary-nvim
         telescope-nvim          # fuzzy finder
         vim-fish                # fish shell highlighting
         vim-fugitive            # git plugin
@@ -33,8 +34,9 @@ in {
         vim-devicons
         nord-vim                # Nord theme
         dashboard-nvim          # dashboard
-        bufferline-nvim
-
+        # bufferline-nvim
+        vim-surround
+        vim-unimpaired
 
         coc-nvim
         coc-tsserver
@@ -57,12 +59,13 @@ in {
 
         nerdtree                # tree explorer
         nerdtree-git-plugin     # shows files git status on the NerdTree
+        vim-nerdtree-syntax-highlight
 
-        completion-nvim
+        # completion-nvim
         (nvim-treesitter.withPlugins (
           plugins: pkgs.tree-sitter.allGrammars
         ))
-        # nvim-treesitter-playground
+        # # nvim-treesitter-playground
         nvim-treesitter-textobjects
       ];
     };

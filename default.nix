@@ -46,13 +46,13 @@ with lib.my;
 
   # Use the latest kernel
   boot = {
-    kernelPackages = mkDefault pkgs.linuxPackages_5_15;
+    kernelPackages = mkDefault pkgs.linuxPackages_latest;
     loader = {
       efi.canTouchEfiVariables = true;
       systemd-boot.enable = true;
     };
   };
-
+  
   # Just the bear necessities...
   environment.systemPackages = with pkgs; [
     bind
@@ -65,7 +65,17 @@ with lib.my;
     killall
     rxvt_unicode
     xclip
-    
+    tree
+    ripgrep
+
+    # YubiKey
+    gnupg
+    pinentry-curses
+    pinentry-qt
+    paperkey
+    yubikey-manager
+    yubikey-personalization
+
     gopls
 
     # JetBrains stuff

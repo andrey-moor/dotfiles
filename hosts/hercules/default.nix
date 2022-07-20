@@ -44,11 +44,23 @@
       docker.enable = true;
     };
   };
-
-
+  
   ## Local config
-  programs.ssh.startAgent = true;
+  # programs.ssh.startAgent = true;
   services.openssh.startWhenNeeded = true;
+
+  #services.gpg-agent = {
+  #  enable = true;
+  #  pinentryFlavor = "tty";
+
+  #  # cache the keys forever so we don't get asked for a password
+  #  defaultCacheTtl = 31536000;
+  #  maxCacheTtl = 31536000;
+  #};
+
+  services.pcscd.enable = true;
+
+
 
   networking.networkmanager.enable = true;
   networking.firewall.enable = false;

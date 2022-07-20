@@ -12,7 +12,23 @@ in {
   config = mkIf cfg.enable {
     environment.variables.GNUPGHOME = "$XDG_CONFIG_HOME/gnupg";
 
-    programs.gnupg.agent.enable = true;
+    # programs = {
+    #  gnupg.agent = {
+    #    enable = true;
+    #    enableSSHSupport = true;
+    #  };
+    # };
+
+    # services.gpg-agent = {
+    #  enable = true;
+    #  pinentryFlavor = "tty";
+
+      # cache the keys forever so we don't get asked for a password
+    #  defaultCacheTtl = 31536000;
+    #  maxCacheTtl = 31536000;
+    #};
+
+    # services.pcscd.enable = true;
 
     user.packages = [ pkgs.tomb ];
 
