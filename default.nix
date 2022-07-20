@@ -71,7 +71,6 @@ with lib.my;
     # YubiKey
     gnupg
     pinentry-curses
-    pinentry-qt
     paperkey
     yubikey-manager
     yubikey-personalization

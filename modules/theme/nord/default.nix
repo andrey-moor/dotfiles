@@ -24,7 +24,7 @@ in {
           fira-code-symbols
           jetbrains-mono
           siji
-          font-awesome-ttf
+          font-awesome
           source-code-pro
           source-sans-pro
           source-serif-pro

@@ -53,14 +53,12 @@
   #  enable = true;
   #  pinentryFlavor = "tty";
 
-  #  # cache the keys forever so we don't get asked for a password
+    # cache the keys forever so we don't get asked for a password
   #  defaultCacheTtl = 31536000;
   #  maxCacheTtl = 31536000;
   #};
 
-  services.pcscd.enable = true;
-
-
+  # services.pcscd.enable = true;
 
   networking.networkmanager.enable = true;
   networking.firewall.enable = false;
