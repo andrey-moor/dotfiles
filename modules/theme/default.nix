@@ -35,9 +35,12 @@ in {
   config = mkIf (cfg.active != null) (mkMerge [
     # Read xresources files in ~/.config/xtheme/* to allow modular
     # configuration of Xresources.
-    (let xrdb = ''${pkgs.xorg.xrdb}/bin/xrdb -merge "$XDG_CONFIG_HOME"/xtheme/*'';
-     in {
-       services.xserver.displayManager.sessionCommands = xrdb;
+    (let xrdb = ''cat "$XDG_CONFIG_HOME"/xtheme/* | ${pkgs.xorg.xrdb}/bin/xrdb -load'';
+    in {
+      home.configFile."xtheme.init" = {
+         text = xrdb;
+         executable = true;
+       };
        modules.theme.onReload.xtheme = xrdb;
      })
 

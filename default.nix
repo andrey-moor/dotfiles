@@ -50,6 +50,7 @@ with lib.my;
     loader = {
       efi.canTouchEfiVariables = true;
       systemd-boot.enable = true;
+      systemd-boot.consoleMode = "0";
     };
   };
 
@@ -68,9 +69,9 @@ with lib.my;
     
     gopls
 
-    # JetBrains stuff
-    jetbrains.jdk
-    dotnet-sdk_5
+    # Yubikey TODO
+    pinentry
+    pinentry-curses
 
     # my.jetbrains.rider
     x11vnc
