@@ -40,15 +40,15 @@
       neovim.enable   = true;
     };
     services = {
-      ssh.enable = true;
+      ssh.enable = false;
       docker.enable = true;
     };
   };
 
 
   ## Local config
-  programs.ssh.startAgent = true;
-  services.openssh.startWhenNeeded = true;
+  # programs.ssh.startAgent = true;
+  # services.openssh.startWhenNeeded = true;
 
   networking.networkmanager.enable = true;
   networking.firewall.enable = false;
