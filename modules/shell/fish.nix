@@ -9,7 +9,8 @@ let cfg = config.modules.shell.fish;
       set -x FZF_DEFAULT_OPTS "--preview='bat {} --color=always'" \n
       set -x SKIM_DEFAULT_COMMAND "rg --files || fd || find ."
 
-      set -x GPG_TTY /dev/pts/0
+      set -x GPG_TTY (tty)
+      gpg-connect-agent updatestartuptty /bye > /dev/null 
       set -x SSH_AUTH_SOCK (gpgconf --list-dirs agent-ssh-socket)
       gpgconf --launch gpg-agent
     '';
