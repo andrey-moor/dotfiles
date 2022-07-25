@@ -27,6 +27,7 @@ in {
     #      is cleaner than overriding the systemd unit.
     home.configFile."gnupg/gpg-agent.conf" = {
       text = ''
+        ttyname $GPG_TTY
         default-cache-ttl ${toString cfg.cacheTTL}
         pinentry-program ${pkgs.pinentry.curses}/bin/pinentry
       '';
