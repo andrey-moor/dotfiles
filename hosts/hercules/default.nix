@@ -45,11 +45,6 @@
     };
   };
 
-
-  ## Local config
-  # programs.ssh.startAgent = true;
-  # services.openssh.startWhenNeeded = true;
-
   networking.networkmanager.enable = true;
   networking.firewall.enable = false;
   # The global useDHCP flag is deprecated, therefore explicitly set to false

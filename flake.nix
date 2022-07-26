@@ -1,12 +1,3 @@
-# flake.nix --- the heart of my dotfiles
-#
-# Author:  Henrik Lissner <henrik@lissner.net>
-# URL:     https://github.com/andrey-moor/dotfiles
-# License: MIT
-#
-# Welcome to ground zero. Where the whole flake gets set up and all its modules
-# are loaded.
-
 {
   description = "A grossly incandescent nixos config.";
 
@@ -15,8 +6,6 @@
       # Core dependencies.
       nixpkgs.url = "nixpkgs/nixos-unstable";             # primary nixpkgs
       nixpkgs-unstable.url = "nixpkgs/nixpkgs-unstable";  # for packages on the edge
-      # home-manager.url = "github:rycee/home-manager/master";
-      # home-manager.inputs.nixpkgs.follows = "nixpkgs";
       #agenix.url = "github:ryantm/agenix";
       #agenix.inputs.nixpkgs.follows = "nixpkgs";
       home-manager-unstable = {
@@ -26,8 +15,6 @@
 
       home-manager = {
         url = "github:nix-community/home-manager/release-21.05";
-
-        # We want home-manager to use the same set of nixpkgs as our system.
         inputs.nixpkgs.follows = "nixpkgs";
       };
 
@@ -44,7 +31,7 @@
 
       mkPkgs = pkgs: extraOverlays: import pkgs {
         inherit system;
-        config.allowUnfree = true;  # forgive me Stallman senpai
+        config.allowUnfree = true;
         overlays = extraOverlays ++ (lib.attrValues self.overlays);
       };
       pkgs  = mkPkgs nixpkgs [ self.overlay ];
@@ -76,21 +63,21 @@
       # devShell."${system}" =
       #   import ./shell.nix { inherit pkgs; };
 
-      templates = {
-        full = {
-          path = ./.;
-          description = "A grossly incandescent nixos config";
-        };
-        minimal = {
-          path = ./templates/minimal;
-          description = "A grossly incandescent and minimal nixos config";
-        };
-      };
-      defaultTemplate = self.templates.minimal;
+      # templates = {
+      #  full = {
+      #    path = ./.;
+      #    description = "A grossly incandescent nixos config";
+      #  };
+      #  minimal = {
+      #    path = ./templates/minimal;
+      #    description = "A grossly incandescent and minimal nixos config";
+      #  };
+      #};
+      #defaultTemplate = self.templates.minimal;
 
-      defaultApp."${system}" = {
-        type = "app";
-        program = ./bin/hey;
-      };
+      # defaultApp."${system}" = {
+      #  type = "app";
+      #  program = ./bin/hey;
+      #};
     };
 }
