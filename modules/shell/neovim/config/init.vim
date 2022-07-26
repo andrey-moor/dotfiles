@@ -5,7 +5,7 @@ set shell=/run/current-system/sw/bin/fish
 
 " Other options
 syntax on
-colorscheme nord
+colorscheme onedark
 set backspace=2
 
 " Tabs as spaces
@@ -47,6 +47,10 @@ nnoremap <leader>fh <cmd>lua require('telescope.builtin').help_tags()<cr>
 
 nnoremap <leader>n :NERDTreeToggle<CR>
 nnoremap <leader>f :NERDTreeFind<CR>
+
+let g:onedark_config = {
+    \ 'style': 'darker',
+\}
 
 let g:lightline = {
       \ 'colorscheme': 'nord',
