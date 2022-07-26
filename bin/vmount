@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# Unlock and mount LUKS encrypted device
+
+set -e
+
+if [ $# -eq 0 ]; then
+    echo "Please specify the device path (e.g. /dev/sdb)"
+    exit 1
+fi
+
+if [ ! -b $1 ]; then
+    echo "$1 is not a valid target device"
+    exit 1
+fi
+
+# Note: if you prefer not to use the systemd ask-password utility, remove the
+# following line and uncomment the one below it.
+PW=$(systemd-ask-password "Enter your password:")
+#echo "Enter your password" && read -s PW
+CHALLENGE=$(printf $PW | sha256sum | awk '{print $1}')
+
+echo "Touch your YubiKey"
+RESPONSE=$(ykchalresp -2 $CHALLENGE)
+KEY=$CHALLENGE$RESPONSE
+
+echo "Decrypting and mounting device"
+sudo cryptsetup open --type=luks $1 data <<<$KEY
+
+mkdir -p $HOME/vault
+sudo mount /dev/mapper/vault $HOME/vault
+echo "Opened $1 as /dev/mapper/vault and mounted in $HOME/vault"
+
