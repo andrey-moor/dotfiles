@@ -17,16 +17,10 @@
     theme.active = "nord";
     desktop = {
       bspwm.enable = true;
-      i3.enable = false;
       browsers = {
         default = "brave";
         brave.enable = true;
       };
-      rider.enable = false;
-    };
-    editors = {
-      default = "nvim";
-      vim.enable = false;
     };
     shell = {
       alacritty.enable = true;

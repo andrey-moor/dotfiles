@@ -32,19 +32,6 @@
       INPUTRC         = "$XDG_CONFIG_HOME/readline/inputrc";
       LESSHISTFILE    = "$XDG_CACHE_HOME/lesshst";
       WGETRC          = "$XDG_CONFIG_HOME/wgetrc";
-
-      # Tools I don't use
-      # SUBVERSION_HOME = "$XDG_CONFIG_HOME/subversion";
-      # BZRPATH         = "$XDG_CONFIG_HOME/bazaar";
-      # BZR_PLUGIN_PATH = "$XDG_DATA_HOME/bazaar";
-      # BZR_HOME        = "$XDG_CACHE_HOME/bazaar";
-      # ICEAUTHORITY    = "$XDG_CACHE_HOME/ICEauthority";
     };
-
-    # Move ~/.Xauthority out of $HOME (setting XAUTHORITY early isn't enough)
-    # extraInit = ''
-    #   export XAUTHORITY=/tmp/Xauthority
-    #   [ -e ~/.Xauthority ] && mv -f ~/.Xauthority "$XAUTHORITY"
-    # '';
   };
 }
