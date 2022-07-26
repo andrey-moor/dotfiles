@@ -72,6 +72,9 @@ with lib.my;
     # Yubikey TODO
     pinentry
     pinentry-curses
+    yubikey-manager
+    yubikey-personalization
+    cryptsetup
 
     # my.jetbrains.rider
     x11vnc
