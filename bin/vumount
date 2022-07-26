@@ -24,10 +24,8 @@ echo "Touch your YubiKey"
 RESPONSE=$(ykchalresp -2 $CHALLENGE)
 KEY=$CHALLENGE$RESPONSE
 
-echo "Decrypting and mounting device"
-sudo cryptsetup open --type=luks $1 vault <<<$KEY
+sudo umount $HOME/vault
+sudo cryptsetup close --type=luks vault <<<$KEY
+echo "Closed $1 as /dev/mapper/vault and unmounted from $HOME/vault"
 
-mkdir -p $HOME/vault
-sudo mount /dev/mapper/vault $HOME/vault
-echo "Opened $1 as /dev/mapper/vault and mounted in $HOME/vault"
 
