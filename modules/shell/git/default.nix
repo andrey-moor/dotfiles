@@ -20,9 +20,9 @@ in {
     ];
 
     home.configFile = {
-      "git/config".source = "./config/config";
-      "git/ignore".source = "./config/ignore";
-      "git/attributes".source = "./config/attributes";
+      "git/config".source = ./. + "/config/config";
+      "git/ignore".source = ./. + "/config/ignore";
+      "git/attributes".source = ./. + "/config/attributes";
     };
   };
 }
