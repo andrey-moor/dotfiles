@@ -7,8 +7,6 @@
 	defaultBranch = main
 [github]
 	user = andrey-moor
-[gitlab]
-	user = andrey-moor
 [rebase]
 	autosquash = true
 [push]
