@@ -3,7 +3,7 @@
 with lib;
 with lib.my;
 let cfg = config.modules.shell.git;
-    configDir = config.dotfiles.configDir;
+  configDir = config.dotfiles.configDir;
 in {
   options.modules.shell.git = {
     enable = mkBoolOpt false;
@@ -20,9 +20,9 @@ in {
     ];
 
     home.configFile = {
-      "git/config".source = "${configDir}/git/config";
-      "git/ignore".source = "${configDir}/git/ignore";
-      "git/attributes".source = "${configDir}/git/attributes";
+      "git/config".source = "./config/config";
+      "git/ignore".source = "./config/ignore";
+      "git/attributes".source = "./config/attributes";
     };
   };
 }
