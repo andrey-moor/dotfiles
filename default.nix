@@ -80,7 +80,6 @@ with lib.my;
     x11vnc
 
     # dev
-    kubectl
     awscli
 
     # TODO: Review

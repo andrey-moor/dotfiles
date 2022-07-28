@@ -32,6 +32,7 @@
       gnupg.enable  = true;
       tmux.enable   = true;
       neovim.enable   = true;
+      kubernetes-utils.enable = true;
     };
     services = {
       ssh.enable = false;

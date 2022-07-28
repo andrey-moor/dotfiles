@@ -19,7 +19,7 @@ in {
       enable = true;
       settings = {
         import = [
-          "~/.config/alacritty/nord.yml"
+          "~/.config/alacritty/onedark.yml"
         ];
         background_opacity = 1.0;
         dynamic_title = true;
