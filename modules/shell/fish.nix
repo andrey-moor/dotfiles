@@ -76,6 +76,7 @@ in {
           g = "git";
           ga = "git add";
           gc = "git commit";
+          gd = "git diff";
           gco = "git checkout";
           gcp = "git cherry-pick";
           gdiff = "git diff";
@@ -90,6 +91,10 @@ in {
 
           pbcopy = "xclip";
           pbpaste = "xclip -o";
+
+          k = "kubectl";
+          kns = "kubens";
+          kctx = "kubectx";
         };
 
         functions = {

@@ -5,7 +5,6 @@ set shell=/run/current-system/sw/bin/fish
 
 " Other options
 syntax on
-colorscheme onedark
 set backspace=2
 
 " Tabs as spaces
@@ -51,6 +50,7 @@ nnoremap <leader>f :NERDTreeFind<CR>
 let g:onedark_config = {
     \ 'style': 'darker',
 \}
+colorscheme onedark
 
 let g:lightline = {
       \ 'colorscheme': 'nord',

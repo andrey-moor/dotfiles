@@ -14,7 +14,7 @@
 
   ## Modules
   modules = {
-    theme.active = "nord";
+    theme.active = "onedark";
     desktop = {
       bspwm.enable = true;
       browsers = {

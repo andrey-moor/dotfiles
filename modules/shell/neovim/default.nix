@@ -31,8 +31,8 @@ in {
         vim-fugitive            # git plugin
         vim-nix                 # nix support (highlighting, etc)
         vim-devicons
-        onedark-vim
-        nord-vim                # Nord theme
+        onedark-nvim
+        # nord-vim                # Nord theme
         dashboard-nvim          # dashboard
         bufferline-nvim
 
