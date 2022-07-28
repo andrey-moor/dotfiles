@@ -15,15 +15,6 @@ in {
       kubectl
       helm
     ];
-
-    programs.fish.shellAliases = mkIf config.modules.shell.fish.enable 
-      mkMerge [
-        {
-          k = "kubectl";
-          kns = "kubens";
-          kctx = "kubectx";
-        }
-    ];
   };
 }
 

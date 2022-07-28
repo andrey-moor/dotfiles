@@ -91,6 +91,10 @@ in {
 
           pbcopy = "xclip";
           pbpaste = "xclip -o";
+        
+          k = "kubectl";
+          kns = "kubens";
+          kctx = "kubectx";
         };
 
         functions = {
