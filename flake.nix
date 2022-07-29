@@ -9,12 +9,12 @@
       #agenix.url = "github:ryantm/agenix";
       #agenix.inputs.nixpkgs.follows = "nixpkgs";
       home-manager-unstable = {
-        url = "github:nix-community/home-manager/release-21.05";
+        url = "github:nix-community/home-manager/release-22.05";
         inputs.nixpkgs.follows = "nixpkgs-unstable";
       };
 
       home-manager = {
-        url = "github:nix-community/home-manager/release-21.05";
+        url = "github:nix-community/home-manager/release-22.05";
         inputs.nixpkgs.follows = "nixpkgs";
       };
 
@@ -32,7 +32,7 @@
       mkPkgs = pkgs: extraOverlays: import pkgs {
         inherit system;
         config.allowUnfree = true;
-        overlays = extraOverlays ++ (lib.attrValues self.overlays);
+        overlays = extraOverlays;# ++ (lib.attrValues self.overlays);
       };
       pkgs  = mkPkgs nixpkgs [ self.overlay ];
       pkgs' = mkPkgs nixpkgs-unstable [];
@@ -48,8 +48,8 @@
           my = self.packages."${system}";
         };
 
-      overlays =
-        mapModules ./overlays import;
+      # overlays =
+      #   mapModules ./overlays import;
 
       packages."${system}" =
         mapModules ./packages (p: pkgs.callPackage p {});
