@@ -7,8 +7,12 @@
 
 with lib;
 {
-  options = with types; {
-    modules = {};
+  options.modules = with types; {
+    dotfilesDir = mkOption {
+      type = str;
+      default = "${config.home.homeDirectory}/.dotfiles";
+      description = "Path to the dotfiles repository";
+    };
   };
 
   config = {
@@ -32,9 +36,6 @@ with lib;
       curl
       wget
       unzip
-
-      # Dotfile management
-      chezmoi
 
       # Task runner
       just

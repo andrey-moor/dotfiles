@@ -57,6 +57,9 @@ with lib;
 
       # Home-manager modules (shell, dev, profiles)
       modules = {
+        # Override default ~/.dotfiles path for this host
+        dotfilesDir = "/Users/andreym/Documents/dotfiles";
+
         profiles.user = "andreym";
 
         shell = {
@@ -71,6 +74,7 @@ with lib;
           lazygit.enable = true;
           ghostty.enable = true;
           gpg.enable = true;
+          chezmoi.enable = true;
         };
 
         dev = {

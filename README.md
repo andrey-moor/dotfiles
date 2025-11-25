@@ -40,13 +40,25 @@ just fmt         # Format nix files
 
 ## Chezmoi (Mutable Configs)
 
-Neovim and nushell configs are managed by chezmoi and live in `chezmoi/` directory:
+Neovim and nushell configs are managed by chezmoi and live in `chezmoi/` directory.
 
+**Editing configs (e.g., neovim):**
 ```bash
-# Edit configs directly in chezmoi/ directory, then apply:
-just chezmoi-apply   # Apply changes to ~/.config
-just chezmoi-diff    # Preview changes
+# 1. Edit files directly in the repo
+nvim chezmoi/dot_config/nvim/lua/plugins/user.lua
+
+# 2. Apply changes to ~/.config
+just chezmoi-apply   # or: chezmoi apply
+
+# Preview changes before applying:
+just chezmoi-diff    # or: chezmoi diff
 ```
+
+**Path configuration:**
+- Default dotfiles path: `~/.dotfiles`
+- Override per-host via `modules.dotfilesDir` (e.g., behemoth uses `~/Documents/dotfiles`)
+- Chezmoi source dir is automatically set to `${dotfilesDir}/chezmoi`
+- `$DOTFILES` env var is exported for shell scripts
 
 ## Upgrading Packages
 
@@ -93,6 +105,7 @@ Homebrew packages auto-update on each `switch` (configured via `onActivation.aut
 | `nushell.nix` | Nu shell (package only, config via chezmoi) |
 | `git.nix` | Git configuration with GPG signing |
 | `direnv.nix` | Directory-based environments |
+| `chezmoi.nix` | Chezmoi dotfile manager |
 
 ### Dev (`modules/home/dev/`)
 | Module | Description |
@@ -127,14 +140,14 @@ Homebrew packages auto-update on each `switch` (configured via `onActivation.aut
    };
    ```
 
-2. Import in `modules/home/shell/default.nix`
-
-3. Enable in host config (`hosts/behemoth/default.nix`):
+2. Enable in host config (`hosts/behemoth/default.nix`):
    ```nix
    modules.shell.mytool.enable = true;
    ```
 
-4. Rebuild: `just switch`
+3. Rebuild: `just switch`
+
+Note: Modules are auto-discovered from the filesystem - no manual imports needed.
 
 ## Disko (Disk Formatting)
 

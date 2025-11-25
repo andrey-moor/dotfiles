@@ -38,8 +38,8 @@ use $"($NU_SCRIPTS)/aliases/git/git-aliases.nu" *
 
 alias ll = ls -l 
 
-alias switch = just --justfile ~/Documents/dotfiles/justfile switch
-alias update = just --justfile ~/Documents/dotfiles/justfile update; just --justfile ~/Documents/dotfiles/justfile switch
+alias switch = just --justfile $"($env.DOTFILES)/justfile" switch
+alias update = just --justfile $"($env.DOTFILES)/justfile" update; just --justfile $"($env.DOTFILES)/justfile" switch
 
 alias vim = nvim 
 alias v = nvim 
