@@ -9,24 +9,45 @@ Nix-based dotfiles for macOS (nix-darwin) and Linux (NixOS/home-manager).
 - **chezmoi**: Mutable configs that change frequently (neovim/AstroVim, nushell)
 - **Homebrew** (macOS): GUI applications via casks
 
-## Prerequisites
+## Initial Setup (macOS)
 
-- [Nix](https://nixos.org/) with flakes enabled
-- [Just](https://github.com/casey/just) command runner
-
-## Quick Start
-
-**First-time setup (bootstrap nix-darwin):**
+**1. Install Nix (Determinate Systems installer):**
 ```bash
-just bootstrap
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
 ```
 
-This builds the configuration and runs `darwin-rebuild` from the result to install nix-darwin itself.
+**2. Install Homebrew:**
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
-**After bootstrap, use:**
+**3. Clone this repository:**
+```bash
+git clone <your-repo-url> ~/Documents/dotfiles
+cd ~/Documents/dotfiles
+```
+
+**4. Bootstrap nix-darwin:**
+
+Since `just` isn't available yet, run the bootstrap command directly:
+```bash
+nix run nixpkgs#darwin-rebuild -- switch --flake .#behemoth
+```
+
+This builds the configuration and installs nix-darwin itself along with all packages (including `just`).
+
+**5. After bootstrap, use `just` commands:**
 ```bash
 just switch
 ```
+
+## Prerequisites
+
+After initial setup, you'll have:
+- [Nix](https://nixos.org/) with flakes enabled (via Determinate Systems)
+- [Just](https://github.com/casey/just) command runner (installed by nix-darwin)
+
+## Quick Start
 
 ## Common Commands
 
@@ -150,6 +171,8 @@ Homebrew packages auto-update on each `switch` (configured via `onActivation.aut
 Note: Modules are auto-discovered from the filesystem - no manual imports needed.
 
 ## Disko (Disk Formatting)
+
+**Note**: Disko is only relevant for NixOS installations (not macOS/nix-darwin). This dotfiles repo currently focuses on macOS (nix-darwin) and Linux (home-manager). If you plan to use NixOS in the future, disko provides declarative disk partitioning.
 
 For fresh NixOS installs:
 
