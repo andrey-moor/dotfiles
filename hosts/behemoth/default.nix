@@ -35,7 +35,6 @@ with lib;
         "zoom"
         # AI/ML
         "lm-studio"
-        "claude"
         # System
         "parallels"
         "little-snitch"

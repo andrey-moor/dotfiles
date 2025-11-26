@@ -26,6 +26,7 @@ with lib;
 
       dev = {
         nix.enable = true;
+        claude.enable = true;
       };
     };
   };
