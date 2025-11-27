@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "kagi": {
+      "command": "op",
+      "args": ["run", "--", "uvx", "--python", "3.13", "kagimcp"],
+      "env": {
+        "KAGI_API_KEY": "op://Private/Kagi/api_key"
+      }
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
+  }
+}
