@@ -10,8 +10,8 @@ in {
   };
 
   config = mkIf cfg.enable {
-    home.packages = with pkgs; [
-      claude-code  # Agentic coding tool for the terminal
+    home.packages = [
+      pkgs.main.claude-code  # Latest from nixpkgs main branch
     ];
   };
 }

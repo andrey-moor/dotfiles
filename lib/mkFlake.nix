@@ -54,6 +54,13 @@ let
           config.allowUnfree = true;
         };
       } else {})
+      # Make main branch packages available as pkgs.main
+      (final: prev: if inputs ? nixpkgs-main then {
+        main = import inputs.nixpkgs-main {
+          inherit system;
+          config.allowUnfree = true;
+        };
+      } else {})
     ];
   };
 

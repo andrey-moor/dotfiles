@@ -5,6 +5,7 @@
     # Core dependencies
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs-main.url = "github:nixos/nixpkgs/master";
     
     # Essential modules
     home-manager = {
