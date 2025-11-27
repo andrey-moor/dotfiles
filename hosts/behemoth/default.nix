@@ -51,6 +51,7 @@ with lib;
     # Home-manager user configuration
     home-manager.users.andreym = { lib, ... }: {
       home.stateVersion = "24.05";
+      home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
       home.username = lib.mkForce "andreym";
       home.homeDirectory = lib.mkForce "/Users/andreym";
 
