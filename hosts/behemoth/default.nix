@@ -49,11 +49,18 @@ with lib;
     };
 
     # Home-manager user configuration
-    home-manager.users.andreym = { lib, ... }: {
+    home-manager.users.andreym = { lib, pkgs, ... }: {
       home.stateVersion = "24.05";
       home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
       home.username = lib.mkForce "andreym";
       home.homeDirectory = lib.mkForce "/Users/andreym";
+
+      # Common packages (not tied to specific modules)
+      home.packages = with pkgs; [
+        _1password-cli  # op CLI for secret management
+        uv              # Python package runner (uvx)
+        nodejs          # Node.js runtime (npx)
+      ];
 
       # Home-manager modules (shell, dev, profiles)
       modules = {
