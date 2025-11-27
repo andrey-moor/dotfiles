@@ -4,28 +4,45 @@
 
 with lib;
 {
-  system = "x86_64-linux";
+  system = "aarch64-linux";
   username = "andreym";
   homeDirectory = "/home/andreym";
 
   config = { config, pkgs, ... }: {
     # Home-manager state version
     home.stateVersion = "24.05";
+    home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
+    home.backupFileExtension = "backup";  # Auto-backup conflicting files
 
     # Enable modules
     modules = {
+      dotfilesDir = "/home/andreym/dotfiles";
+
       profiles.user = "andreym";
 
       shell = {
         default = "nushell";
         nushell.enable = true;
-        fish.enable = true;
         git.enable = true;
+        ssh.enable = true;
         direnv.enable = true;
+        starship.enable = true;
+        tmux.enable = true;
+        bat.enable = true;
+        lazygit.enable = true;
+        ghostty.enable = true;
+        gpg.enable = true;
+        chezmoi.enable = true;
+        openvpn.enable = true;
       };
 
       dev = {
         nix.enable = true;
+        neovim.enable = true;
+        jj.enable = true;
+        go.enable = true;
+        rust.enable = true;
+        kubernetes.enable = true;
         claude.enable = true;
       };
     };

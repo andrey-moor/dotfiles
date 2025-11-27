@@ -90,6 +90,37 @@ just switch   # Rebuild with new versions
 
 Homebrew packages auto-update on each `switch` (configured via `onActivation.autoUpdate`).
 
+## Initial Setup (Linux - standalone home-manager)
+
+For non-NixOS Linux (e.g., Omarchy, Arch, Ubuntu):
+
+**1. Install Nix (Determinate Systems installer):**
+```bash
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+```
+
+**2. Clone this repository:**
+```bash
+git clone <your-repo-url> ~/dotfiles
+cd ~/dotfiles
+```
+
+**3. Apply home-manager configuration:**
+```bash
+nix run home-manager -- switch --flake .#rocinante
+```
+
+**4. Set nushell as default shell (one-time):**
+```bash
+echo ~/.nix-profile/bin/nu | sudo tee -a /etc/shells
+chsh -s ~/.nix-profile/bin/nu
+```
+
+**5. Apply chezmoi configs (neovim, nushell):**
+```bash
+chezmoi apply
+```
+
 ## Directory Structure
 
 ```
@@ -97,7 +128,7 @@ Homebrew packages auto-update on each `switch` (configured via `onActivation.aut
 ├── flake.nix              # Flake entrypoint
 ├── hosts/
 │   ├── behemoth/          # macOS host (nix-darwin)
-│   └── rocinante/         # Linux host (NixOS)
+│   └── rocinante/         # Linux host (standalone home-manager)
 ├── modules/
 │   ├── darwin/            # macOS-specific modules
 │   │   └── homebrew.nix   # Homebrew casks & brews

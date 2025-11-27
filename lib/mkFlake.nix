@@ -126,8 +126,8 @@ let
       pkgs = mkPkgs system;
       username = mergedHost.username or name;
       homeDirectory = mergedHost.homeDirectory or "/home/${username}";
-      # Home-manager modules
-      homeModules = moduleLib.mapModulesRec' homeModulesPath import;
+      # Home-manager modules - include root default.nix + all recursive modules
+      homeModules = [ (import homeModulesPath) ] ++ moduleLib.mapModulesRec' homeModulesPath import;
     in
     inputs.home-manager.lib.homeManagerConfiguration {
       inherit pkgs;

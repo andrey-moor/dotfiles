@@ -44,6 +44,12 @@ in {
           identityFile = "~/.ssh/id_ed25519_sk_rk_microsoft";
           identitiesOnly = true;
         };
+
+        # Rocinante - Linux VM (Parallels)
+        "rocinante" = {
+          hostname = "10.211.55.3";
+          user = "andreym";
+        };
       };
     };
   };
