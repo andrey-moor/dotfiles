@@ -74,6 +74,7 @@ with lib;
           ghostty.enable = true;
           gpg.enable = true;
           chezmoi.enable = true;
+          openvpn.enable = true;
         };
 
         dev = {
