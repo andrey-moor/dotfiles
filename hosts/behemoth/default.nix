@@ -27,7 +27,10 @@ with lib;
         image = "ghcr.io/berriai/litellm:main-latest";
         ports = [ "4000:4000" ];
         pull = true;
-        volumes = [ "${config.modules.dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro" ];
+        volumes = [
+          "${config.modules.dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
+          "${config.user.dataDir}/litellm:/root/.config/litellm"  # Persist auth tokens
+        ];
         cmd = [ "--config" "/app/config.yaml" ];
       };
     };

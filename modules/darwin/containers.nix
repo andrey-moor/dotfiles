@@ -13,8 +13,8 @@ let
   # Runtime-specific configuration
   runtimeConfig = {
     orbstack = {
-      bin = "/opt/orbstack/bin/docker";
-      path = "/opt/orbstack/bin:/usr/local/bin:/usr/bin:/bin";
+      bin = "/usr/local/bin/docker";  # OrbStack symlinks here
+      path = "/usr/local/bin:/usr/bin:/bin";
     };
     podman = {
       bin = "${pkgs.podman}/bin/podman";

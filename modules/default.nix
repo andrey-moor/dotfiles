@@ -22,12 +22,24 @@ in {
     # User configuration - simplified for cross-platform use
     user = {
       name = lib.mkOpt str "andreym";
+      homeDir = lib.mkOption {
+        type = str;
+        default = if pkgs.stdenv.isDarwin
+          then "/Users/${config.user.name}"
+          else "/home/${config.user.name}";
+        description = "User home directory (platform-aware)";
+      };
+      dataDir = lib.mkOption {
+        type = str;
+        default = "${config.user.homeDir}/.local/share";
+        description = "XDG data directory";
+      };
     };
 
     # System-level dotfiles path (also available in home-manager as modules.dotfilesDir)
     modules.dotfilesDir = lib.mkOption {
       type = str;
-      default = "/Users/${config.user.name}/.dotfiles";
+      default = "${config.user.homeDir}/.dotfiles";
       description = "Path to the dotfiles repository";
     };
   };
