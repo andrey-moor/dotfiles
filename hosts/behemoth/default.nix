@@ -17,13 +17,17 @@ with lib;
     user.name = "andreym";
 
     # Darwin system-level modules
+    modules.darwin.containers = {
+      enable = true;
+      runtime = "orbstack";
+    };
+
     modules.darwin.homebrew = {
       enable = true;
       casks = [
         # Development
         "ghostty"
         "cursor"
-        "orbstack"
         # Productivity
         "1password"
         "raycast"

@@ -7,11 +7,16 @@
 
 { lib, config, options, pkgs, inputs, ... }:
 
-{
+let
+  # Import our custom lib functions (mapModulesRec' etc.)
+  # Note: We can't use specialArgs.lib as nix-darwin's module system shadows it
+  attrs = import ../lib/attrs.nix { inherit lib; };
+  modules = import ../lib/modules.nix { inherit lib attrs; };
+in {
   # Import darwin modules:
   # - ./darwin itself (default.nix) provides base Darwin config
   # - mapModulesRec' finds child modules (homebrew.nix, etc.)
-  imports = [ ./darwin ] ++ lib.mapModulesRec' ./darwin import;
+  imports = [ ./darwin ] ++ modules.mapModulesRec' ./darwin import;
 
   options = with lib.types; {
     # User configuration - simplified for cross-platform use
