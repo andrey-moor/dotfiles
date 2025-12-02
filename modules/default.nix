@@ -23,5 +23,12 @@ in {
     user = {
       name = lib.mkOpt str "andreym";
     };
+
+    # System-level dotfiles path (also available in home-manager as modules.dotfilesDir)
+    modules.dotfilesDir = lib.mkOption {
+      type = str;
+      default = "/Users/${config.user.name}/.dotfiles";
+      description = "Path to the dotfiles repository";
+    };
   };
 }

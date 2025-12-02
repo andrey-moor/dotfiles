@@ -20,7 +20,8 @@ For a different host: `just --set host <hostname> switch`
 
 **Hybrid dotfiles approach:**
 - **Nix (nix-darwin + home-manager)**: Packages, services, declarative configs
-- **Chezmoi**: Mutable configs that change frequently (neovim, nushell)
+- **Chezmoi**: Mutable user configs that change frequently (neovim, nushell) — lives in `chezmoi/`
+- **config/**: Infrastructure/service configs (litellm, etc.) — version-controlled, rarely changes
 - **Homebrew** (macOS only): GUI applications via casks
 
 ### Flake Structure
@@ -58,6 +59,7 @@ Enable in host config: `modules.<category>.<name>.enable = true;`
 - `modules.profiles.user`: User profile to load (sets git identity, signing key)
 - `modules.shell.*`: Shell tools (git, ssh, gpg, tmux, starship, etc.)
 - `modules.dev.*`: Dev tools (neovim, go, rust, kubernetes, etc.)
+- `modules.darwin.containers`: Container services via launchd (OrbStack/Podman)
 
 ### Chezmoi Integration
 

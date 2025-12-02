@@ -30,7 +30,7 @@ let
       ++ optional container.pull "--pull=always"
       ++ concatMap (p: [ "-p" p ]) container.ports
       ++ concatMap (v: [ "-v" v ]) container.volumes
-      ++ concatMap (n: [ "--network" n ]) (toList container.network)
+      ++ optionals (container.network != null) (concatMap (n: [ "--network" n ]) (toList container.network))
       ++ concatLists (mapAttrsToList (k: v: [ "-e" "${k}=${v}" ]) container.environment)
       ++ concatLists (mapAttrsToList (k: v: [ "-l" "${k}=${v}" ]) container.labels)
       ++ optional (container.user != null) "--user=${container.user}"

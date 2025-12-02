@@ -16,10 +16,20 @@ with lib;
     # User configuration
     user.name = "andreym";
 
+    # Dotfiles location
+    modules.dotfilesDir = "/Users/andreym/Documents/dotfiles";
+
     # Darwin system-level modules
     modules.darwin.containers = {
       enable = true;
       runtime = "orbstack";
+      containers.litellm = {
+        image = "ghcr.io/berriai/litellm:main-latest";
+        ports = [ "4000:4000" ];
+        pull = true;
+        volumes = [ "${config.modules.dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro" ];
+        cmd = [ "--config" "/app/config.yaml" ];
+      };
     };
 
     modules.darwin.homebrew = {

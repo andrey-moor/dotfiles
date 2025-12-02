@@ -1,0 +1,12 @@
+general_settings:
+  master_key: sk-
+
+litellm_settings:
+  drop_params: true
+
+model_list:
+  - model_name: '*'
+    litellm_params:
+      model: github_copilot/*
+      extra_headers:
+        Editor-Version: vscode/1.100.0
