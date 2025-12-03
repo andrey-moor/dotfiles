@@ -77,6 +77,7 @@ with lib;
         _1password-cli  # op CLI for secret management
         uv              # Python package runner (uvx)
         nodejs          # Node.js runtime (npx)
+        (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
       ];
 
       # Home-manager modules (shell, dev, profiles)

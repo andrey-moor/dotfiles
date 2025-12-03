@@ -56,6 +56,8 @@
     lib.mkFlake inputs {
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
 
+      overlays = [ (import ./overlays) ];
+
       hosts = lib.mapHosts ./hosts;
 
       # Modules to apply to all hosts
