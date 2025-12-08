@@ -33,6 +33,22 @@ with lib;
         ];
         cmd = [ "--config" "/app/config.yaml" ];
       };
+
+      # RTMP/WebRTC streaming server for screen sharing
+      # OBS: rtmp://localhost:1935 with stream key (e.g., "stream")
+      # View: http://localhost:8889/<key> (WebRTC, <1s latency)
+      # Note: OBS must use x264 with bframes=0 or tune=zerolatency for WebRTC
+      containers.mediamtx = {
+        image = "bluenviron/mediamtx:latest";
+        ports = [
+          "1935:1935"      # RTMP input
+          "8889:8889"      # WebRTC player
+          "8888:8888"      # HLS (fallback)
+          "8554:8554"      # RTSP
+          "8890:8890/udp"  # SRT
+        ];
+        autoStart = false;  # Start manually: launchctl start gui/$(id -u)/container-mediamtx
+      };
     };
 
     modules.darwin.homebrew = {
@@ -57,6 +73,8 @@ with lib;
         "little-snitch"
         # Design
         "monodraw"
+        # Media
+        "obs"
       ];
       brews = [
         # CLI tools better via Homebrew
