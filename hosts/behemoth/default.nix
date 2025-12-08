@@ -110,6 +110,7 @@ with lib;
           go.enable = true;
           rust.enable = true;
           kubernetes.enable = true;
+          terraform.enable = true;
           claude.enable = true;
         };
       };
