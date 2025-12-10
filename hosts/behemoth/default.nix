@@ -43,11 +43,12 @@ with lib;
         ports = [
           "1935:1935"      # RTMP input
           "8889:8889"      # WebRTC player
+          "8189:8189/udp"  # WebRTC ICE/UDP
           "8888:8888"      # HLS (fallback)
           "8554:8554"      # RTSP
-          "8890:8890/udp"  # SRT
         ];
-        autoStart = false;  # Start manually: launchctl start gui/$(id -u)/container-mediamtx
+        environment.MTX_WEBRTCADDITIONALHOSTS = "10.0.0.157";
+        autoStart = true;
       };
     };
 
