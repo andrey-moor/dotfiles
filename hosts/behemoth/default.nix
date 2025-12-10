@@ -68,6 +68,7 @@ with lib;
         # Communication
         "zoom"
         # AI/ML
+        "claude"
         "lm-studio"
         # System
         "parallels"
