@@ -47,7 +47,7 @@ with lib;
           "8888:8888"      # HLS (fallback)
           "8554:8554"      # RTSP
         ];
-        environment.MTX_WEBRTCADDITIONALHOSTS = "10.0.0.157";
+        environment.MTX_WEBRTCADDITIONALHOSTS = "10.0.0.239,10.0.0.157";
         autoStart = true;
       };
     };
@@ -77,6 +77,7 @@ with lib;
         "monodraw"
         # Media
         "obs"
+        "imaging-edge"
       ];
       brews = [
         # CLI tools better via Homebrew
