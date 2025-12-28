@@ -60,6 +60,22 @@ rebuild:
     just switch
     just clean
 
+# ============================================
+# Linux (home-manager) hosts
+# ============================================
+
+# Build home-manager config for a Linux host (from this machine)
+hm-build linux-host:
+    nix build '.#homeConfigurations.{{linux-host}}.activationPackage'
+
+# Apply home-manager on rocinante via prlctl
+rocinante-switch:
+    prlctl exec Rocinante -- bash -c 'cd ~/dotfiles && home-manager switch --flake .#rocinante'
+
+# Build rocinante config locally (cross-compile check)
+rocinante-build:
+    nix build '.#homeConfigurations.rocinante.activationPackage' --dry-run
+
 # Format disk using disko for a specific host
 disko-format disko-host:
     sudo nix run \

@@ -12,7 +12,6 @@ with lib;
     # Home-manager state version
     home.stateVersion = "24.05";
     home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
-    home.backupFileExtension = "backup";  # Auto-backup conflicting files
 
     # Enable modules
     modules = {
@@ -44,6 +43,12 @@ with lib;
         rust.enable = true;
         kubernetes.enable = true;
         claude.enable = true;
+      };
+
+      linux = {
+        intune.enable = true;
+        intune.debug = true;  # Enable verbose logging for debugging
+        edge.enable = true;
       };
     };
   };

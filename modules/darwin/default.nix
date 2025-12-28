@@ -28,6 +28,7 @@ with lib;
     environment.shells = [ pkgs.nushell ];
     environment.systemPackages = [ pkgs.nushell ];
 
+
     # User account configuration
     users.users.${config.user.name} = {
       name = config.user.name;
