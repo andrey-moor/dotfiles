@@ -5,30 +5,29 @@
 # ARCHITECTURE:
 #   +------------------+     D-Bus      +----------------------+
 #   |  intune-portal   | ------------> |  user broker (SSO)   |
-#   |  (Nix + wrapper) |               |  (AUR + Nix wrapper) |
+#   |  (Nix + wrapper) |               |  (Nix + wrapper)     |
 #   +------------------+               +----------------------+
 #           |                                    |
 #           | D-Bus                              | D-Bus
 #           v                                    v
 #   +------------------+               +----------------------+
 #   |  device broker   |               |    gnome-keyring     |
-#   |  (AUR, system)   |               |    (credentials)     |
+#   |  (Nix, system)   |               |    (credentials)     |
 #   +------------------+               +----------------------+
 #
 # COMPONENTS:
 #   1. intune-portal (Nix): Main enrollment GUI
-#   2. microsoft-identity-broker (AUR 2.0.3): User SSO authentication
-#   3. microsoft-identity-device-broker (AUR 2.0.3): Device attestation (system service)
+#   2. microsoft-identity-broker (Nix 2.0.4): User SSO authentication
+#   3. microsoft-identity-device-broker (Nix 2.0.4): Device attestation (system service)
 #
 # ROSETTA REQUIREMENTS:
 #   - All x86_64 binaries run via Rosetta binfmt_misc
 #   - libglvnd MUST be first in LD_LIBRARY_PATH for Mesa software rendering
-#   - AUR broker needs OpenSSL 3.3.2 LD_PRELOAD (fixes Code:1200 error)
+#   - Broker needs OpenSSL 3.3.2 in LD_LIBRARY_PATH (fixes Code:1200 error)
 #   - WebKitGTK needs WEBKIT_DISABLE_DMABUF_RENDERER=1 (NOT COMPOSITING_MODE!)
 #
 # MANUAL PREREQUISITES:
-#   1. Install AUR packages: yay -S microsoft-identity-broker-bin
-#   2. Fake Ubuntu os-release: sudo tee /etc/os-release << 'EOF'
+#   1. Fake Ubuntu os-release: sudo tee /etc/os-release << 'EOF'
 #      NAME="Ubuntu"
 #      VERSION="22.04.3 LTS (Jammy Jellyfish)"
 #      ID=ubuntu
@@ -59,12 +58,19 @@ let
     config.allowUnfree = true;
   };
 
+  # Microsoft Identity Broker package (x86_64 binaries from Microsoft .deb)
+  brokerPkg = pkgsX86.callPackage ../../../packages/microsoft-identity-broker { };
+
+  # Custom curl without HTTP/3 support to avoid ngtcp2's OPENSSL_3.5.0 requirement
+  # This allows us to use Arch OpenSSL 3.3.2 for the broker without symbol conflicts
+  curlNoHttp3 = pkgsX86.curl.override { http3Support = false; };
+
   #############################################################################
-  # OPENSSL 3.3.2 (fixes Code:1200 error in AUR broker)
+  # OPENSSL 3.3.2 (fixes Code:1200 error in broker)
   #############################################################################
 
   # OpenSSL 3.3.2 from Arch Linux archives
-  # Required because AUR broker links system OpenSSL 3.6.0 which has
+  # Required because broker on Arch links system OpenSSL 3.6.0 which has
   # X509_REQ_set_version bug causing Code:1200 "credential is invalid"
   opensslArch = pkgs.stdenv.mkDerivation {
     pname = "openssl-arch";
@@ -85,6 +91,7 @@ let
     '';
   };
 
+
   #############################################################################
   # SHARED ENVIRONMENT SETUP
   #############################################################################
@@ -102,14 +109,14 @@ let
     opensc = "${pkgsX86.opensc}";
     libp11 = "${pkgsX86.libp11}";
     pcsclite = "${pkgsX86.pcsclite.lib}";
-    p11kit = "${pkgsX86.p11-kit.out}/lib";
+    p11kit = "${pkgsX86.p11-kit.out}";
     libfido2 = "${pkgsX86.libfido2}";
     # System libraries needed by AUR broker
     dbus = "${pkgsX86.dbus.lib}/lib";
     glib = "${pkgsX86.glib.out}/lib";
     systemd = "${pkgsX86.systemdLibs}/lib";
     util-linux = "${pkgsX86.util-linux.lib}/lib";
-    curl = "${pkgsX86.curl.out}/lib";
+    curl = "${curlNoHttp3.out}/lib";
     zlib = "${pkgsX86.zlib.out}/lib";
     libssh2 = "${pkgsX86.libssh2.out}/lib";
     nghttp2 = "${pkgsX86.nghttp2.lib}/lib";
@@ -157,6 +164,8 @@ let
     libxslt = "${pkgsX86.libxslt.out}/lib";
     enchant = "${pkgsX86.enchant.out}/lib";
     libnotify = "${pkgsX86.libnotify.out}/lib";
+    # Arch OpenSSL 3.3.2 - fixes Code:1200 error in AUR broker
+    opensslArch = "${opensslArch}/lib";
   };
 
   # Environment variables for Mesa software rendering under Rosetta
@@ -243,8 +252,11 @@ let
     export OPENSSL_CONF="${opensslConf}"
     export OPENSSL_ENGINES="${x86LibPaths.libp11}/lib/engines-3"
     export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
-    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11"
+    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11:${x86LibPaths.p11kit}/pkcs11"
     export P11_KIT_MODULE_CONFIGS="${p11kitModuleDir}"
+    # Tell GnuTLS to use p11-kit proxy for PKCS#11
+    export GNUTLS_CPUID_OVERRIDE=0x1
+    export GNUTLS_FORCE_FIPS_MODE=0
 
     ${debugEnvVars}
 
@@ -258,16 +270,13 @@ let
   '';
 
   #############################################################################
-  # USER BROKER (AUR binary + Nix wrapper)
+  # USER BROKER (Nix package + wrapper)
   #############################################################################
-
-  # Path to AUR-installed broker binary
-  aurBrokerBinary = "/usr/bin/microsoft-identity-broker-2.0.3";
 
   # Wrapper for user broker with Rosetta + OpenSSL fix
   userBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-broker-rosetta" ''
     #!/usr/bin/env bash
-    # microsoft-identity-broker-rosetta: Nix-managed wrapper for AUR broker
+    # microsoft-identity-broker-rosetta: Nix-managed wrapper for broker
     #
     # This wrapper:
     # 1. Provides OpenSSL 3.3.2 via LD_LIBRARY_PATH (fixes Code:1200 error)
@@ -275,27 +284,29 @@ let
     # 3. Sets up Mesa software rendering for WebKitGTK SSO popups
     # 4. Configures GIO TLS for HTTPS
 
-    # Check if AUR broker is installed
-    if [[ ! -x "${aurBrokerBinary}" ]]; then
-      echo "ERROR: AUR broker not found at ${aurBrokerBinary}" >&2
-      echo "Install with: yay -S microsoft-identity-broker-bin" >&2
-      exit 1
-    fi
-
     # LD_LIBRARY_PATH construction - comprehensive x86_64 library set for Rosetta
-    export LD_LIBRARY_PATH="${opensslArch}/lib:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}:''${LD_LIBRARY_PATH:-}"
+    # NOTE: Arch OpenSSL 3.3.2 is included to fix Code:1200 "credential is invalid" error
+    # We use curlNoHttp3 (curl with http3Support=false) to avoid ngtcp2's OPENSSL_3.5.0 requirement
+    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${mesaEnvVars}
     ${webkitEnvVars}
     ${tlsEnvVars}
 
+    # PKCS#11/YubiKey support (required for certificate-based auth)
+    export OPENSSL_CONF="${opensslConf}"
+    export OPENSSL_ENGINES="${x86LibPaths.libp11}/lib/engines-3"
+    export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
+    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11"
+    export P11_KIT_MODULE_CONFIGS="${p11kitModuleDir}"
+
     ${debugEnvVars}
 
     ${optionalString cfg.debug ''
-      echo "[DEBUG] Launching user broker..." >&2
+      echo "[DEBUG] Launching user broker (${brokerPkg.version})..." >&2
     ''}
 
-    exec "${aurBrokerBinary}" "$@"
+    exec "${brokerPkg}/bin/microsoft-identity-broker" "$@"
   '';
 
   # D-Bus service file for user broker (overrides system-wide /usr/share/dbus-1/services/)
@@ -310,37 +321,32 @@ let
   };
 
   #############################################################################
-  # DEVICE BROKER (AUR binary, system service - wrapper for reference)
+  # DEVICE BROKER (Nix package, system service - wrapper for reference)
   #############################################################################
-
-  # Path to AUR-installed device broker binary
-  aurDeviceBrokerBinary = "/usr/bin/microsoft-identity-device-broker-2.0.3";
 
   # Wrapper for device broker (for manual system configuration)
   # NOTE: This is installed to user profile but needs manual systemd config
   deviceBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-device-broker-rosetta" ''
     #!/usr/bin/env bash
-    # microsoft-identity-device-broker-rosetta: Nix-managed wrapper for AUR device broker
+    # microsoft-identity-device-broker-rosetta: Nix-managed wrapper for device broker
     #
     # NOTE: Device broker runs as a SYSTEM service. To use this wrapper:
     # 1. sudo systemctl edit microsoft-identity-device-broker.service
     # 2. Add: [Service]
     #         ExecStart=
-    #         ExecStart=/home/YOUR_USER/.nix-profile/bin/microsoft-identity-device-broker-rosetta
+    #         ExecStart=<nix-store-path>/bin/microsoft-identity-device-broker-rosetta
     # 3. sudo systemctl daemon-reload && sudo systemctl restart microsoft-identity-device-broker
+    #
+    # IMPORTANT: Use the full nix store path (not ~/.nix-profile) because root cannot
+    # traverse /home/user directories.
 
-    if [[ ! -x "${aurDeviceBrokerBinary}" ]]; then
-      echo "ERROR: AUR device broker not found at ${aurDeviceBrokerBinary}" >&2
-      exit 1
-    fi
-
-    # Device broker may not need OpenSSL fix or Mesa (no WebKitGTK UI)
-    # but we include basic library paths for safety
-    export LD_LIBRARY_PATH="${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:''${LD_LIBRARY_PATH:-}"
+    # Device broker shares same dependencies as user broker (WebKitGTK, GTK, etc.)
+    # Use the same comprehensive LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${debugEnvVars}
 
-    exec "${aurDeviceBrokerBinary}" "$@"
+    exec "${brokerPkg}/bin/microsoft-identity-device-broker" "$@"
   '';
 
   #############################################################################
@@ -406,14 +412,14 @@ let
       echo "    ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service (Nix-managed)"
       cat ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service | sed 's/^/    /'
     else
-      echo "    /usr/share/dbus-1/services/com.microsoft.identity.broker1.service (AUR)"
+      echo "    /usr/share/dbus-1/services/com.microsoft.identity.broker1.service (system)"
     fi
     echo ""
 
     echo "VERSIONS:"
     echo "  intune-portal: ${intunePackage.version}"
-    ${aurBrokerBinary} --version 2>/dev/null | head -1 | sed 's/^/  user broker: /' || echo "  user broker: (run to check)"
-    ${aurDeviceBrokerBinary} --version 2>/dev/null | head -1 | sed 's/^/  device broker: /' || echo "  device broker: 2.0.3 (AUR)"
+    echo "  user broker: ${brokerPkg.version} (Nix)"
+    echo "  device broker: ${brokerPkg.version} (Nix)"
     echo ""
 
     echo "NIX WRAPPERS:"
@@ -455,7 +461,7 @@ in {
       logsHelper
       statusHelper
     ] ++ (if isAarch64 then [
-      # Rosetta wrappers
+      # Rosetta wrappers (reference brokerPkg binaries directly)
       intuneWrapper
       userBrokerWrapper
       deviceBrokerWrapper
@@ -482,7 +488,7 @@ in {
       pkgsX86.glib.out
       pkgsX86.systemdLibs
       pkgsX86.util-linux.lib
-      pkgsX86.curl.out
+      curlNoHttp3.out
       pkgsX86.zlib.out
       pkgsX86.libssh2.out
       pkgsX86.nghttp2.lib
@@ -543,18 +549,21 @@ in {
       };
     };
 
+    # Set systemd user session environment variables for WebKitGTK
+    # These are needed for D-Bus activated services that spawn WebKit subprocesses
+    # See: https://github.com/recolic/microsoft-intune-archlinux
+    systemd.user.sessionVariables = mkIf isAarch64 {
+      WEBKIT_DISABLE_DMABUF_RENDERER = "1";
+      LIBGL_ALWAYS_SOFTWARE = "1";
+      GDK_BACKEND = "x11";
+    };
+
     # Activation script to verify setup
     home.activation.verifyIntuneSetup = mkIf isAarch64
       (lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
-        # Verify AUR broker is installed
-        if [[ ! -x "${aurBrokerBinary}" ]]; then
-          warnEcho "AUR microsoft-identity-broker not found!"
-          warnEcho "Install with: yay -S microsoft-identity-broker-bin"
-        fi
-
         # Verify D-Bus service file is in place
         if [[ -f "$HOME/.local/share/dbus-1/services/com.microsoft.identity.broker1.service" ]]; then
-          noteEcho "User broker D-Bus service installed (Nix-managed wrapper)"
+          noteEcho "User broker D-Bus service installed (Nix-managed, version ${brokerPkg.version})"
         else
           warnEcho "User broker D-Bus service not found in ~/.local/share/dbus-1/services/"
         fi

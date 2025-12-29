@@ -4,12 +4,14 @@ Running Microsoft Intune Portal with YubiKey smart card authentication on Arch L
 
 ## Current Status (December 2025)
 
-| Component | nixpkgs Version | AUR/recolic Version | Notes |
-|-----------|----------------|---------------------|-------|
-| intune-portal | 1.2503.10-noble | 1.2511.7-1 | nixpkgs version used (pre-November regression) |
-| microsoft-identity-broker | N/A | **2.0.3** (native) | Use recolic's native broker, NOT Java broker |
-| openssl_3 | 3.0.18 | 3.3.2 | Both safe; nixpkgs intune-portal already links 3.0.18 |
-| openssl (default) | 3.6.0 | 3.6.x | BROKEN - causes X509 errors |
+| Component | Version | Source | Notes |
+|-----------|---------|--------|-------|
+| intune-portal | 1.2503.10-noble | nixpkgs | Pre-November regression version |
+| microsoft-identity-broker | **2.0.4** | Nix package | Pure Nix - downloads from Microsoft .deb |
+| openssl (broker) | 3.3.2 | Arch archives | Included in LD_LIBRARY_PATH by wrapper |
+| openssl (intune-portal) | 3.0.18 | bundled | Safe - predates X509 bug |
+
+**Architecture:** All components are now managed by Nix. No AUR packages required.
 
 ### OpenSSL Architecture (Critical Understanding)
 
@@ -18,11 +20,11 @@ Running Microsoft Intune Portal with YubiKey smart card authentication on Arch L
 - OpenSSL 3.0.18 predates the X509_REQ_set_version bug (introduced in 3.4.0+)
 - Verified via: `readelf -d /nix/store/.../intune-portal | grep openssl-3.0.18`
 
-**The AUR microsoft-identity-broker DOES need LD_PRELOAD:**
-- The AUR native broker binary links system OpenSSL dynamically
-- Arch Linux ships OpenSSL 3.6.0 which HAS the bug
-- The broker wrapper (`/usr/bin/microsoft-identity-broker-wrapper`) must have LD_PRELOAD
-- This is why the broker gets OpenSSL 3.3.2 via LD_PRELOAD in our wrapper
+**The Nix broker wrapper provides OpenSSL 3.3.2 via LD_LIBRARY_PATH:**
+- The Microsoft broker binary links system OpenSSL dynamically
+- System OpenSSL 3.6.0 has the X509 bug
+- The Nix wrapper (`microsoft-identity-broker-rosetta`) includes OpenSSL 3.3.2 in LD_LIBRARY_PATH
+- This fixes the Code:1200 "credential is invalid" error
 
 **Why LD_PRELOAD in intune-portal causes crashes:**
 - Adding LD_PRELOAD to intune-portal overwrites its bundled 3.0.18
@@ -30,65 +32,36 @@ Running Microsoft Intune Portal with YubiKey smart card authentication on Arch L
 - OpenSSL 3.3.2 lacks these symbols → SIGSEGV crash on ngtcp2 init
 - Solution: Don't use LD_PRELOAD in intune-portal, only in broker wrapper
 
-### Critical: Identity Broker Setup
+### Identity Broker Setup (Nix-Managed)
 
-**Use the native brokers (2.0.3) from recolic, NOT the Java brokers (1.7.0):**
+The identity broker is now fully managed by Nix via `modules/home/linux/intune.nix`:
 
-The native 2.0.3 broker dropped Java dependency and includes BOTH user and device broker.
-The old Java device broker (1.7.0) is incompatible - it lacks D-Bus methods the native user broker expects,
-causing "org.freedesktop.dbus.errors.UnknownMethod" errors.
+**User Broker:**
+- Binary: `${brokerPkg}/bin/microsoft-identity-broker` (from Nix package)
+- Wrapper: `microsoft-identity-broker-rosetta` (in PATH after home-manager switch)
+- D-Bus activation: `~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service`
+- Automatically configured with Mesa software rendering and OpenSSL 3.3.2
 
-**User Broker (native 2.0.3):**
-- Binary: `/usr/bin/microsoft-identity-broker-2.0.3` + wrapper
-- D-Bus activation: `/usr/share/dbus-1/services/com.microsoft.identity.broker1.service`
-- **Mask the Java user service** to prevent conflicts:
-  ```bash
-  systemctl --user mask microsoft-identity-broker.service
-  ```
-
-**Device Broker (CRITICAL - must also be native 2.0.3):**
-- Binary: `/usr/bin/microsoft-identity-device-broker-2.0.3` + wrapper
-- The systemd service at `/usr/lib/systemd/system/microsoft-identity-device-broker.service` points to old Java broker
-- **Create override to use native device broker:**
+**Device Broker (requires manual systemd override):**
+- Binary: `${brokerPkg}/bin/microsoft-identity-device-broker` (from Nix package)
+- Wrapper: `microsoft-identity-device-broker-rosetta` (in PATH)
+- **Create systemd override to use Nix wrapper:**
   ```bash
   sudo mkdir -p /etc/systemd/system/microsoft-identity-device-broker.service.d
   sudo tee /etc/systemd/system/microsoft-identity-device-broker.service.d/override.conf << 'EOF'
   [Service]
-  Environment=
   ExecStart=
-  ExecStart=/usr/bin/microsoft-identity-device-broker-wrapper
-  WorkingDirectory=
+  ExecStart=/home/andreym/.nix-profile/bin/microsoft-identity-device-broker-rosetta
   EOF
   sudo systemctl daemon-reload
   sudo systemctl restart microsoft-identity-device-broker.service
   ```
 
-**Broker Wrapper Mesa Fix (CRITICAL for Rosetta):**
-
-The broker opens an embedded WebKitGTK browser for login. Under Rosetta, this fails with
-`Could not create default EGL display: EGL_BAD_PARAMETER` unless Mesa software rendering is configured.
-
-**Patch the user broker wrapper** (add before `exec` line in `/usr/bin/microsoft-identity-broker-wrapper`):
-```bash
-# Mesa software rendering for WebKitGTK embedded browser
-export LIBGL_ALWAYS_SOFTWARE=1
-export GALLIUM_DRIVER=llvmpipe
-export GDK_BACKEND=x11
-# NOTE: Do NOT set WEBKIT_DISABLE_COMPOSITING_MODE=1 - causes blank login window!
-export WEBKIT_DISABLE_DMABUF_RENDERER=1
-# EGL vendor config (required for WebKitGTK WebProcess)
-export __EGL_VENDOR_LIBRARY_DIRS="/nix/store/...-mesa-.../share/glvnd/egl_vendor.d"
-export LIBGL_DRIVERS_PATH="/nix/store/...-mesa-.../lib/dri"
-export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
-```
-
-Find Mesa path and apply with:
-```bash
-MESA_PATH=$(dirname $(dirname $(find /nix/store -name "libgbm.so.1" -path "*mesa*" 2>/dev/null | head -1)))
-sudo sed -i '/^exec /i # Mesa software rendering for WebKitGTK embedded browser\nexport LIBGL_ALWAYS_SOFTWARE=1\nexport GALLIUM_DRIVER=llvmpipe\nexport GDK_BACKEND=x11\nexport WEBKIT_DISABLE_DMABUF_RENDERER=1\nexport __EGL_VENDOR_LIBRARY_DIRS="'"$MESA_PATH"'/share/glvnd/egl_vendor.d"\nexport LIBGL_DRIVERS_PATH="'"$MESA_PATH"'/lib/dri"\nexport MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n' /usr/bin/microsoft-identity-broker-wrapper
-```
-
-**Note:** The `intune.nix` module includes an activation script that applies this patch automatically.
+**What the Nix wrappers provide:**
+- Mesa software rendering (llvmpipe) for WebKitGTK embedded browser
+- OpenSSL 3.3.2 via LD_LIBRARY_PATH (fixes Code:1200)
+- All required x86_64 libraries for Rosetta emulation
+- GIO TLS backend for HTTPS
 
 ### Clean Test: Full State Reset Procedure
 
@@ -113,23 +86,14 @@ rm -rf ~/.local/state/log/microsoft-identity-broker
 sudo rm -rf /var/lib/microsoft-identity-device-broker
 sudo rm -rf /var/lib/microsoft-identity-broker
 
-# 4. Verify broker wrapper has LD_PRELOAD for OpenSSL 3.3.2
-grep "LD_PRELOAD" /usr/bin/microsoft-identity-broker-wrapper
-# Should show: export LD_PRELOAD="/nix/store/.../openssl-arch-3.3.2/lib/libcrypto.so.3:..."
-
-# 5. Restart device broker with clean state
+# 4. Restart device broker with clean state
 sudo systemctl daemon-reload
 sudo systemctl restart microsoft-identity-device-broker.service
 
-# 6. Verify broker is running through wrapper (check for LD_PRELOAD in env)
-BROKER_PID=$(pgrep -f microsoft-identity-broker-2.0.3 | head -1)
-if [ -n "$BROKER_PID" ]; then
-  cat /proc/$BROKER_PID/environ | tr '\0' '\n' | grep LD_PRELOAD
-fi
+# 5. Verify status
+intune-status
 
-# 7. Launch intune-portal (use minimal wrapper without LD_LIBRARY_PATH overrides)
-~/.local/bin/intune-portal-minimal
-# Or the Nix wrapper:
+# 6. Launch intune-portal
 intune-portal-rosetta
 ```
 
@@ -138,8 +102,8 @@ intune-portal-rosetta
 # Check OpenSSL version intune-portal uses (should show 3.0.18)
 readelf -d $(which intune-portal) | grep openssl
 
-# Check broker has OpenSSL 3.3.2 loaded
-cat /proc/$(pgrep -f microsoft-identity-broker-2.0.3)/environ | tr '\0' '\n' | grep LD_PRELOAD
+# Check broker status and D-Bus service
+intune-status
 
 # Check broker logs
 sudo journalctl -u microsoft-identity-device-broker.service -n 50
@@ -150,13 +114,13 @@ sudo journalctl -u microsoft-identity-device-broker.service -n 50
 - [Issue #285](https://github.com/microsoft/linux-package-repositories/issues/285) - November 2025 regression (closed)
 - [Issue #254](https://github.com/microsoft/linux-package-repositories/issues/254) - OpenSSL 3.4.0+ bug report
 
-## Current Test Setup (Dec 26, 2025)
+## Current Test Setup (Dec 29, 2025)
 
 **Verified working:**
 - Rosetta binfmt: ✓ enabled (restart `systemd-binfmt` after reboot if needed)
 - os-release: ✓ Ubuntu 22.04 (required)
-- User broker: ✓ native 2.0.3 via D-Bus activation (Java service masked)
-- Device broker: ✓ native 2.0.3 via systemd override (replaces Java 1.7.0)
+- User broker: ✓ 2.0.4 via Nix package + D-Bus activation
+- Device broker: ✓ 2.0.4 via Nix package + systemd override
 - YubiKey: ✓ detected via Parallels smart card sharing
 - pcscd: ✓ socket at `/run/pcscd/pcscd.comm` + symlink
 - gnome-keyring: ✓ running (password-protected keyring required)
@@ -167,23 +131,27 @@ sudo journalctl -u microsoft-identity-device-broker.service -n 50
 
 **Nix packages (intune.nix):**
 - intune-portal, intune-portal-rosetta wrapper
+- microsoft-identity-broker (2.0.4 from Microsoft .deb)
+- microsoft-identity-broker-rosetta, microsoft-identity-device-broker-rosetta wrappers
 - gnome-keyring, seahorse, libsecret
 - yubikey-manager (ykman), pcsc-tools
-- x86_64: mesa, glib-networking, opensc, pcsclite, openssl_3
+- x86_64: mesa, glib-networking, opensc, pcsclite, openssl 3.3.2 (Arch)
 
-**Debug script:** `~/intune-debug.sh` captures all logs
+**Helper commands:**
+- `intune-status` - Show status of all components
+- `intune-logs` - Tail all Intune-related logs
 
 **To test:**
 ```bash
-# Terminal 1: Start log capture
-~/intune-debug.sh
+# Check status
+intune-status
 
-# Terminal 2: Run intune
-intune-portal-rosetta 2>&1 | tee /tmp/intune-logs-*/intune-portal.log
+# Run intune
+intune-portal-rosetta
 ```
 
 **If issues, check:**
-- `/tmp/intune-logs-*/` for all captured logs
+- `intune-logs --all` for combined log output
 - `journalctl --user -u microsoft-identity-broker.service`
 - `sudo journalctl -u microsoft-identity-device-broker.service`
 
@@ -194,12 +162,12 @@ intune-portal-rosetta 2>&1 | tee /tmp/intune-logs-*/intune-portal.log
 | intune-portal | x86_64-only package | Rosetta emulation via binfmt_misc |
 | WebKitGTK GUI | EGL errors (no GPU) | x86_64 Mesa with llvmpipe software rendering |
 | Network/TLS | GIO TLS backend missing | x86_64 glib-networking |
-| OpenSSL 3.4.0+ | X509 bug causes auth failures | nixpkgs intune-portal already links 3.0.18 |
+| OpenSSL 3.4.0+ | X509 bug causes auth failures | nixpkgs intune-portal links 3.0.18; broker uses 3.3.2 |
 | YubiKey CCID | USB passthrough issues | Parallels "Share smart card readers" |
 | PIV certificates | Browser can't find certs | OpenSC + NSS PKCS#11 module |
-| Identity Broker | Java user broker conflicts with native | Use native 2.0.3, mask Java systemd service |
-| Device Broker | Systemd service points to old Java 1.7.0 | Create systemd override to use native 2.0.3 |
-| Broker WebKit UI | EGL_BAD_PARAMETER under Rosetta | Patch broker wrapper with Mesa software rendering |
+| Identity Broker | Needs x86_64 libs + OpenSSL fix | Nix package with Rosetta wrapper |
+| Device Broker | System service needs Nix wrapper | Manual systemd override to Nix wrapper |
+| Broker WebKit UI | EGL_BAD_PARAMETER under Rosetta | Wrapper includes Mesa software rendering |
 
 ## 1. Rosetta x86_64 Emulation
 
@@ -422,75 +390,45 @@ PCSCLITE_CSOCK_NAME=/run/pcscd/pcscd.comm \
   --slot-index 0 --list-objects --type cert
 ```
 
-## 7. Microsoft Identity Broker (Manual Setup)
+## 7. Microsoft Identity Broker (Nix-Managed)
 
-The identity broker requires manual configuration for x86_64 Java under Rosetta.
+The identity broker is now managed by Nix. The package downloads the official Microsoft .deb
+from `packages.microsoft.com` and extracts the native x86_64 binaries.
 
-### Install AUR Packages
+### Package Location
 
-```bash
-yay -S microsoft-identity-broker jdk11-openjdk-amd64
+```
+packages/microsoft-identity-broker/default.nix
 ```
 
-### Create Device Broker User
+### What's Included
+
+- `microsoft-identity-broker` binary (x86_64 ELF)
+- `microsoft-identity-device-broker` binary (x86_64 ELF)
+- D-Bus service files (templates - wrappers override paths)
+- Systemd service file
+
+### Updating the Broker Version
+
+1. Check for new versions at: `https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/m/microsoft-identity-broker/`
+2. Update `version` in `packages/microsoft-identity-broker/default.nix`
+3. Get new hash: `nix-prefetch-url <new-url>`
+4. Update `sha256` in the package
+5. Rebuild: `home-manager switch --flake .#rocinante`
+
+### Device Broker Override (One-Time Setup)
+
+The device broker runs as a system service and needs a manual override to use the Nix wrapper:
 
 ```bash
-sudo useradd -r -s /usr/bin/nologin -d /var/lib/microsoft-identity-broker microsoft-identity-broker
-```
-
-### D-Bus Policy (Device Broker)
-
-```bash
-sudo tee /usr/share/dbus-1/system.d/com.microsoft.identity.devicebroker1.conf << 'EOF'
-<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
- "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
-<busconfig>
-  <policy user="microsoft-identity-broker">
-    <allow own="com.microsoft.identity.devicebroker1"/>
-    <allow send_destination="com.microsoft.identity.devicebroker1"/>
-  </policy>
-  <policy context="default">
-    <allow send_destination="com.microsoft.identity.devicebroker1"/>
-  </policy>
-</busconfig>
+sudo mkdir -p /etc/systemd/system/microsoft-identity-device-broker.service.d
+sudo tee /etc/systemd/system/microsoft-identity-device-broker.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/home/andreym/.nix-profile/bin/microsoft-identity-device-broker-rosetta
 EOF
-sudo chmod 644 /usr/share/dbus-1/system.d/com.microsoft.identity.devicebroker1.conf
-sudo systemctl reload dbus
-```
-
-### Configure Device Broker Service (System)
-
-Edit `/usr/lib/systemd/system/microsoft-identity-device-broker.service`:
-
-```ini
-Environment="JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64"
-Environment="JAVA_OPTS=-Xint -XX:+UseSerialGC -Xmx256m"
-Environment="LD_LIBRARY_PATH=/nix/store/.../alsa-lib/lib:/nix/store/.../gtk+3/lib:..."
-```
-
-Key: Add x86_64 Nix store library paths for GTK, glib, Mesa, alsa-lib, X11 libs.
-
-### Configure Identity Broker Service (User)
-
-Edit `/usr/lib/systemd/user/microsoft-identity-broker.service`:
-
-```ini
-Environment="JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64"
-Environment="JAVA_OPTS=-Xint -XX:+UseSerialGC -Xmx512m"
-Environment="LD_LIBRARY_PATH=..."  # Same x86_64 libs as device broker
-Environment="GDK_PIXBUF_MODULE_FILE=/nix/store/.../gdk-pixbuf/.../loaders.cache"
-Environment="LIBGL_ALWAYS_SOFTWARE=1"
-Environment="GALLIUM_DRIVER=llvmpipe"
-Environment="GDK_BACKEND=x11"
-```
-
-### Start Services
-
-```bash
 sudo systemctl daemon-reload
-sudo systemctl start microsoft-identity-device-broker
-systemctl --user daemon-reload
-systemctl --user start microsoft-identity-broker
+sudo systemctl restart microsoft-identity-device-broker.service
 ```
 
 ## 8. OS Release Fix (Critical)
@@ -556,32 +494,42 @@ env LD_PRELOAD=/usr/lib/libcrypto-332.so:/usr/lib/libssl-332.so intune-portal
 
 ## 10. Build & Deploy Process
 
+### Quick Rebuild on Rocinante
+
+The dotfiles directory is mounted from macOS at `/media/psf/Home/Documents/dotfiles`.
+
+```bash
+# From rocinante - rebuild and apply
+cd /media/psf/Home/Documents/dotfiles
+nix run nixpkgs#home-manager -- switch --flake .#rocinante
+
+# Or create a helper script
+cat > ~/rebuild.sh << 'EOF'
+#!/bin/bash
+export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+cd /media/psf/Home/Documents/dotfiles
+nix run nixpkgs#home-manager -- switch --flake ".#rocinante"
+EOF
+chmod +x ~/rebuild.sh
+```
+
 ### From behemoth (macOS host)
 
 ```bash
-# Dry-run build to verify config (no actual build)
-just rocinante-build
+# Build only (verify config compiles)
+just hm-build rocinante
 
-# Apply on rocinante via prlctl (requires VM running)
-just rocinante-switch
-```
-
-### From rocinante (in VM)
-
-```bash
-# Pull latest dotfiles
-cd ~/dotfiles && git pull
-
-# Apply home-manager configuration
-home-manager switch --flake .#rocinante
-
-# Or if home-manager not in PATH
-nix run home-manager -- switch --flake .#rocinante
+# Or build via prlctl
+prlctl exec Rocinante /nix/var/nix/profiles/default/bin/nix build \
+  '/media/psf/Home/Documents/dotfiles#homeConfigurations.rocinante.activationPackage'
 ```
 
 ### After applying, test intune
 
 ```bash
+# Check status
+intune-status
+
 # Clear old state (if needed)
 rm -rf ~/.Microsoft ~/.cache/intune-portal ~/.config/intune ~/.local/share/intune-portal
 
@@ -657,33 +605,16 @@ journalctl --user -u dbus -n 50 --no-pager
 sudo systemctl status microsoft-identity-device-broker.service
 sudo journalctl -u microsoft-identity-device-broker.service -n 50 --no-pager
 
-# 7. Verify broker wrapper has correct Mesa paths
-cat /usr/bin/microsoft-identity-broker-wrapper | grep -E "(EGL|MESA|LIBGL)"
-
-# 8. Check that EGL vendor config exists
-ls -la $(grep __EGL_VENDOR_LIBRARY_DIRS /usr/bin/microsoft-identity-broker-wrapper | cut -d'"' -f2)
-
-# 9. Verify Mesa EGL vendor JSON is valid
-cat $(grep __EGL_VENDOR_LIBRARY_DIRS /usr/bin/microsoft-identity-broker-wrapper | cut -d'"' -f2)/50_mesa.json
+# 7. Verify Nix wrapper contents
+cat $(which microsoft-identity-broker-rosetta)
 ```
 
 **Key EGL/Mesa issues to look for:**
 - `EGL_BAD_PARAMETER` - EGL vendor config not found or invalid
 - `Could not create default EGL display` - Mesa software rendering not configured
 - `WebKitWebProcess ... terminated abnormally with signal 6/ABRT` - WebKit crashed (usually EGL-related)
-- Empty `__EGL_VENDOR_LIBRARY_DIRS` - Points to mesa-libgbm instead of full mesa (no 50_mesa.json)
 
-**Fix for EGL vendor path:**
-The broker wrapper must point to a full mesa package (not mesa-libgbm) that has `share/glvnd/egl_vendor.d/50_mesa.json`:
-```bash
-# Find correct mesa path (must have egl_vendor.d with 50_mesa.json)
-find /nix/store -path "*mesa*/share/glvnd/egl_vendor.d/50_mesa.json" 2>/dev/null | head -1
-
-# Update broker wrapper with correct path
-MESA_PATH=$(dirname $(dirname $(dirname $(find /nix/store -path "*mesa*/share/glvnd/egl_vendor.d/50_mesa.json" 2>/dev/null | head -1))))
-sudo sed -i "s|__EGL_VENDOR_LIBRARY_DIRS=.*|__EGL_VENDOR_LIBRARY_DIRS=\"${MESA_PATH}/share/glvnd/egl_vendor.d\"|" /usr/bin/microsoft-identity-broker-wrapper
-sudo sed -i "s|LIBGL_DRIVERS_PATH=.*|LIBGL_DRIVERS_PATH=\"${MESA_PATH}/lib/dri\"|" /usr/bin/microsoft-identity-broker-wrapper
-```
+**Note:** The Nix wrappers (`microsoft-identity-broker-rosetta`) include all necessary Mesa configuration. If issues persist, rebuild with `home-manager switch --flake .#rocinante`.
 
 ## Known Limitations
 
@@ -697,8 +628,8 @@ sudo sed -i "s|LIBGL_DRIVERS_PATH=.*|LIBGL_DRIVERS_PATH=\"${MESA_PATH}/lib/dri\"
 
 5. **Polkit blocks Rosetta processes** - pcscd's polkit integration doesn't recognize Rosetta-emulated x86_64 processes as authorized. Use `--disable-polkit` systemd override.
 
-6. **JVM under Rosetta** - Requires `-Xint -XX:+UseSerialGC` to avoid JIT/GC crashes.
+6. **os-release must be Ubuntu** - intune-portal checks os-release and fails with credential errors on non-Ubuntu systems (see section 8).
 
-7. **os-release must be Ubuntu** - intune-portal checks os-release and fails with credential errors on non-Ubuntu systems (see section 8).
+7. **WebKitGTK lacks WebAuthn/FIDO2 support** - The broker's embedded WebKitGTK browser cannot show passkey/FIDO2 prompts. Use password authentication for broker login. Edge browser does support FIDO2 for other Microsoft services.
 
-8. **WebKitGTK lacks WebAuthn/FIDO2 support** - The broker's embedded WebKitGTK browser cannot show passkey/FIDO2 prompts. Use password authentication for broker login. Edge browser does support FIDO2 for other Microsoft services.
+8. **Device broker requires manual systemd override** - Since it's a system service, home-manager cannot configure it. See section 7 for override instructions.
