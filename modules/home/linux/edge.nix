@@ -3,6 +3,12 @@
 # Installs Microsoft Edge browser.
 # On aarch64-linux, uses Rosetta emulation with x86_64 Mesa for software rendering.
 # Uses bubblewrap to create NixOS-compatible /run/opengl-driver paths.
+#
+# PKCS#11/Smart Card Support:
+#   - Edge uses NSS for certificate handling (not p11-kit/GnuTLS like WebKitGTK)
+#   - NSS module config: ~/.pki/nssdb/pkcs11.txt (set up via intune-nss-setup)
+#   - LD_LIBRARY_PATH includes nixpkgs OpenSSL for x86_64 OpenSC compatibility
+#   - x86_64 OpenSC requires OpenSSL 3.4+ symbols (not compatible with Arch's 3.3.2)
 
 { lib, config, pkgs, ... }:
 
@@ -104,6 +110,7 @@ EOF
       --ro-bind /run/user /run/user \
       --ro-bind /run/dbus /run/dbus \
       --ro-bind /run/pcscd /run/pcscd \
+      --ro-bind /run/systemd/resolve /run/systemd/resolve \
       --ro-bind /tmp/.X11-unix /tmp/.X11-unix \
       --ro-bind ${openglDriverDir} /run/opengl-driver \
       --setenv DISPLAY "''${DISPLAY:-:0}" \
@@ -112,7 +119,7 @@ EOF
       --setenv GALLIUM_DRIVER llvmpipe \
       --setenv MESA_LOADER_DRIVER_OVERRIDE llvmpipe \
       --setenv __EGL_VENDOR_LIBRARY_DIRS "${pkgsX86.mesa}/share/glvnd/egl_vendor.d" \
-      --setenv LD_LIBRARY_PATH "${pkgsX86.libglvnd}/lib:${pkgsX86.mesa}/lib:''${LD_LIBRARY_PATH:-}" \
+      --setenv LD_LIBRARY_PATH "${pkgsX86.openssl.out}/lib:${pkgsX86.libglvnd}/lib:${pkgsX86.mesa}/lib:''${LD_LIBRARY_PATH:-}" \
       --setenv LD_PRELOAD "${sigtrapIgnore}/lib/libsigtrap_ignore.so:''${LD_PRELOAD:-}" \
       --setenv CHROME_CRASHPAD_PIPE_NAME "" \
       -- ${edgePackage}/bin/microsoft-edge \
@@ -147,6 +154,8 @@ in {
       pkgs.bubblewrap
       pkgsX86.mesa
       pkgsX86.libglvnd
+      # Note: pkgsX86.openssl.out is referenced in LD_LIBRARY_PATH for PKCS#11/OpenSC
+      # but NOT added to home.packages to avoid conflict with opensslArch in intune.nix
       # SIGTRAP ignore preload for crashpad Rosetta workaround
       sigtrapIgnore
     ] else []);

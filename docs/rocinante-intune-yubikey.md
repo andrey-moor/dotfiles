@@ -126,6 +126,7 @@ sudo journalctl -u microsoft-identity-device-broker.service -n 50
 - gnome-keyring: ✓ running (password-protected keyring required)
 - openssl: ✓ nixpkgs intune-portal links 3.0.18 (safe version)
 - Microsoft Edge: ✓ YubiKey FIDO2/Passkey works (PIN prompt appears)
+- Microsoft Edge: ✓ YubiKey PIV certificate auth works (certificate picker appears)
 
 **Note:** Direct Edge access to `portal.manage.microsoft.com` may return "Access Denied" if org policy requires device enrollment through Intune Portal first.
 
@@ -318,7 +319,60 @@ intune-portal-rosetta
 microsoft-edge https://portal.manage.microsoft.com
 ```
 
-## 6. x86_64 Smart Card Support (Critical)
+## 6. Microsoft Edge PKCS#11/YubiKey Support
+
+Edge browser uses NSS (not p11-kit/GnuTLS like WebKitGTK) for certificate handling. The Edge wrapper in `modules/home/linux/edge.nix` includes:
+
+### Key Configuration
+
+1. **OpenSSL 3.6.0 in LD_LIBRARY_PATH** - x86_64 OpenSC from nixpkgs requires OpenSSL 3.4+ symbols. The Edge wrapper includes `${pkgsX86.openssl.out}/lib` to provide these.
+
+2. **DNS Resolution** - The bwrap sandbox binds `/run/systemd/resolve` for systemd-resolved DNS to work.
+
+3. **NSS Module Registration** - OpenSC must be registered in NSS database at `~/.pki/nssdb/`.
+
+### NSS Setup (One-Time)
+
+Run the helper script to configure NSS for YubiKey:
+
+```bash
+intune-nss-setup
+```
+
+Or manually:
+
+```bash
+# Ensure NSS database exists
+mkdir -p ~/.pki/nssdb
+certutil -d sql:~/.pki/nssdb -N --empty-password
+
+# Add OpenSC module (use x86_64 path for Rosetta Edge)
+modutil -dbdir sql:~/.pki/nssdb -add 'OpenSC-x86' \
+  -libfile ~/.nix-profile/lib/pkcs11/opensc-pkcs11.so -force
+```
+
+### Verification
+
+```bash
+# Check NSS modules
+modutil -dbdir sql:~/.pki/nssdb -list
+
+# Launch Edge with Rosetta wrapper
+microsoft-edge-rosetta
+
+# Navigate to a site requiring certificate auth
+# You should see the YubiKey certificate picker
+```
+
+### Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `OPENSSL_3.4.0 not found` | Missing OpenSSL in LD_LIBRARY_PATH | Rebuild edge.nix wrapper |
+| `ERR_NAME_NOT_RESOLVED` | DNS not working in bwrap | Add `/run/systemd/resolve` binding |
+| No certificate dialog | NSS module not registered | Run `intune-nss-setup` |
+
+## 7. x86_64 Smart Card Support (Critical)
 
 The x86_64 intune-portal binary can only load x86_64 PKCS#11 modules. ARM64 opensc-pkcs11.so won't work.
 
@@ -390,7 +444,7 @@ PCSCLITE_CSOCK_NAME=/run/pcscd/pcscd.comm \
   --slot-index 0 --list-objects --type cert
 ```
 
-## 7. Microsoft Identity Broker (Nix-Managed)
+## 8. Microsoft Identity Broker (Nix-Managed)
 
 The identity broker is now managed by Nix. The package downloads the official Microsoft .deb
 from `packages.microsoft.com` and extracts the native x86_64 binaries.
@@ -431,7 +485,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart microsoft-identity-device-broker.service
 ```
 
-## 8. OS Release Fix (Critical)
+## 9. OS Release Fix (Critical)
 
 intune-portal requires Ubuntu os-release to function properly. On Arch Linux, the credential storage fails with "(Code:1200) The credential is invalid" errors.
 
@@ -453,7 +507,7 @@ EOF
 
 Reference: https://github.com/recolic/microsoft-intune-archlinux
 
-## 9. OpenSSL 3.4.0+ Bug Fix (Critical)
+## 10. OpenSSL 3.4.0+ Bug Fix (Critical)
 
 OpenSSL 3.4.0 introduced a breaking change ([PR #23965](https://github.com/openssl/openssl/pull/23965)) that causes:
 - `X509_REQ_set_version:passed invalid argument` errors
@@ -492,7 +546,7 @@ sudo cp /tmp/.ossl332/usr/lib/libssl.so.3 /usr/lib/libssl-332.so
 env LD_PRELOAD=/usr/lib/libcrypto-332.so:/usr/lib/libssl-332.so intune-portal
 ```
 
-## 10. Build & Deploy Process
+## 11. Build & Deploy Process
 
 ### Quick Rebuild on Rocinante
 
@@ -545,7 +599,7 @@ intune-portal-rosetta
 |-------|-------|----------|
 | `X509_REQ_set_version:passed invalid argument` | OpenSSL 3.4.0+ bug | Use openssl_3 (3.0.18) via LD_LIBRARY_PATH |
 | `BadCertificate` / Code:1200 | OpenSSL 3.4.0+ bug | Same as above |
-| `Terms of use error` / Internal Server Error | Wrong os-release | Set /etc/os-release to Ubuntu (Section 8) |
+| `Terms of use error` / Internal Server Error | Wrong os-release | Set /etc/os-release to Ubuntu (Section 9) |
 | `errorCode 1001, WL: error in client communication` | NVIDIA Wayland issue | Set `WEBKIT_DISABLE_DMABUF_RENDERER=1` |
 | White screen before login | gnome-keyring issue | Create password-protected keyring with seahorse |
 | Blank window after email entry | WEBKIT_DISABLE_COMPOSITING_MODE=1 | Remove/comment out this env var from broker wrapper |

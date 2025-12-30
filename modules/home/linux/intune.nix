@@ -61,6 +61,10 @@ let
   # Microsoft Identity Broker package (x86_64 binaries from Microsoft .deb)
   brokerPkg = pkgsX86.callPackage ../../../packages/microsoft-identity-broker { };
 
+  # Microsoft Intune Portal package (x86_64 binaries from Microsoft .deb)
+  # Using custom package to get latest version (nixpkgs is often outdated)
+  intunePkg = pkgsX86.callPackage ../../../packages/intune-portal { };
+
   # Custom curl without HTTP/3 support to avoid ngtcp2's OPENSSL_3.5.0 requirement
   # This allows us to use Arch OpenSSL 3.3.2 for the broker without symbol conflicts
   curlNoHttp3 = pkgsX86.curl.override { http3Support = false; };
@@ -91,6 +95,30 @@ let
     '';
   };
 
+  # OpenSC 0.25.1 from Arch Linux archives
+  # Required because Nix OpenSC 0.26.1 requires OPENSSL_3.4.0 symbols,
+  # but we use Arch OpenSSL 3.3.2 (which only has up to OPENSSL_3.0.0).
+  # This version was built April 2024, before OpenSSL 3.4.0 was released.
+  openscArch = pkgs.stdenv.mkDerivation {
+    pname = "opensc-arch";
+    version = "0.25.1";
+    src = pkgs.fetchurl {
+      url = "https://archive.archlinux.org/packages/o/opensc/opensc-0.25.1-1-x86_64.pkg.tar.zst";
+      sha256 = "0qvfh0wbcbh02nram42fgip055msmdffhg310rsi3d843xa5pdy6";
+    };
+    nativeBuildInputs = [ pkgs.zstd ];
+    unpackPhase = ''
+      mkdir -p $out
+      cd $out
+      zstd -d < $src | tar xf -
+    '';
+    installPhase = ''
+      # Move usr contents to $out root
+      mv $out/usr/* $out/
+      rm -rf $out/usr $out/.BUILDINFO $out/.MTREE $out/.PKGINFO $out/etc
+    '';
+  };
+
 
   #############################################################################
   # SHARED ENVIRONMENT SETUP
@@ -102,11 +130,11 @@ let
     mesa = "${pkgsX86.mesa}";
     wayland = "${pkgsX86.wayland}/lib";
     gio = "${pkgsX86.glib-networking}/lib/gio/modules";
-    gnutls = "${pkgsX86.gnutls}/lib";
+    gnutls = "${pkgsX86.gnutls.out}/lib";
     nettle = "${pkgsX86.nettle}/lib";
     libtasn1 = "${pkgsX86.libtasn1}/lib";
     libidn2 = "${pkgsX86.libidn2}/lib";
-    opensc = "${pkgsX86.opensc}";
+    opensc = "${openscArch}";
     libp11 = "${pkgsX86.libp11}";
     pcsclite = "${pkgsX86.pcsclite.lib}";
     p11kit = "${pkgsX86.p11-kit.out}";
@@ -189,9 +217,25 @@ let
   # Environment variables for TLS/SSL
   tlsEnvVars = ''
     # GIO TLS backend (glib-networking) for HTTPS
+    # NOTE: The old gnutls-pkcs11 separate backend was removed in glib-networking 2.64+
+    # Modern giognutls has PKCS#11 support built-in via GnuTLS PKCS#11 functions
     export GIO_MODULE_DIR="${x86LibPaths.gio}"
     export SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
     export SSL_CERT_DIR="/etc/ssl/certs"
+  '';
+
+  # Environment variables for PKCS#11 / YubiKey support
+  # CRITICAL: XDG_CONFIG_HOME must be set for p11-kit to find module configs in ~/.config/pkcs11/modules/
+  # Without this, D-Bus activated services won't find the PKCS#11 modules
+  pkcs11EnvVars = ''
+    # XDG paths - required for p11-kit to find user module configs
+    export HOME="''${HOME:-/home/$(whoami)}"
+    export XDG_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
+
+    # PKCS#11/YubiKey support
+    # NOTE: p11-kit reads module configs from $XDG_CONFIG_HOME/pkcs11/modules/ (managed by home-manager)
+    export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
+    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11:${x86LibPaths.p11kit}/lib/pkcs11"
   '';
 
   # Debug environment variables (when cfg.debug is true)
@@ -200,25 +244,29 @@ let
     export G_MESSAGES_DEBUG=all
     export WEBKIT_DEBUG=all
     export LIBGL_DEBUG=verbose
+    # Intune/MSAL internal debugging
+    export INTUNE_LOG_LEVEL=debug
+    export MSAL_LOG_LEVEL=Trace
+    # PKCS#11/p11-kit debugging
+    export P11_KIT_DEBUG=all
+    export GNUTLS_DEBUG_LEVEL=9
     echo "[DEBUG] Starting at $(date)" >&2
+    echo "[DEBUG] HOME=$HOME" >&2
+    echo "[DEBUG] XDG_CONFIG_HOME=$XDG_CONFIG_HOME" >&2
     echo "[DEBUG] LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >&2
     echo "[DEBUG] LD_PRELOAD=$LD_PRELOAD" >&2
+    echo "[DEBUG] P11_KIT_MODULE_PATH=$P11_KIT_MODULE_PATH" >&2
+    echo "[DEBUG] PCSCLITE_CSOCK_NAME=$PCSCLITE_CSOCK_NAME" >&2
+    echo "[DEBUG] XDG p11-kit config: $XDG_CONFIG_HOME/pkcs11/modules/" >&2
+    ls -la "$XDG_CONFIG_HOME/pkcs11/modules/" 2>/dev/null | sed 's/^/[DEBUG]   /' >&2 || echo "[DEBUG]   (not found)" >&2
   '';
 
   #############################################################################
-  # INTUNE-PORTAL (from Nix)
+  # INTUNE-PORTAL (custom package with latest version)
   #############################################################################
 
-  intunePackage = if isAarch64 then pkgsX86.intune-portal else pkgs.intune-portal;
-
-  # p11-kit module config for x86_64 opensc (YubiKey support)
-  p11kitModuleDir = pkgs.runCommand "p11kit-x86-modules" {} ''
-    mkdir -p $out
-    cat > $out/opensc.module << EOF
-    module: ${pkgsX86.opensc}/lib/pkcs11/opensc-pkcs11.so
-    critical: no
-    EOF
-  '';
+  # Use our custom package for latest version (nixpkgs has 1.2503.10, we have 1.2511.7)
+  intunePackage = intunePkg;
 
   # OpenSSL config for PKCS#11 (YubiKey support)
   opensslConf = pkgs.writeText "openssl-pkcs11.cnf" ''
@@ -229,7 +277,7 @@ let
     pkcs11 = pkcs11_section
     [pkcs11_section]
     engine_id = pkcs11
-    MODULE_PATH = ${pkgsX86.opensc}/lib/pkcs11/opensc-pkcs11.so
+    MODULE_PATH = ${openscArch}/lib/pkcs11/opensc-pkcs11.so
     init = 0
   '';
 
@@ -237,23 +285,23 @@ let
   intuneWrapper = pkgs.writeShellScriptBin "intune-portal-rosetta" ''
     #!/usr/bin/env bash
     # intune-portal-rosetta: Runs intune-portal with x86_64 Mesa under Rosetta
+    # v4 - intune-portal 1.2511+ no longer bundles OpenSSL; needs Arch OpenSSL 3.3.2
     #
-    # NOTE: intune-portal bundles OpenSSL 3.0.18, so NO LD_PRELOAD needed here.
-    # The LD_PRELOAD is only for the AUR broker which uses system OpenSSL.
+    # NOTE: Both intune-portal and broker now use Arch OpenSSL 3.3.2 from LD_LIBRARY_PATH.
 
     # LD_LIBRARY_PATH: libglvnd MUST be first for Mesa software rendering
-    export LD_LIBRARY_PATH="${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.libfido2}/lib:${x86LibPaths.wayland}:${x86LibPaths.gnutls}:${x86LibPaths.nettle}:${x86LibPaths.libtasn1}:${x86LibPaths.libidn2}:${x86LibPaths.opensc}/lib:${x86LibPaths.libp11}/lib:${x86LibPaths.pcsclite}/lib:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
+    # Note: intune-portal 1.2511+ needs comprehensive x86_64 libraries - use same set as broker wrapper
+    # OpenSSL 3.3.2 from Arch is needed as newer intune-portal no longer bundles OpenSSL
+    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.wayland}:${x86LibPaths.gnutls}:${x86LibPaths.nettle}:${x86LibPaths.libtasn1}:${x86LibPaths.libidn2}:${x86LibPaths.libfido2}/lib:${x86LibPaths.opensc}/lib:${x86LibPaths.libp11}/lib:${x86LibPaths.pcsclite}/lib:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${mesaEnvVars}
     ${webkitEnvVars}
     ${tlsEnvVars}
+    ${pkcs11EnvVars}
 
-    # PKCS#11/YubiKey support
+    # OpenSSL PKCS#11 engine config (for legacy OpenSSL apps)
     export OPENSSL_CONF="${opensslConf}"
     export OPENSSL_ENGINES="${x86LibPaths.libp11}/lib/engines-3"
-    export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
-    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11:${x86LibPaths.p11kit}/pkcs11"
-    export P11_KIT_MODULE_CONFIGS="${p11kitModuleDir}"
     # Tell GnuTLS to use p11-kit proxy for PKCS#11
     export GNUTLS_CPUID_OVERRIDE=0x1
     export GNUTLS_FORCE_FIPS_MODE=0
@@ -286,19 +334,19 @@ let
 
     # LD_LIBRARY_PATH construction - comprehensive x86_64 library set for Rosetta
     # NOTE: Arch OpenSSL 3.3.2 is included to fix Code:1200 "credential is invalid" error
+    # NOTE: opensc/lib added for libopensc.so.11 needed by opensc-pkcs11.so PKCS#11 module
+    # NOTE: pcsclite/lib needed for OpenSC to communicate with native pcscd
     # We use curlNoHttp3 (curl with http3Support=false) to avoid ngtcp2's OPENSSL_3.5.0 requirement
-    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.opensc}/lib:${x86LibPaths.pcsclite}/lib:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${mesaEnvVars}
     ${webkitEnvVars}
     ${tlsEnvVars}
+    ${pkcs11EnvVars}
 
-    # PKCS#11/YubiKey support (required for certificate-based auth)
+    # OpenSSL PKCS#11 engine config (for legacy OpenSSL apps)
     export OPENSSL_CONF="${opensslConf}"
     export OPENSSL_ENGINES="${x86LibPaths.libp11}/lib/engines-3"
-    export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
-    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11"
-    export P11_KIT_MODULE_CONFIGS="${p11kitModuleDir}"
 
     ${debugEnvVars}
 
@@ -341,8 +389,8 @@ let
     # traverse /home/user directories.
 
     # Device broker shares same dependencies as user broker (WebKitGTK, GTK, etc.)
-    # Use the same comprehensive LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
+    # Use the same comprehensive LD_LIBRARY_PATH (including opensc/lib, pcsclite/lib)
+    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.opensc}/lib:${x86LibPaths.pcsclite}/lib:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${debugEnvVars}
 
@@ -428,6 +476,319 @@ let
     echo ""
   '';
 
+  #############################################################################
+  # PKCS#11/YUBIKEY DIAGNOSTIC HELPER
+  #############################################################################
+
+  pkcs11DiagHelper = pkgs.writeShellScriptBin "intune-pkcs11-diag" ''
+    #!/usr/bin/env bash
+    # intune-pkcs11-diag: Diagnose PKCS#11/YubiKey certificate chain
+    #
+    # Tests each layer: pcscd → OpenSC → p11-kit → GnuTLS
+    # Run this to identify where the certificate chain breaks.
+
+    set -euo pipefail
+
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m' # No Color
+
+    pass() { echo -e "''${GREEN}✓ PASS:''${NC} $1"; }
+    fail() { echo -e "''${RED}✗ FAIL:''${NC} $1"; }
+    warn() { echo -e "''${YELLOW}⚠ WARN:''${NC} $1"; }
+    info() { echo -e "  INFO: $1"; }
+
+    echo "========================================"
+    echo "PKCS#11/YubiKey Diagnostic for Intune"
+    echo "========================================"
+    echo ""
+
+    # Set up environment matching intune-portal-rosetta
+    # NOTE: p11-kit reads module configs from ~/.config/pkcs11/modules/ (XDG path)
+    export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
+    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11:${x86LibPaths.p11kit}/pkcs11"
+    export LD_LIBRARY_PATH="${x86LibPaths.pcsclite}/lib:${x86LibPaths.opensc}/lib:${x86LibPaths.p11kit}/lib:${x86LibPaths.gnutls}:${x86LibPaths.nettle}:${x86LibPaths.libtasn1}:${x86LibPaths.libidn2}:''${LD_LIBRARY_PATH:-}"
+    XDG_PKCS11_MODULES="$HOME/.config/pkcs11/modules"
+
+    echo "=== LAYER 1: pcscd (Smart Card Daemon) ==="
+    if systemctl is-active pcscd >/dev/null 2>&1; then
+      pass "pcscd service is running"
+    elif systemctl is-active pcscd.socket >/dev/null 2>&1; then
+      pass "pcscd.socket is active (socket activation)"
+    else
+      fail "pcscd is not running"
+      info "Try: sudo systemctl start pcscd"
+    fi
+
+    if [[ -S /run/pcscd/pcscd.comm ]]; then
+      pass "pcscd socket exists at /run/pcscd/pcscd.comm"
+    else
+      fail "pcscd socket not found"
+    fi
+    echo ""
+
+    echo "=== LAYER 2: OpenSC (x86_64) ==="
+    OPENSC_LIB="${x86LibPaths.opensc}/lib/pkcs11/opensc-pkcs11.so"
+    if [[ -f "$OPENSC_LIB" ]]; then
+      pass "OpenSC PKCS#11 module exists"
+      info "Path: $OPENSC_LIB"
+    else
+      fail "OpenSC PKCS#11 module not found at $OPENSC_LIB"
+    fi
+
+    PKCS11_TOOL="${openscArch}/bin/pkcs11-tool"
+    if [[ -x "$PKCS11_TOOL" ]]; then
+      pass "pkcs11-tool available"
+
+      echo "  Testing slot detection..."
+      if SLOTS=$("$PKCS11_TOOL" --list-slots 2>&1); then
+        if echo "$SLOTS" | grep -qi "yubikey\|token"; then
+          pass "YubiKey/token detected in slots"
+          echo "$SLOTS" | head -10 | sed 's/^/    /'
+        else
+          warn "No YubiKey found in slots (is it plugged in?)"
+          echo "$SLOTS" | head -5 | sed 's/^/    /'
+        fi
+      else
+        fail "pkcs11-tool --list-slots failed"
+        echo "$SLOTS" | sed 's/^/    /'
+      fi
+
+      echo "  Testing certificate listing..."
+      if CERTS=$("$PKCS11_TOOL" --list-objects --type cert 2>&1); then
+        if echo "$CERTS" | grep -qi "certificate"; then
+          pass "Certificates found on token"
+          echo "$CERTS" | grep -i "label\|subject" | head -10 | sed 's/^/    /'
+        else
+          warn "No certificates found (or PIN required)"
+        fi
+      else
+        fail "pkcs11-tool --list-objects failed"
+      fi
+    else
+      fail "pkcs11-tool not found"
+    fi
+    echo ""
+
+    echo "=== LAYER 3: p11-kit ==="
+    P11_KIT="${pkgsX86.p11-kit.bin}/bin/p11-kit"
+    if [[ -x "$P11_KIT" ]]; then
+      pass "p11-kit available"
+
+      echo "  XDG module config directory: $XDG_PKCS11_MODULES"
+      if [[ -d "$XDG_PKCS11_MODULES" ]]; then
+        pass "XDG module config directory exists"
+        for f in "$XDG_PKCS11_MODULES"/*.module; do
+          if [[ -f "$f" ]]; then
+            info "Found: $(basename "$f")"
+            cat "$f" | sed 's/^/      /'
+          fi
+        done
+      else
+        fail "XDG module config directory not found"
+        info "Expected: ~/.config/pkcs11/modules/"
+        info "Run 'home-manager switch' to create it"
+      fi
+
+      echo "  Testing module discovery..."
+      if MODULES=$("$P11_KIT" list-modules 2>&1); then
+        if echo "$MODULES" | grep -qi "opensc"; then
+          pass "OpenSC module discovered by p11-kit"
+        else
+          warn "OpenSC module not found by p11-kit"
+        fi
+        echo "$MODULES" | head -20 | sed 's/^/    /'
+      else
+        fail "p11-kit list-modules failed"
+        echo "$MODULES" | sed 's/^/    /'
+      fi
+    else
+      fail "p11-kit not found"
+    fi
+    echo ""
+
+    echo "=== LAYER 4: GnuTLS ==="
+    P11TOOL="${pkgsX86.gnutls.bin}/bin/p11tool"
+    if [[ -x "$P11TOOL" ]]; then
+      pass "GnuTLS p11tool available"
+
+      echo "  Testing token visibility..."
+      if TOKENS=$("$P11TOOL" --list-tokens 2>&1); then
+        if echo "$TOKENS" | grep -qi "yubikey\|piv\|token"; then
+          pass "Token visible to GnuTLS"
+          echo "$TOKENS" | head -10 | sed 's/^/    /'
+        else
+          warn "No tokens visible to GnuTLS p11tool"
+          echo "$TOKENS" | head -5 | sed 's/^/    /'
+        fi
+      else
+        fail "p11tool --list-tokens failed"
+      fi
+
+      echo "  Testing certificate visibility..."
+      if CERTS=$("$P11TOOL" --list-all-certs 2>&1); then
+        if echo "$CERTS" | grep -qi "object\|certificate\|label"; then
+          pass "Certificates visible to GnuTLS"
+          echo "$CERTS" | head -15 | sed 's/^/    /'
+        else
+          warn "No certificates visible to GnuTLS"
+        fi
+      else
+        fail "p11tool --list-all-certs failed"
+      fi
+    else
+      fail "GnuTLS p11tool not found"
+    fi
+    echo ""
+
+    echo "=== LAYER 5: System p11-kit Config ==="
+    echo "  Checking /etc/pkcs11/modules/..."
+    if [[ -d /etc/pkcs11/modules ]]; then
+      PERMS=$(stat -c '%a' /etc/pkcs11/modules 2>/dev/null || stat -f '%A' /etc/pkcs11/modules 2>/dev/null)
+      if [[ "$PERMS" == "755" ]] || [[ "$PERMS" == "7" ]]; then
+        pass "/etc/pkcs11/modules has correct permissions ($PERMS)"
+      else
+        warn "/etc/pkcs11/modules has permissions $PERMS (should be 755)"
+      fi
+      for f in /etc/pkcs11/modules/*.module; do
+        if [[ -f "$f" ]]; then
+          info "System module: $(basename "$f")"
+          cat "$f" | sed 's/^/      /'
+        fi
+      done
+    else
+      info "/etc/pkcs11/modules does not exist (using Nix config only)"
+    fi
+    echo ""
+
+    echo "=== SUMMARY ==="
+    echo "If all layers pass but intune-portal still says 'No certificate detected':"
+    echo "1. The issue may be JavaScript detection (not TLS-level)"
+    echo "2. Try clicking 'Use a certificate or smartcard' link manually"
+    echo "3. Enable debug mode: modules.linux.intune.debug = true"
+    echo "4. Check WebKitGTK TLS client auth support"
+    echo ""
+    echo "For verbose p11-kit debugging, run:"
+    echo "  export P11_KIT_DEBUG=all"
+    echo "  intune-portal-rosetta"
+  '';
+
+  #############################################################################
+  # NSS PKCS#11 SETUP HELPER
+  #############################################################################
+
+  # Helper to configure NSS database for Chromium-based browsers (Edge, Chrome)
+  # This is needed because NSS uses a separate module system from p11-kit
+  nssSetupHelper = pkgs.writeShellScriptBin "intune-nss-setup" ''
+    #!/usr/bin/env bash
+    # intune-nss-setup: Configure NSS database for smart card / YubiKey support
+    #
+    # This adds the OpenSC PKCS#11 module to the NSS database used by
+    # Chromium-based browsers (Edge, Chrome) so they can see YubiKey certificates.
+    #
+    # NSS database location: ~/.pki/nssdb/
+    # After running this, restart your browser.
+
+    set -euo pipefail
+
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m'
+
+    pass() { echo -e "''${GREEN}✓''${NC} $1"; }
+    fail() { echo -e "''${RED}✗''${NC} $1"; }
+    warn() { echo -e "''${YELLOW}⚠''${NC} $1"; }
+    info() { echo -e "  $1"; }
+
+    NSS_DB="$HOME/.pki/nssdb"
+    # Use x86_64 OpenSC for Rosetta/x86_64 browsers
+    OPENSC_LIB="${openscArch}/lib/pkcs11/opensc-pkcs11.so"
+    MODULE_NAME="OpenSC-x86"
+
+    echo "============================================"
+    echo "NSS PKCS#11 Setup for Smart Cards / YubiKey"
+    echo "============================================"
+    echo ""
+
+    # Check for modutil
+    MODUTIL="${pkgs.nss.tools}/bin/modutil"
+    if [[ ! -x "$MODUTIL" ]]; then
+      fail "modutil not found. Installing nss.tools..."
+      exit 1
+    fi
+    pass "modutil found at $MODUTIL"
+
+    # Ensure NSS database exists
+    if [[ ! -d "$NSS_DB" ]]; then
+      warn "NSS database not found at $NSS_DB"
+      info "Creating new NSS database..."
+      mkdir -p "$NSS_DB"
+      ${pkgs.nss.tools}/bin/certutil -d sql:"$NSS_DB" -N --empty-password
+      pass "Created NSS database"
+    else
+      pass "NSS database exists at $NSS_DB"
+    fi
+
+    # Check if OpenSC module already registered
+    if "$MODUTIL" -dbdir sql:"$NSS_DB" -list 2>/dev/null | grep -q "$MODULE_NAME"; then
+      warn "Module '$MODULE_NAME' already registered"
+      info "Current modules:"
+      "$MODUTIL" -dbdir sql:"$NSS_DB" -list 2>/dev/null | grep -A2 "slot:" | head -20 || true
+      echo ""
+      echo "To remove and re-add, run:"
+      echo "  $MODUTIL -dbdir sql:$NSS_DB -delete '$MODULE_NAME'"
+      exit 0
+    fi
+
+    # Check OpenSC library exists
+    if [[ ! -f "$OPENSC_LIB" ]]; then
+      fail "OpenSC PKCS#11 library not found at $OPENSC_LIB"
+      exit 1
+    fi
+    pass "OpenSC library found"
+
+    # Add the module
+    echo ""
+    echo "Adding OpenSC PKCS#11 module to NSS database..."
+    echo "  Module name: $MODULE_NAME"
+    echo "  Library: $OPENSC_LIB"
+    echo ""
+
+    if "$MODUTIL" -dbdir sql:"$NSS_DB" -add "$MODULE_NAME" -libfile "$OPENSC_LIB" -force; then
+      pass "Successfully added '$MODULE_NAME' to NSS database"
+    else
+      fail "Failed to add module"
+      exit 1
+    fi
+
+    echo ""
+    echo "Verifying module registration..."
+    if "$MODUTIL" -dbdir sql:"$NSS_DB" -list 2>/dev/null | grep -q "$MODULE_NAME"; then
+      pass "Module verified in NSS database"
+    else
+      fail "Module not found after adding"
+      exit 1
+    fi
+
+    echo ""
+    echo "============================================"
+    echo "Setup complete!"
+    echo ""
+    echo "Next steps:"
+    echo "1. Restart your browser (Edge, Chrome, etc.)"
+    echo "2. Go to a site requiring certificate auth"
+    echo "3. You should now see the YubiKey certificate picker"
+    echo ""
+    echo "To verify in browser:"
+    echo "  Chrome: Settings → Privacy and security → Security → Manage certificates"
+    echo "  Edge: edge://settings/security → Manage certificates"
+    echo ""
+    echo "To check registered modules:"
+    echo "  $MODUTIL -dbdir sql:$NSS_DB -list"
+  '';
+
 in {
   options.modules.linux.intune = {
     enable = mkEnableOption "Microsoft Intune Portal with identity brokers";
@@ -460,7 +821,13 @@ in {
       # Helper scripts
       logsHelper
       statusHelper
+      pkcs11DiagHelper
+
+      # NSS tools for browser smart card setup
+      pkgs.nss.tools  # provides modutil, certutil
     ] ++ (if isAarch64 then [
+      # NSS setup helper for Rosetta browsers
+      nssSetupHelper
       # Rosetta wrappers (reference brokerPkg binaries directly)
       intuneWrapper
       userBrokerWrapper
@@ -478,10 +845,11 @@ in {
       pkgsX86.nettle
       pkgsX86.libtasn1
       pkgsX86.libidn2
-      pkgsX86.opensc
+      openscArch
       pkgsX86.libp11
       pkgsX86.pcsclite.lib
       pkgsX86.p11-kit
+      pkgsX86.p11-kit.bin  # For p11-kit CLI tools
       pkgsX86.libfido2
       # System libraries for AUR broker
       pkgsX86.dbus.lib
@@ -547,6 +915,18 @@ in {
       "dbus-1/services/com.microsoft.identity.broker1.service" = {
         source = "${userBrokerDbusService}/share/dbus-1/services/com.microsoft.identity.broker1.service";
       };
+    };
+
+    # Install x86_64 PKCS#11 module config for p11-kit
+    # This tells the x86_64 p11-kit (used by intune-portal's WebKitGTK) where to find OpenSC
+    # NOTE: p11-kit reads from ~/.config/pkcs11/modules/ (XDG path) - not env vars!
+    # NOTE: No leading whitespace in text - p11-kit is whitespace-sensitive
+    xdg.configFile = mkIf isAarch64 {
+      "pkcs11/modules/opensc-x86.module".text = ''
+module: ${openscArch}/lib/pkcs11/opensc-pkcs11.so
+critical: no
+trust-policy: no
+'';
     };
 
     # Set systemd user session environment variables for WebKitGTK
