@@ -11,7 +11,7 @@ let hm_vars_path = if ($"/etc/profiles/per-user/($env.USER)/etc/profile.d/hm-ses
 
 if $hm_vars_path != null {
     # List of automatic nushell env vars that cannot be set manually
-    let excluded_vars = ['PWD', 'OLDPWD', 'CMD_DURATION_MS', 'LAST_EXIT_CODE', 'NU_VERSION']
+    let excluded_vars = ['PWD', 'OLDPWD', 'CMD_DURATION_MS', 'LAST_EXIT_CODE', 'NU_VERSION', 'FILE_PWD', 'CURRENT_FILE']
 
     let hm_vars = (bash -c $'source ($hm_vars_path) && env'
         | lines
@@ -35,7 +35,7 @@ if $hm_vars_path != null {
 $env.NIX_SSL_CERT_FILE = '/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt'
 
 # GPG agent for SSH authentication (Yubikey)
-$env.GPG_TTY = (tty)
+$env.GPG_TTY = (do -i { tty } | default "")
 $env.SSH_AUTH_SOCK = $"($env.HOME)/.gnupg/S.gpg-agent.ssh"
 
 $env.PATH = ($env.PATH | split row (char esep)

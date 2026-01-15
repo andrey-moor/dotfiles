@@ -99,6 +99,7 @@ with lib;
         uv              # Python package runner (uvx)
         nodejs          # Node.js runtime (npx)
         (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
+        yubikey-manager # ykman CLI for Yubikey management
       ];
 
       # Home-manager modules (shell, dev, profiles)
@@ -133,6 +134,7 @@ with lib;
           kubernetes.enable = true;
           terraform.enable = true;
           claude.enable = true;
+          bazel.enable = true;
         };
       };
     };

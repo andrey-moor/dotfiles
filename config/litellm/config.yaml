@@ -3,6 +3,13 @@ general_settings:
 
 litellm_settings:
   drop_params: true
+  request_timeout: 600  # 10 min for long planning sessions
+
+router_settings:
+  routing_strategy: simple-shuffle
+  allowed_fails: 3
+  cooldown_time: 60
+  retry_after: 5
 
 model_list:
   - model_name: '*'
@@ -10,3 +17,5 @@ model_list:
       model: github_copilot/*
       extra_headers:
         Editor-Version: vscode/1.100.0
+      rpm: 20   # Requests per minute limit (prevents upstream throttling)
+      tpm: 100000  # Tokens per minute limit

@@ -1,4 +1,5 @@
-# Rocinante -- Linux workstation (standalone home-manager)
+# Endurance -- Linux workstation (standalone home-manager)
+# Parallels VM on Apple Silicon with LUKS encryption
 
 { lib, ... }:
 
@@ -15,7 +16,8 @@ with lib;
 
     # Enable modules
     modules = {
-      dotfilesDir = "/home/andreym/dotfiles";
+      # Mounted from macOS via Parallels shared folders
+      dotfilesDir = "/mnt/psf/Home/Documents/dotfiles";
 
       profiles.user = "andreym";
 

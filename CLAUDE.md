@@ -73,7 +73,50 @@ To edit neovim config: edit `chezmoi/dot_config/nvim/...`, then `chezmoi apply`.
 ## Hosts
 
 - **behemoth**: macOS workstation (aarch64-darwin)
-- **rocinante**: Linux host (x86_64-linux)
+- **rocinante**: aarch64-linux VM running under Parallels on behemoth (uses Rosetta for x86_64 emulation)
+- **endurance**: aarch64-linux VM running under Parallels on behemoth with LUKS encryption (Intune compliance)
+
+### Rocinante (Parallels VM)
+
+Rocinante is an aarch64-linux VM with the dotfiles directory mounted from macOS via Parallels shared folders.
+
+**Directory paths:**
+- macOS: `/Users/andreym/Documents/dotfiles`
+- Rocinante: `/media/psf/Home/Documents/dotfiles` (mounted)
+
+**Build/switch from macOS (recommended):**
+```bash
+prlctl exec Rocinante "su andreym -s /bin/bash -c '. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && cd /media/psf/Home/Documents/dotfiles && nix run home-manager -- switch --flake .#rocinante'"
+```
+
+**Build/switch from inside Rocinante:**
+```bash
+cd /media/psf/Home/Documents/dotfiles
+nix run home-manager -- switch --flake .#rocinante
+```
+
+**Notes:**
+- Use `su andreym -s /bin/bash -c '...'` because Rocinante's default shell is nushell (doesn't support `&&`)
+- The mounted directory allows editing on macOS and building on Rocinante without git push/pull
+- Rosetta x86_64 emulation is enabled for running x86_64 binaries (intune-portal, identity brokers)
+
+### Endurance (Parallels VM - Encrypted)
+
+Endurance is an aarch64-linux VM with LUKS full-disk encryption for Microsoft Intune compliance.
+
+**Directory paths:**
+- macOS: `/Users/andreym/Documents/dotfiles`
+- Endurance: `/mnt/psf/Home/Documents/dotfiles` (mounted via Parallels shared folders)
+
+**Build/switch from macOS:**
+```bash
+prlctl exec Endurance "su andreym -s /bin/bash -c '. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && cd /mnt/psf/Home/Documents/dotfiles && nix run home-manager -- switch --flake .#endurance -b backup'"
+```
+
+**Notes:**
+- Uses `/mnt/psf/` mount path (vs Rocinante's `/media/psf/`)
+- Requires manual prerequisites for Rosetta and Intune - see `hosts/endurance/README.md`
+- LUKS passphrase required at boot
 
 ## Notes
 
