@@ -37,10 +37,12 @@ let
     "packages" "devShells" "apps" "checks"
   ];
 
-  # Detect host type from system string
-  hostType = system:
-    if hasSuffix "darwin" system then "darwin"
-    else "home";  # Linux = standalone home-manager
+  # Detect host type from system string and optional explicit type field
+  # Supports: "darwin" (auto from system), "nixos" (explicit), "home" (default for Linux)
+  hostType = system: host:
+    if (host.type or null) == "nixos" then "nixos"
+    else if hasSuffix "darwin" system then "darwin"
+    else "home";  # Linux = standalone home-manager (default)
 
   # Create nixpkgs instance for a given system
   mkPkgs = system: import nixpkgs {
@@ -151,9 +153,58 @@ let
       ++ (if mergedHost ? config then [ mergedHost.config ] else []);
     };
 
+  # Path to NixOS system modules
+  nixosModulesPath = ../modules/nixos;
+
+  # Build a NixOS host configuration (NixOS + home-manager)
+  mkNixosHost = name: host:
+    let
+      mergedHost = normalizeHost name host;
+      system = mergedHost.system or "x86_64-linux";
+      pkgs = mkPkgs system;
+      # Home-manager modules - include root default.nix + all recursive modules
+      homeModules = [ (import homeModulesPath) ] ++ moduleLib.mapModulesRec' homeModulesPath import;
+      # NixOS system modules - include root default.nix + all recursive modules
+      nixosModules = [ (import nixosModulesPath) ] ++ moduleLib.mapModulesRec' nixosModulesPath import;
+    in
+    nixpkgs.lib.nixosSystem {
+      inherit system;
+
+      specialArgs = {
+        inherit inputs;
+        inherit (self) lib;
+      } // (mergedHost.specialArgs or {});
+
+      modules = [
+        # Base NixOS configuration
+        {
+          nixpkgs.pkgs = mkDefault pkgs;
+          networking.hostName = mkDefault name;
+        }
+        # Home-manager as NixOS module
+        inputs.home-manager.nixosModules.home-manager
+        {
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+          home-manager.extraSpecialArgs = {
+            inherit inputs;
+            # Note: Don't override lib here - home-manager needs its own lib.hm
+          };
+          # Load home-manager modules for all users
+          home-manager.sharedModules = homeModules;
+        }
+      ]
+      # NixOS system modules (from modules/nixos/)
+      ++ nixosModules
+      # Host-specific modules
+      ++ (mergedHost.modules or [])
+      ++ (if mergedHost ? config then [ mergedHost.config ] else []);
+    };
+
   # Split hosts by type
-  darwinHosts = filterAttrs (n: h: hostType ((normalizeHost n h).system or "x86_64-linux") == "darwin") hosts;
-  homeHosts = filterAttrs (n: h: hostType ((normalizeHost n h).system or "x86_64-linux") == "home") hosts;
+  darwinHosts = filterAttrs (n: h: let nh = normalizeHost n h; in hostType (nh.system or "x86_64-linux") nh == "darwin") hosts;
+  nixosHosts = filterAttrs (n: h: let nh = normalizeHost n h; in hostType (nh.system or "x86_64-linux") nh == "nixos") hosts;
+  homeHosts = filterAttrs (n: h: let nh = normalizeHost n h; in hostType (nh.system or "x86_64-linux") nh == "home") hosts;
 
   # Build per-system outputs (packages, devShells, etc.)
   perSystemOutputs = genAttrs systems (system:
@@ -172,6 +223,7 @@ let
   # Build final flake outputs
   self = extraOutputs // {
     darwinConfigurations = mapAttrs mkDarwinHost darwinHosts;
+    nixosConfigurations = mapAttrs mkNixosHost nixosHosts;
     homeConfigurations = mapAttrs mkHomeConfiguration homeHosts;
     lib = import ./. { inherit nixpkgs; };
   } // genAttrs [ "packages" "devShells" "apps" "checks" ] (

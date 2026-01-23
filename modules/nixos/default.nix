@@ -8,8 +8,7 @@
 with lib;
 let
   # Import our custom lib functions for mkOpt helper
-  attrs = import ../../lib/attrs.nix { inherit lib; };
-  customLib = import ../../lib/options.nix { inherit lib attrs; };
+  customLib = import ../../lib/options.nix { inherit lib; };
 in {
   # Options shared with Darwin (user configuration)
   options = with types; {
@@ -44,8 +43,8 @@ in {
       trusted-users = [ "root" "@wheel" ];
     };
 
-    # Allow unfree packages
-    nixpkgs.config.allowUnfree = true;
+    # Note: allowUnfree is set in mkPkgs in lib/mkFlake.nix
+    # Don't set nixpkgs.config here as we use an external pkgs instance
 
     # Basic system packages
     environment.systemPackages = with pkgs; [
@@ -55,12 +54,12 @@ in {
       wget
     ];
 
-    # Enable SSH server
+    # Enable SSH server (mkDefault allows OrbStack to override)
     services.openssh = {
-      enable = true;
+      enable = mkDefault true;
       settings = {
-        PermitRootLogin = "no";
-        PasswordAuthentication = false;
+        PermitRootLogin = mkDefault "no";
+        PasswordAuthentication = mkDefault false;
       };
     };
 
