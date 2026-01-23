@@ -1,14 +1,15 @@
 # modules/home/linux/edge.nix -- Microsoft Edge Browser
 #
 # Installs Microsoft Edge browser.
-# On aarch64-linux, uses Rosetta emulation with x86_64 Mesa for software rendering.
-# Uses bubblewrap to create NixOS-compatible /run/opengl-driver paths.
+# On x86_64-linux: installs natively, works out of the box.
+# On aarch64-linux: uses Rosetta emulation with x86_64 Mesa for software rendering,
+#   bubblewrap for NixOS-compatible /run/opengl-driver paths, and SIGTRAP workaround.
 #
 # PKCS#11/Smart Card Support:
 #   - Edge uses NSS for certificate handling (not p11-kit/GnuTLS like WebKitGTK)
 #   - NSS module config: ~/.pki/nssdb/pkcs11.txt (set up via intune-nss-setup)
-#   - LD_LIBRARY_PATH includes nixpkgs OpenSSL for x86_64 OpenSC compatibility
-#   - x86_64 OpenSC requires OpenSSL 3.4+ symbols (not compatible with Arch's 3.3.2)
+#   - LD_LIBRARY_PATH includes nixpkgs OpenSSL for OpenSC compatibility
+#   - OpenSC requires OpenSSL 3.4+ symbols (not compatible with Arch's 3.3.2)
 
 { lib, config, pkgs, ... }:
 

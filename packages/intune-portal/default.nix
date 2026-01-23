@@ -50,12 +50,17 @@ stdenvNoCC.mkDerivation rec {
   installPhase = ''
     runHook preInstall
 
-    # Main binary
+    # Main binaries (intune-portal and intune-agent)
     mkdir -p $out/bin
     if [ -f opt/microsoft/intune/bin/intune-portal ]; then
       cp opt/microsoft/intune/bin/intune-portal $out/bin/
     elif [ -f usr/bin/intune-portal ]; then
       cp usr/bin/intune-portal $out/bin/
+    fi
+
+    # intune-agent - compliance reporting daemon
+    if [ -f opt/microsoft/intune/bin/intune-agent ]; then
+      cp opt/microsoft/intune/bin/intune-agent $out/bin/
     fi
 
     # Libraries (if any)

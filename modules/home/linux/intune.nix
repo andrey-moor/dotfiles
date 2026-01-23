@@ -1,6 +1,7 @@
 # modules/home/linux/intune.nix -- Microsoft Intune Portal + Identity Brokers
 #
-# Full Nix-managed solution for Microsoft Intune on aarch64-linux with Rosetta.
+# Full Nix-managed solution for Microsoft Intune on Linux.
+# Supports both native x86_64 and aarch64-linux (via Rosetta emulation).
 #
 # ARCHITECTURE:
 #   +------------------+     D-Bus      +----------------------+
@@ -20,11 +21,14 @@
 #   2. microsoft-identity-broker (Nix 2.0.4): User SSO authentication
 #   3. microsoft-identity-device-broker (Nix 2.0.4): Device attestation (system service)
 #
-# ROSETTA REQUIREMENTS:
+# ROSETTA REQUIREMENTS (aarch64 only):
 #   - All x86_64 binaries run via Rosetta binfmt_misc
 #   - libglvnd MUST be first in LD_LIBRARY_PATH for Mesa software rendering
-#   - Broker needs OpenSSL 3.3.2 in LD_LIBRARY_PATH (fixes Code:1200 error)
 #   - WebKitGTK needs WEBKIT_DISABLE_DMABUF_RENDERER=1 (NOT COMPOSITING_MODE!)
+#
+# SHARED REQUIREMENTS (both architectures):
+#   - Broker needs OpenSSL 3.3.2 in LD_LIBRARY_PATH (fixes Code:1200 error)
+#   - LD_LIBRARY_PATH needed for Nix store libs on non-NixOS (Arch + home-manager)
 #
 # MANUAL PREREQUISITES:
 #   1. Fake Ubuntu os-release: sudo tee /etc/os-release << 'EOF'
@@ -50,24 +54,28 @@ let
   isAarch64 = pkgs.stdenv.hostPlatform.isAarch64;
 
   #############################################################################
-  # x86_64 PACKAGES (for Rosetta emulation)
+  # PACKAGE SOURCES
   #############################################################################
 
+  # On aarch64, we need cross-arch x86_64 packages (run via Rosetta).
+  # On x86_64, we use native packages directly.
   pkgsX86 = import pkgs.path {
     system = "x86_64-linux";
     config.allowUnfree = true;
   };
 
+  effectivePkgs = if isAarch64 then pkgsX86 else pkgs;
+
   # Microsoft Identity Broker package (x86_64 binaries from Microsoft .deb)
-  brokerPkg = pkgsX86.callPackage ../../../packages/microsoft-identity-broker { };
+  brokerPkg = effectivePkgs.callPackage ../../../packages/microsoft-identity-broker { };
 
   # Microsoft Intune Portal package (x86_64 binaries from Microsoft .deb)
   # Using custom package to get latest version (nixpkgs is often outdated)
-  intunePkg = pkgsX86.callPackage ../../../packages/intune-portal { };
+  intunePkg = effectivePkgs.callPackage ../../../packages/intune-portal { };
 
   # Custom curl without HTTP/3 support to avoid ngtcp2's OPENSSL_3.5.0 requirement
   # This allows us to use Arch OpenSSL 3.3.2 for the broker without symbol conflicts
-  curlNoHttp3 = pkgsX86.curl.override { http3Support = false; };
+  curlNoHttp3 = effectivePkgs.curl.override { http3Support = false; };
 
   #############################################################################
   # OPENSSL 3.3.2 (fixes Code:1200 error in broker)
@@ -124,90 +132,92 @@ let
   # SHARED ENVIRONMENT SETUP
   #############################################################################
 
-  # Common x86_64 library paths for all wrappers
-  x86LibPaths = {
-    glvnd = "${pkgsX86.libglvnd}/lib";
-    mesa = "${pkgsX86.mesa}";
-    wayland = "${pkgsX86.wayland}/lib";
-    gio = "${pkgsX86.glib-networking}/lib/gio/modules";
-    gnutls = "${pkgsX86.gnutls.out}/lib";
-    nettle = "${pkgsX86.nettle}/lib";
-    libtasn1 = "${pkgsX86.libtasn1}/lib";
-    libidn2 = "${pkgsX86.libidn2}/lib";
+  # Library paths for all wrappers (uses effectivePkgs: native on x86_64, cross on aarch64)
+  libPaths = {
+    glvnd = "${effectivePkgs.libglvnd}/lib";
+    mesa = "${effectivePkgs.mesa}";
+    wayland = "${effectivePkgs.wayland}/lib";
+    gio = "${effectivePkgs.glib-networking}/lib/gio/modules";
+    gnutls = "${effectivePkgs.gnutls.out}/lib";
+    nettle = "${effectivePkgs.nettle}/lib";
+    libtasn1 = "${effectivePkgs.libtasn1}/lib";
+    libidn2 = "${effectivePkgs.libidn2}/lib";
     opensc = "${openscArch}";
-    libp11 = "${pkgsX86.libp11}";
-    pcsclite = "${pkgsX86.pcsclite.lib}";
-    p11kit = "${pkgsX86.p11-kit.out}";
-    libfido2 = "${pkgsX86.libfido2}";
-    # System libraries needed by AUR broker
-    dbus = "${pkgsX86.dbus.lib}/lib";
-    glib = "${pkgsX86.glib.out}/lib";
-    systemd = "${pkgsX86.systemdLibs}/lib";
-    util-linux = "${pkgsX86.util-linux.lib}/lib";
+    libp11 = "${effectivePkgs.libp11}";
+    pcsclite = "${effectivePkgs.pcsclite.lib}";
+    p11kit = "${effectivePkgs.p11-kit.out}";
+    libfido2 = "${effectivePkgs.libfido2}";
+    # System libraries needed by broker
+    dbus = "${effectivePkgs.dbus.lib}/lib";
+    glib = "${effectivePkgs.glib.out}/lib";
+    systemd = "${effectivePkgs.systemdLibs}/lib";
+    util-linux = "${effectivePkgs.util-linux.lib}/lib";
     curl = "${curlNoHttp3.out}/lib";
-    zlib = "${pkgsX86.zlib.out}/lib";
-    libssh2 = "${pkgsX86.libssh2.out}/lib";
-    nghttp2 = "${pkgsX86.nghttp2.lib}/lib";
-    brotli = "${pkgsX86.brotli.lib}/lib";
-    icu = "${pkgsX86.icu.out}/lib";
-    libstdcxx = "${pkgsX86.stdenv.cc.cc.lib}/lib";
-    zstd = "${pkgsX86.zstd.out}/lib";
+    zlib = "${effectivePkgs.zlib.out}/lib";
+    libssh2 = "${effectivePkgs.libssh2.out}/lib";
+    nghttp2 = "${effectivePkgs.nghttp2.lib}/lib";
+    brotli = "${effectivePkgs.brotli.lib}/lib";
+    icu = "${effectivePkgs.icu.out}/lib";
+    libstdcxx = "${effectivePkgs.stdenv.cc.cc.lib}/lib";
+    zstd = "${effectivePkgs.zstd.out}/lib";
     # X11 and GUI libraries
-    xorg-libX11 = "${pkgsX86.xorg.libX11.out}/lib";
-    xorg-libXext = "${pkgsX86.xorg.libXext.out}/lib";
-    xorg-libXrender = "${pkgsX86.xorg.libXrender.out}/lib";
-    xorg-libXi = "${pkgsX86.xorg.libXi.out}/lib";
-    xorg-libXcursor = "${pkgsX86.xorg.libXcursor.out}/lib";
-    xorg-libXrandr = "${pkgsX86.xorg.libXrandr.out}/lib";
-    xorg-libXfixes = "${pkgsX86.xorg.libXfixes.out}/lib";
-    xorg-libXcomposite = "${pkgsX86.xorg.libXcomposite.out}/lib";
-    xorg-libXdamage = "${pkgsX86.xorg.libXdamage.out}/lib";
-    xorg-libxcb = "${pkgsX86.xorg.libxcb.out}/lib";
-    libxkbcommon = "${pkgsX86.libxkbcommon.out}/lib";
-    fontconfig = "${pkgsX86.fontconfig.lib}/lib";
-    freetype = "${pkgsX86.freetype.out}/lib";
-    expat = "${pkgsX86.expat.out}/lib";
-    cairo = "${pkgsX86.cairo.out}/lib";
-    pango = "${pkgsX86.pango.out}/lib";
-    gdk-pixbuf = "${pkgsX86.gdk-pixbuf.out}/lib";
-    gtk3 = "${pkgsX86.gtk3.out}/lib";
-    atk = "${pkgsX86.atk.out}/lib";
-    at-spi2-atk = "${pkgsX86.at-spi2-atk.out}/lib";
-    at-spi2-core = "${pkgsX86.at-spi2-core.out}/lib";
-    harfbuzz = "${pkgsX86.harfbuzz.out}/lib";
-    pcre2 = "${pkgsX86.pcre2.out}/lib";
-    webkitgtk = "${pkgsX86.webkitgtk_4_1.out}/lib";
-    libsoup = "${pkgsX86.libsoup_3.out}/lib";
-    libsecret = "${pkgsX86.libsecret.out}/lib";
-    sqlite = "${pkgsX86.sqlite.out}/lib";
-    libpsl = "${pkgsX86.libpsl.out}/lib";
-    libidn = "${pkgsX86.libidn.out}/lib";
-    libpng = "${pkgsX86.libpng.out}/lib";
-    libjpeg = "${pkgsX86.libjpeg.out}/lib";
-    libwebp = "${pkgsX86.libwebp.out}/lib";
-    lcms2 = "${pkgsX86.lcms2.out}/lib";
-    gstreamer = "${pkgsX86.gst_all_1.gstreamer.out}/lib";
-    gst-plugins-base = "${pkgsX86.gst_all_1.gst-plugins-base.out}/lib";
-    libxml2 = "${pkgsX86.libxml2.out}/lib";
-    libxslt = "${pkgsX86.libxslt.out}/lib";
-    enchant = "${pkgsX86.enchant.out}/lib";
-    libnotify = "${pkgsX86.libnotify.out}/lib";
-    # Arch OpenSSL 3.3.2 - fixes Code:1200 error in AUR broker
+    xorg-libX11 = "${effectivePkgs.xorg.libX11.out}/lib";
+    xorg-libXext = "${effectivePkgs.xorg.libXext.out}/lib";
+    xorg-libXrender = "${effectivePkgs.xorg.libXrender.out}/lib";
+    xorg-libXi = "${effectivePkgs.xorg.libXi.out}/lib";
+    xorg-libXcursor = "${effectivePkgs.xorg.libXcursor.out}/lib";
+    xorg-libXrandr = "${effectivePkgs.xorg.libXrandr.out}/lib";
+    xorg-libXfixes = "${effectivePkgs.xorg.libXfixes.out}/lib";
+    xorg-libXcomposite = "${effectivePkgs.xorg.libXcomposite.out}/lib";
+    xorg-libXdamage = "${effectivePkgs.xorg.libXdamage.out}/lib";
+    xorg-libxcb = "${effectivePkgs.xorg.libxcb.out}/lib";
+    libxkbcommon = "${effectivePkgs.libxkbcommon.out}/lib";
+    fontconfig = "${effectivePkgs.fontconfig.lib}/lib";
+    freetype = "${effectivePkgs.freetype.out}/lib";
+    expat = "${effectivePkgs.expat.out}/lib";
+    cairo = "${effectivePkgs.cairo.out}/lib";
+    pango = "${effectivePkgs.pango.out}/lib";
+    gdk-pixbuf = "${effectivePkgs.gdk-pixbuf.out}/lib";
+    gtk3 = "${effectivePkgs.gtk3.out}/lib";
+    atk = "${effectivePkgs.atk.out}/lib";
+    at-spi2-atk = "${effectivePkgs.at-spi2-atk.out}/lib";
+    at-spi2-core = "${effectivePkgs.at-spi2-core.out}/lib";
+    harfbuzz = "${effectivePkgs.harfbuzz.out}/lib";
+    pcre2 = "${effectivePkgs.pcre2.out}/lib";
+    webkitgtk = "${effectivePkgs.webkitgtk_4_1.out}/lib";
+    libsoup = "${effectivePkgs.libsoup_3.out}/lib";
+    libsecret = "${effectivePkgs.libsecret.out}/lib";
+    sqlite = "${effectivePkgs.sqlite.out}/lib";
+    libpsl = "${effectivePkgs.libpsl.out}/lib";
+    libidn = "${effectivePkgs.libidn.out}/lib";
+    libpng = "${effectivePkgs.libpng.out}/lib";
+    libjpeg = "${effectivePkgs.libjpeg.out}/lib";
+    libwebp = "${effectivePkgs.libwebp.out}/lib";
+    lcms2 = "${effectivePkgs.lcms2.out}/lib";
+    gstreamer = "${effectivePkgs.gst_all_1.gstreamer.out}/lib";
+    gst-plugins-base = "${effectivePkgs.gst_all_1.gst-plugins-base.out}/lib";
+    libxml2 = "${effectivePkgs.libxml2.out}/lib";
+    libxslt = "${effectivePkgs.libxslt.out}/lib";
+    enchant = "${effectivePkgs.enchant.out}/lib";
+    libnotify = "${effectivePkgs.libnotify.out}/lib";
+    # Arch OpenSSL 3.3.2 - fixes Code:1200 error in broker
     opensslArch = "${opensslArch}/lib";
   };
 
-  # Environment variables for Mesa software rendering under Rosetta
-  mesaEnvVars = ''
+  # Environment variables for Mesa software rendering (aarch64/Rosetta only)
+  # On x86_64, hardware GPU works natively - no forced software rendering needed
+  mesaEnvVars = optionalString isAarch64 ''
     # Mesa software rendering (llvmpipe) - required for Rosetta
     export LIBGL_ALWAYS_SOFTWARE=1
     export GALLIUM_DRIVER=llvmpipe
     export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
-    export __EGL_VENDOR_LIBRARY_DIRS="${x86LibPaths.mesa}/share/glvnd/egl_vendor.d"
-    export LIBGL_DRIVERS_PATH="${x86LibPaths.mesa}/lib/dri"
+    export __EGL_VENDOR_LIBRARY_DIRS="${libPaths.mesa}/share/glvnd/egl_vendor.d"
+    export LIBGL_DRIVERS_PATH="${libPaths.mesa}/lib/dri"
   '';
 
-  # Environment variables for WebKitGTK under Rosetta
-  webkitEnvVars = ''
+  # Environment variables for WebKitGTK (aarch64/Rosetta only)
+  # On x86_64, WebKitGTK works natively without these workarounds
+  webkitEnvVars = optionalString isAarch64 ''
     # WebKitGTK settings for Rosetta
     # NOTE: Do NOT set WEBKIT_DISABLE_COMPOSITING_MODE=1 - causes blank windows!
     export WEBKIT_DISABLE_DMABUF_RENDERER=1
@@ -219,7 +229,7 @@ let
     # GIO TLS backend (glib-networking) for HTTPS
     # NOTE: The old gnutls-pkcs11 separate backend was removed in glib-networking 2.64+
     # Modern giognutls has PKCS#11 support built-in via GnuTLS PKCS#11 functions
-    export GIO_MODULE_DIR="${x86LibPaths.gio}"
+    export GIO_MODULE_DIR="${libPaths.gio}"
     export SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
     export SSL_CERT_DIR="/etc/ssl/certs"
   '';
@@ -235,7 +245,7 @@ let
     # PKCS#11/YubiKey support
     # NOTE: p11-kit reads module configs from $XDG_CONFIG_HOME/pkcs11/modules/ (managed by home-manager)
     export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
-    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11:${x86LibPaths.p11kit}/lib/pkcs11"
+    export P11_KIT_MODULE_PATH="${libPaths.opensc}/lib/pkcs11:${libPaths.p11kit}/lib/pkcs11"
   '';
 
   # Debug environment variables (when cfg.debug is true)
@@ -268,6 +278,9 @@ let
   # Use our custom package for latest version (nixpkgs has 1.2503.10, we have 1.2511.7)
   intunePackage = intunePkg;
 
+  # Architecture-aware wrapper names
+  wrapperSuffix = if isAarch64 then "-rosetta" else "-wrapped";
+
   # OpenSSL config for PKCS#11 (YubiKey support)
   opensslConf = pkgs.writeText "openssl-pkcs11.cnf" ''
     openssl_conf = openssl_init
@@ -281,18 +294,18 @@ let
     init = 0
   '';
 
-  # Wrapper for intune-portal with Rosetta compatibility
-  intuneWrapper = pkgs.writeShellScriptBin "intune-portal-rosetta" ''
+  # Wrapper for intune-portal with Nix library paths
+  intuneWrapper = pkgs.writeShellScriptBin "intune-portal${wrapperSuffix}" ''
     #!/usr/bin/env bash
-    # intune-portal-rosetta: Runs intune-portal with x86_64 Mesa under Rosetta
-    # v4 - intune-portal 1.2511+ no longer bundles OpenSSL; needs Arch OpenSSL 3.3.2
+    # intune-portal wrapper: Runs intune-portal with Nix library paths
+    # On aarch64: includes Mesa software rendering for Rosetta
+    # On x86_64: uses native hardware GPU
     #
-    # NOTE: Both intune-portal and broker now use Arch OpenSSL 3.3.2 from LD_LIBRARY_PATH.
+    # NOTE: Both intune-portal and broker use Arch OpenSSL 3.3.2 from LD_LIBRARY_PATH.
 
-    # LD_LIBRARY_PATH: libglvnd MUST be first for Mesa software rendering
-    # Note: intune-portal 1.2511+ needs comprehensive x86_64 libraries - use same set as broker wrapper
-    # OpenSSL 3.3.2 from Arch is needed as newer intune-portal no longer bundles OpenSSL
-    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.wayland}:${x86LibPaths.gnutls}:${x86LibPaths.nettle}:${x86LibPaths.libtasn1}:${x86LibPaths.libidn2}:${x86LibPaths.libfido2}/lib:${x86LibPaths.opensc}/lib:${x86LibPaths.libp11}/lib:${x86LibPaths.pcsclite}/lib:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
+    # LD_LIBRARY_PATH: provides Nix store libraries to the FHS binary
+    # OpenSSL 3.3.2 from Arch is needed (fixes Code:1200 error)
+    export LD_LIBRARY_PATH="${libPaths.opensslArch}:${libPaths.glvnd}:${libPaths.mesa}/lib:${libPaths.webkitgtk}:${libPaths.libsoup}:${libPaths.libsecret}:${libPaths.gtk3}:${libPaths.gdk-pixbuf}:${libPaths.cairo}:${libPaths.pango}:${libPaths.harfbuzz}:${libPaths.fontconfig}:${libPaths.freetype}:${libPaths.atk}:${libPaths.at-spi2-atk}:${libPaths.at-spi2-core}:${libPaths.xorg-libX11}:${libPaths.xorg-libXext}:${libPaths.xorg-libXrender}:${libPaths.xorg-libXi}:${libPaths.xorg-libXcursor}:${libPaths.xorg-libXrandr}:${libPaths.xorg-libXfixes}:${libPaths.xorg-libXcomposite}:${libPaths.xorg-libXdamage}:${libPaths.xorg-libxcb}:${libPaths.libxkbcommon}:${libPaths.dbus}:${libPaths.glib}:${libPaths.systemd}:${libPaths.util-linux}:${libPaths.curl}:${libPaths.zlib}:${libPaths.libssh2}:${libPaths.nghttp2}:${libPaths.brotli}:${libPaths.icu}:${libPaths.libstdcxx}:${libPaths.zstd}:${libPaths.expat}:${libPaths.pcre2}:${libPaths.sqlite}:${libPaths.libpsl}:${libPaths.libidn}:${libPaths.libpng}:${libPaths.libjpeg}:${libPaths.libwebp}:${libPaths.lcms2}:${libPaths.gstreamer}:${libPaths.gst-plugins-base}:${libPaths.libxml2}:${libPaths.libxslt}:${libPaths.enchant}:${libPaths.libnotify}:${libPaths.wayland}:${libPaths.gnutls}:${libPaths.nettle}:${libPaths.libtasn1}:${libPaths.libidn2}:${libPaths.libfido2}/lib:${libPaths.opensc}/lib:${libPaths.libp11}/lib:${libPaths.pcsclite}/lib:${libPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${mesaEnvVars}
     ${webkitEnvVars}
@@ -301,7 +314,7 @@ let
 
     # OpenSSL PKCS#11 engine config (for legacy OpenSSL apps)
     export OPENSSL_CONF="${opensslConf}"
-    export OPENSSL_ENGINES="${x86LibPaths.libp11}/lib/engines-3"
+    export OPENSSL_ENGINES="${effectivePkgs.libp11}/lib/engines-3"
     # Tell GnuTLS to use p11-kit proxy for PKCS#11
     export GNUTLS_CPUID_OVERRIDE=0x1
     export GNUTLS_FORCE_FIPS_MODE=0
@@ -318,26 +331,52 @@ let
   '';
 
   #############################################################################
+  # INTUNE-AGENT (compliance reporting daemon)
+  #############################################################################
+
+  # Wrapper for intune-agent with Nix library paths
+  # This agent periodically reports compliance status to Microsoft Intune
+  intuneAgentWrapper = pkgs.writeShellScriptBin "intune-agent${wrapperSuffix}" ''
+    #!/usr/bin/env bash
+    # intune-agent wrapper: Runs intune-agent with Nix library paths
+    #
+    # This agent collects device compliance data (disk encryption, password policy, etc.)
+    # and sends it to Microsoft Intune for evaluation.
+    # Runs periodically via intune-agent.timer (every hour after 5min startup delay)
+
+    # LD_LIBRARY_PATH - same as intune-portal for consistency
+    export LD_LIBRARY_PATH="${libPaths.opensslArch}:${libPaths.glvnd}:${libPaths.mesa}/lib:${libPaths.webkitgtk}:${libPaths.libsoup}:${libPaths.libsecret}:${libPaths.gtk3}:${libPaths.gdk-pixbuf}:${libPaths.cairo}:${libPaths.pango}:${libPaths.harfbuzz}:${libPaths.fontconfig}:${libPaths.freetype}:${libPaths.atk}:${libPaths.at-spi2-atk}:${libPaths.at-spi2-core}:${libPaths.xorg-libX11}:${libPaths.xorg-libXext}:${libPaths.xorg-libXrender}:${libPaths.xorg-libXi}:${libPaths.xorg-libXcursor}:${libPaths.xorg-libXrandr}:${libPaths.xorg-libXfixes}:${libPaths.xorg-libXcomposite}:${libPaths.xorg-libXdamage}:${libPaths.xorg-libxcb}:${libPaths.libxkbcommon}:${libPaths.dbus}:${libPaths.glib}:${libPaths.systemd}:${libPaths.util-linux}:${libPaths.curl}:${libPaths.zlib}:${libPaths.libssh2}:${libPaths.nghttp2}:${libPaths.brotli}:${libPaths.icu}:${libPaths.libstdcxx}:${libPaths.zstd}:${libPaths.expat}:${libPaths.pcre2}:${libPaths.sqlite}:${libPaths.libpsl}:${libPaths.libidn}:${libPaths.libpng}:${libPaths.libjpeg}:${libPaths.libwebp}:${libPaths.lcms2}:${libPaths.gstreamer}:${libPaths.gst-plugins-base}:${libPaths.libxml2}:${libPaths.libxslt}:${libPaths.enchant}:${libPaths.libnotify}:${libPaths.wayland}:${libPaths.gnutls}:${libPaths.nettle}:${libPaths.libtasn1}:${libPaths.libidn2}:${libPaths.libfido2}/lib:${libPaths.opensc}/lib:${libPaths.libp11}/lib:${libPaths.pcsclite}/lib:${libPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
+
+    ${tlsEnvVars}
+
+    ${optionalString cfg.debug ''
+      echo "[DEBUG] intune-agent starting at $(date)" >&2
+    ''}
+
+    exec ${intunePackage}/bin/intune-agent "$@"
+  '';
+
+  #############################################################################
   # USER BROKER (Nix package + wrapper)
   #############################################################################
 
-  # Wrapper for user broker with Rosetta + OpenSSL fix
-  userBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-broker-rosetta" ''
+  # Wrapper for user broker with OpenSSL fix and Nix library paths
+  userBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-broker${wrapperSuffix}" ''
     #!/usr/bin/env bash
-    # microsoft-identity-broker-rosetta: Nix-managed wrapper for broker
+    # microsoft-identity-broker wrapper: Nix-managed wrapper for broker
     #
     # This wrapper:
     # 1. Provides OpenSSL 3.3.2 via LD_LIBRARY_PATH (fixes Code:1200 error)
-    # 2. Provides x86_64 system libraries (dbus, glib, systemd) for Rosetta
-    # 3. Sets up Mesa software rendering for WebKitGTK SSO popups
+    # 2. Provides system libraries (dbus, glib, systemd) from Nix store
+    # 3. Sets up Mesa software rendering for WebKitGTK SSO popups (aarch64 only)
     # 4. Configures GIO TLS for HTTPS
 
-    # LD_LIBRARY_PATH construction - comprehensive x86_64 library set for Rosetta
+    # LD_LIBRARY_PATH construction - comprehensive library set from Nix store
     # NOTE: Arch OpenSSL 3.3.2 is included to fix Code:1200 "credential is invalid" error
     # NOTE: opensc/lib added for libopensc.so.11 needed by opensc-pkcs11.so PKCS#11 module
     # NOTE: pcsclite/lib needed for OpenSC to communicate with native pcscd
     # We use curlNoHttp3 (curl with http3Support=false) to avoid ngtcp2's OPENSSL_3.5.0 requirement
-    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.opensc}/lib:${x86LibPaths.pcsclite}/lib:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="${libPaths.opensslArch}:${libPaths.opensc}/lib:${libPaths.pcsclite}/lib:${libPaths.glvnd}:${libPaths.mesa}/lib:${libPaths.webkitgtk}:${libPaths.libsoup}:${libPaths.libsecret}:${libPaths.gtk3}:${libPaths.gdk-pixbuf}:${libPaths.cairo}:${libPaths.pango}:${libPaths.harfbuzz}:${libPaths.fontconfig}:${libPaths.freetype}:${libPaths.atk}:${libPaths.at-spi2-atk}:${libPaths.at-spi2-core}:${libPaths.xorg-libX11}:${libPaths.xorg-libXext}:${libPaths.xorg-libXrender}:${libPaths.xorg-libXi}:${libPaths.xorg-libXcursor}:${libPaths.xorg-libXrandr}:${libPaths.xorg-libXfixes}:${libPaths.xorg-libXcomposite}:${libPaths.xorg-libXdamage}:${libPaths.xorg-libxcb}:${libPaths.libxkbcommon}:${libPaths.dbus}:${libPaths.glib}:${libPaths.systemd}:${libPaths.util-linux}:${libPaths.curl}:${libPaths.zlib}:${libPaths.libssh2}:${libPaths.nghttp2}:${libPaths.brotli}:${libPaths.icu}:${libPaths.libstdcxx}:${libPaths.zstd}:${libPaths.expat}:${libPaths.pcre2}:${libPaths.sqlite}:${libPaths.libpsl}:${libPaths.libidn}:${libPaths.libpng}:${libPaths.libjpeg}:${libPaths.libwebp}:${libPaths.lcms2}:${libPaths.gstreamer}:${libPaths.gst-plugins-base}:${libPaths.libxml2}:${libPaths.libxslt}:${libPaths.enchant}:${libPaths.libnotify}:${libPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${mesaEnvVars}
     ${webkitEnvVars}
@@ -346,7 +385,7 @@ let
 
     # OpenSSL PKCS#11 engine config (for legacy OpenSSL apps)
     export OPENSSL_CONF="${opensslConf}"
-    export OPENSSL_ENGINES="${x86LibPaths.libp11}/lib/engines-3"
+    export OPENSSL_ENGINES="${effectivePkgs.libp11}/lib/engines-3"
 
     ${debugEnvVars}
 
@@ -364,7 +403,7 @@ let
     text = ''
       [D-BUS Service]
       Name=com.microsoft.identity.broker1
-      Exec=${userBrokerWrapper}/bin/microsoft-identity-broker-rosetta
+      Exec=${userBrokerWrapper}/bin/microsoft-identity-broker${wrapperSuffix}
     '';
   };
 
@@ -374,15 +413,15 @@ let
 
   # Wrapper for device broker (for manual system configuration)
   # NOTE: This is installed to user profile but needs manual systemd config
-  deviceBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-device-broker-rosetta" ''
+  deviceBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-device-broker${wrapperSuffix}" ''
     #!/usr/bin/env bash
-    # microsoft-identity-device-broker-rosetta: Nix-managed wrapper for device broker
+    # microsoft-identity-device-broker wrapper: Nix-managed wrapper for device broker
     #
     # NOTE: Device broker runs as a SYSTEM service. To use this wrapper:
     # 1. sudo systemctl edit microsoft-identity-device-broker.service
     # 2. Add: [Service]
     #         ExecStart=
-    #         ExecStart=<nix-store-path>/bin/microsoft-identity-device-broker-rosetta
+    #         ExecStart=<nix-store-path>/bin/microsoft-identity-device-broker${wrapperSuffix}
     # 3. sudo systemctl daemon-reload && sudo systemctl restart microsoft-identity-device-broker
     #
     # IMPORTANT: Use the full nix store path (not ~/.nix-profile) because root cannot
@@ -390,7 +429,7 @@ let
 
     # Device broker shares same dependencies as user broker (WebKitGTK, GTK, etc.)
     # Use the same comprehensive LD_LIBRARY_PATH (including opensc/lib, pcsclite/lib)
-    export LD_LIBRARY_PATH="${x86LibPaths.opensslArch}:${x86LibPaths.opensc}/lib:${x86LibPaths.pcsclite}/lib:${x86LibPaths.glvnd}:${x86LibPaths.mesa}/lib:${x86LibPaths.webkitgtk}:${x86LibPaths.libsoup}:${x86LibPaths.libsecret}:${x86LibPaths.gtk3}:${x86LibPaths.gdk-pixbuf}:${x86LibPaths.cairo}:${x86LibPaths.pango}:${x86LibPaths.harfbuzz}:${x86LibPaths.fontconfig}:${x86LibPaths.freetype}:${x86LibPaths.atk}:${x86LibPaths.at-spi2-atk}:${x86LibPaths.at-spi2-core}:${x86LibPaths.xorg-libX11}:${x86LibPaths.xorg-libXext}:${x86LibPaths.xorg-libXrender}:${x86LibPaths.xorg-libXi}:${x86LibPaths.xorg-libXcursor}:${x86LibPaths.xorg-libXrandr}:${x86LibPaths.xorg-libXfixes}:${x86LibPaths.xorg-libXcomposite}:${x86LibPaths.xorg-libXdamage}:${x86LibPaths.xorg-libxcb}:${x86LibPaths.libxkbcommon}:${x86LibPaths.dbus}:${x86LibPaths.glib}:${x86LibPaths.systemd}:${x86LibPaths.util-linux}:${x86LibPaths.curl}:${x86LibPaths.zlib}:${x86LibPaths.libssh2}:${x86LibPaths.nghttp2}:${x86LibPaths.brotli}:${x86LibPaths.icu}:${x86LibPaths.libstdcxx}:${x86LibPaths.zstd}:${x86LibPaths.expat}:${x86LibPaths.pcre2}:${x86LibPaths.sqlite}:${x86LibPaths.libpsl}:${x86LibPaths.libidn}:${x86LibPaths.libpng}:${x86LibPaths.libjpeg}:${x86LibPaths.libwebp}:${x86LibPaths.lcms2}:${x86LibPaths.gstreamer}:${x86LibPaths.gst-plugins-base}:${x86LibPaths.libxml2}:${x86LibPaths.libxslt}:${x86LibPaths.enchant}:${x86LibPaths.libnotify}:${x86LibPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="${libPaths.opensslArch}:${libPaths.opensc}/lib:${libPaths.pcsclite}/lib:${libPaths.glvnd}:${libPaths.mesa}/lib:${libPaths.webkitgtk}:${libPaths.libsoup}:${libPaths.libsecret}:${libPaths.gtk3}:${libPaths.gdk-pixbuf}:${libPaths.cairo}:${libPaths.pango}:${libPaths.harfbuzz}:${libPaths.fontconfig}:${libPaths.freetype}:${libPaths.atk}:${libPaths.at-spi2-atk}:${libPaths.at-spi2-core}:${libPaths.xorg-libX11}:${libPaths.xorg-libXext}:${libPaths.xorg-libXrender}:${libPaths.xorg-libXi}:${libPaths.xorg-libXcursor}:${libPaths.xorg-libXrandr}:${libPaths.xorg-libXfixes}:${libPaths.xorg-libXcomposite}:${libPaths.xorg-libXdamage}:${libPaths.xorg-libxcb}:${libPaths.libxkbcommon}:${libPaths.dbus}:${libPaths.glib}:${libPaths.systemd}:${libPaths.util-linux}:${libPaths.curl}:${libPaths.zlib}:${libPaths.libssh2}:${libPaths.nghttp2}:${libPaths.brotli}:${libPaths.icu}:${libPaths.libstdcxx}:${libPaths.zstd}:${libPaths.expat}:${libPaths.pcre2}:${libPaths.sqlite}:${libPaths.libpsl}:${libPaths.libidn}:${libPaths.libpng}:${libPaths.libjpeg}:${libPaths.libwebp}:${libPaths.lcms2}:${libPaths.gstreamer}:${libPaths.gst-plugins-base}:${libPaths.libxml2}:${libPaths.libxslt}:${libPaths.enchant}:${libPaths.libnotify}:${libPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${debugEnvVars}
 
@@ -453,6 +492,12 @@ let
     echo "  Device broker (system):"
     systemctl status microsoft-identity-device-broker --no-pager 2>/dev/null | head -5 || echo "    Not found"
     echo ""
+    echo "  Intune agent timer (user):"
+    systemctl --user status intune-agent.timer --no-pager 2>/dev/null | head -5 || echo "    Not found (enable with: systemctl --user enable --now intune-agent.timer)"
+    echo ""
+    echo "  Next intune-agent run:"
+    systemctl --user list-timers intune-agent.timer --no-pager 2>/dev/null | tail -2 || echo "    Timer not active"
+    echo ""
 
     echo "D-BUS SERVICES:"
     echo "  User broker activation file:"
@@ -471,8 +516,9 @@ let
     echo ""
 
     echo "NIX WRAPPERS:"
-    echo "  intune-portal-rosetta: $(which intune-portal-rosetta 2>/dev/null || echo 'not in PATH')"
-    echo "  microsoft-identity-broker-rosetta: $(which microsoft-identity-broker-rosetta 2>/dev/null || echo 'not in PATH')"
+    echo "  intune-portal${wrapperSuffix}: $(which intune-portal${wrapperSuffix} 2>/dev/null || echo 'not in PATH')"
+    echo "  intune-agent${wrapperSuffix}: $(which intune-agent${wrapperSuffix} 2>/dev/null || echo 'not in PATH')"
+    echo "  microsoft-identity-broker${wrapperSuffix}: $(which microsoft-identity-broker${wrapperSuffix} 2>/dev/null || echo 'not in PATH')"
     echo ""
   '';
 
@@ -504,11 +550,11 @@ let
     echo "========================================"
     echo ""
 
-    # Set up environment matching intune-portal-rosetta
+    # Set up environment matching the intune-portal wrapper
     # NOTE: p11-kit reads module configs from ~/.config/pkcs11/modules/ (XDG path)
     export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
-    export P11_KIT_MODULE_PATH="${x86LibPaths.opensc}/lib/pkcs11:${x86LibPaths.p11kit}/pkcs11"
-    export LD_LIBRARY_PATH="${x86LibPaths.pcsclite}/lib:${x86LibPaths.opensc}/lib:${x86LibPaths.p11kit}/lib:${x86LibPaths.gnutls}:${x86LibPaths.nettle}:${x86LibPaths.libtasn1}:${x86LibPaths.libidn2}:''${LD_LIBRARY_PATH:-}"
+    export P11_KIT_MODULE_PATH="${libPaths.opensc}/lib/pkcs11:${libPaths.p11kit}/pkcs11"
+    export LD_LIBRARY_PATH="${libPaths.pcsclite}/lib:${libPaths.opensc}/lib:${libPaths.p11kit}/lib:${libPaths.gnutls}:${libPaths.nettle}:${libPaths.libtasn1}:${libPaths.libidn2}:''${LD_LIBRARY_PATH:-}"
     XDG_PKCS11_MODULES="$HOME/.config/pkcs11/modules"
 
     echo "=== LAYER 1: pcscd (Smart Card Daemon) ==="
@@ -529,7 +575,7 @@ let
     echo ""
 
     echo "=== LAYER 2: OpenSC (x86_64) ==="
-    OPENSC_LIB="${x86LibPaths.opensc}/lib/pkcs11/opensc-pkcs11.so"
+    OPENSC_LIB="${libPaths.opensc}/lib/pkcs11/opensc-pkcs11.so"
     if [[ -f "$OPENSC_LIB" ]]; then
       pass "OpenSC PKCS#11 module exists"
       info "Path: $OPENSC_LIB"
@@ -572,7 +618,7 @@ let
     echo ""
 
     echo "=== LAYER 3: p11-kit ==="
-    P11_KIT="${pkgsX86.p11-kit.bin}/bin/p11-kit"
+    P11_KIT="${effectivePkgs.p11-kit.bin}/bin/p11-kit"
     if [[ -x "$P11_KIT" ]]; then
       pass "p11-kit available"
 
@@ -609,7 +655,7 @@ let
     echo ""
 
     echo "=== LAYER 4: GnuTLS ==="
-    P11TOOL="${pkgsX86.gnutls.bin}/bin/p11tool"
+    P11TOOL="${effectivePkgs.gnutls.bin}/bin/p11tool"
     if [[ -x "$P11TOOL" ]]; then
       pass "GnuTLS p11tool available"
 
@@ -671,7 +717,7 @@ let
     echo ""
     echo "For verbose p11-kit debugging, run:"
     echo "  export P11_KIT_DEBUG=all"
-    echo "  intune-portal-rosetta"
+    echo "  intune-portal${wrapperSuffix}"
   '';
 
   #############################################################################
@@ -703,9 +749,9 @@ let
     info() { echo -e "  $1"; }
 
     NSS_DB="$HOME/.pki/nssdb"
-    # Use x86_64 OpenSC for Rosetta/x86_64 browsers
+    # OpenSC PKCS#11 module (Arch package for compatibility)
     OPENSC_LIB="${openscArch}/lib/pkcs11/opensc-pkcs11.so"
-    MODULE_NAME="OpenSC-x86"
+    MODULE_NAME="OpenSC"
 
     echo "============================================"
     echo "NSS PKCS#11 Setup for Smart Cards / YubiKey"
@@ -822,125 +868,148 @@ in {
       logsHelper
       statusHelper
       pkcs11DiagHelper
+      nssSetupHelper
 
       # NSS tools for browser smart card setup
       pkgs.nss.tools  # provides modutil, certutil
-    ] ++ (if isAarch64 then [
-      # NSS setup helper for Rosetta browsers
-      nssSetupHelper
-      # Rosetta wrappers (reference brokerPkg binaries directly)
+
+      # Wrappers (architecture-aware names via wrapperSuffix)
       intuneWrapper
+      intuneAgentWrapper
       userBrokerWrapper
       deviceBrokerWrapper
 
       # D-Bus service override for user broker
       userBrokerDbusService
 
-      # Required x86_64 libraries
-      pkgsX86.libglvnd
-      pkgsX86.wayland
-      pkgsX86.mesa
-      pkgsX86.glib-networking
-      pkgsX86.gnutls
-      pkgsX86.nettle
-      pkgsX86.libtasn1
-      pkgsX86.libidn2
+      # Required libraries (effectivePkgs resolves to native or cross-arch)
+      effectivePkgs.libglvnd
+      effectivePkgs.wayland
+      effectivePkgs.mesa
+      effectivePkgs.glib-networking
+      effectivePkgs.gnutls
+      effectivePkgs.nettle
+      effectivePkgs.libtasn1
+      effectivePkgs.libidn2
       openscArch
-      pkgsX86.libp11
-      pkgsX86.pcsclite.lib
-      pkgsX86.p11-kit
-      pkgsX86.p11-kit.bin  # For p11-kit CLI tools
-      pkgsX86.libfido2
-      # System libraries for AUR broker
-      pkgsX86.dbus.lib
-      pkgsX86.glib.out
-      pkgsX86.systemdLibs
-      pkgsX86.util-linux.lib
+      effectivePkgs.libp11
+      effectivePkgs.pcsclite.lib
+      effectivePkgs.p11-kit
+      effectivePkgs.p11-kit.bin  # For p11-kit CLI tools
+      effectivePkgs.libfido2
+      # System libraries for broker
+      effectivePkgs.dbus.lib
+      effectivePkgs.glib.out
+      effectivePkgs.systemdLibs
+      effectivePkgs.util-linux.lib
       curlNoHttp3.out
-      pkgsX86.zlib.out
-      pkgsX86.libssh2.out
-      pkgsX86.nghttp2.lib
-      pkgsX86.brotli.lib
-      pkgsX86.icu.out
-      pkgsX86.stdenv.cc.cc.lib
-      pkgsX86.zstd.out
-      pkgsX86.expat.out
-      pkgsX86.pcre2.out
+      effectivePkgs.zlib.out
+      effectivePkgs.libssh2.out
+      effectivePkgs.nghttp2.lib
+      effectivePkgs.brotli.lib
+      effectivePkgs.icu.out
+      effectivePkgs.stdenv.cc.cc.lib
+      effectivePkgs.zstd.out
+      effectivePkgs.expat.out
+      effectivePkgs.pcre2.out
       # X11 and GUI libraries
-      pkgsX86.xorg.libX11.out
-      pkgsX86.xorg.libXext.out
-      pkgsX86.xorg.libXrender.out
-      pkgsX86.xorg.libXi.out
-      pkgsX86.xorg.libXcursor.out
-      pkgsX86.xorg.libXrandr.out
-      pkgsX86.xorg.libXfixes.out
-      pkgsX86.xorg.libXcomposite.out
-      pkgsX86.xorg.libXdamage.out
-      pkgsX86.xorg.libxcb.out
-      pkgsX86.libxkbcommon.out
-      pkgsX86.fontconfig.lib
-      pkgsX86.freetype.out
-      pkgsX86.cairo.out
-      pkgsX86.pango.out
-      pkgsX86.gdk-pixbuf.out
-      pkgsX86.gtk3.out
-      pkgsX86.atk.out
-      pkgsX86.at-spi2-atk.out
-      pkgsX86.at-spi2-core.out
-      pkgsX86.harfbuzz.out
+      effectivePkgs.xorg.libX11.out
+      effectivePkgs.xorg.libXext.out
+      effectivePkgs.xorg.libXrender.out
+      effectivePkgs.xorg.libXi.out
+      effectivePkgs.xorg.libXcursor.out
+      effectivePkgs.xorg.libXrandr.out
+      effectivePkgs.xorg.libXfixes.out
+      effectivePkgs.xorg.libXcomposite.out
+      effectivePkgs.xorg.libXdamage.out
+      effectivePkgs.xorg.libxcb.out
+      effectivePkgs.libxkbcommon.out
+      effectivePkgs.fontconfig.lib
+      effectivePkgs.freetype.out
+      effectivePkgs.cairo.out
+      effectivePkgs.pango.out
+      effectivePkgs.gdk-pixbuf.out
+      effectivePkgs.gtk3.out
+      effectivePkgs.atk.out
+      effectivePkgs.at-spi2-atk.out
+      effectivePkgs.at-spi2-core.out
+      effectivePkgs.harfbuzz.out
       # WebKitGTK and related
-      pkgsX86.webkitgtk_4_1.out
-      pkgsX86.libsoup_3.out
-      # libsecret already included via webkitgtk dependencies
-      pkgsX86.sqlite.out
-      pkgsX86.libpsl.out
-      pkgsX86.libidn.out
-      pkgsX86.libpng.out
-      pkgsX86.libjpeg.out
-      pkgsX86.libwebp.out
-      pkgsX86.lcms2.out
-      pkgsX86.gst_all_1.gstreamer.out
-      pkgsX86.gst_all_1.gst-plugins-base.out
-      pkgsX86.libxml2.out
-      pkgsX86.libxslt.out
-      pkgsX86.enchant.out
-      pkgsX86.libnotify.out
+      effectivePkgs.webkitgtk_4_1.out
+      effectivePkgs.libsoup_3.out
+      effectivePkgs.sqlite.out
+      effectivePkgs.libpsl.out
+      effectivePkgs.libidn.out
+      effectivePkgs.libpng.out
+      effectivePkgs.libjpeg.out
+      effectivePkgs.libwebp.out
+      effectivePkgs.lcms2.out
+      effectivePkgs.gst_all_1.gstreamer.out
+      effectivePkgs.gst_all_1.gst-plugins-base.out
+      effectivePkgs.libxml2.out
+      effectivePkgs.libxslt.out
+      effectivePkgs.enchant.out
+      effectivePkgs.libnotify.out
       # OpenSSL 3.3.2 for broker Code:1200 fix
       opensslArch
-    ] else []);
+    ];
 
     # Install D-Bus service file to user's local share
     # This overrides /usr/share/dbus-1/services/com.microsoft.identity.broker1.service
-    xdg.dataFile = mkIf isAarch64 {
-      "dbus-1/services/com.microsoft.identity.broker1.service" = {
-        source = "${userBrokerDbusService}/share/dbus-1/services/com.microsoft.identity.broker1.service";
-      };
+    xdg.dataFile."dbus-1/services/com.microsoft.identity.broker1.service" = {
+      source = "${userBrokerDbusService}/share/dbus-1/services/com.microsoft.identity.broker1.service";
     };
 
-    # Install x86_64 PKCS#11 module config for p11-kit
-    # This tells the x86_64 p11-kit (used by intune-portal's WebKitGTK) where to find OpenSC
+    # Install PKCS#11 module config for p11-kit
+    # This tells p11-kit (used by intune-portal's WebKitGTK) where to find OpenSC
     # NOTE: p11-kit reads from ~/.config/pkcs11/modules/ (XDG path) - not env vars!
     # NOTE: No leading whitespace in text - p11-kit is whitespace-sensitive
-    xdg.configFile = mkIf isAarch64 {
-      "pkcs11/modules/opensc-x86.module".text = ''
+    xdg.configFile."pkcs11/modules/opensc.module".text = ''
 module: ${openscArch}/lib/pkcs11/opensc-pkcs11.so
 critical: no
 trust-policy: no
 '';
+
+    # NOTE: Do NOT set global sessionVariables for LIBGL_ALWAYS_SOFTWARE or GDK_BACKEND
+    # These break Hyprland/Wayland compositors! The wrapper scripts already set these
+    # environment variables for the specific binaries that need them.
+
+    # Systemd user service for intune-agent (compliance reporting)
+    # This service collects device compliance data and sends it to Microsoft Intune
+    systemd.user.services.intune-agent = {
+      Unit = {
+        Description = "Intune Agent - compliance reporting";
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = "${intuneAgentWrapper}/bin/intune-agent${wrapperSuffix}";
+        StateDirectory = "intune";
+        Slice = "background.slice";
+      };
     };
 
-    # Set systemd user session environment variables for WebKitGTK
-    # These are needed for D-Bus activated services that spawn WebKit subprocesses
-    # See: https://github.com/recolic/microsoft-intune-archlinux
-    systemd.user.sessionVariables = mkIf isAarch64 {
-      WEBKIT_DISABLE_DMABUF_RENDERER = "1";
-      LIBGL_ALWAYS_SOFTWARE = "1";
-      GDK_BACKEND = "x11";
+    # Systemd user timer for intune-agent
+    # Runs after graphical session starts, then every hour with 10min random delay
+    systemd.user.timers.intune-agent = {
+      Unit = {
+        Description = "Intune Agent scheduler";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Timer = {
+        OnStartupSec = "5m";      # First run 5 minutes after login
+        OnUnitActiveSec = "1h";   # Then every hour
+        RandomizedDelaySec = "10m"; # Random delay up to 10 minutes
+        AccuracySec = "2m";
+      };
+      Install = {
+        WantedBy = [ "graphical-session.target" ];
+      };
     };
 
     # Activation script to verify setup
-    home.activation.verifyIntuneSetup = mkIf isAarch64
-      (lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
+    home.activation.verifyIntuneSetup =
+      lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
         # Verify D-Bus service file is in place
         if [[ -f "$HOME/.local/share/dbus-1/services/com.microsoft.identity.broker1.service" ]]; then
           noteEcho "User broker D-Bus service installed (Nix-managed, version ${brokerPkg.version})"
@@ -949,10 +1018,16 @@ trust-policy: no
         fi
 
         # Remind about device broker (system service)
-        noteEcho "Device broker runs as system service. For Rosetta compatibility, run:"
+        noteEcho "Device broker runs as system service. To use Nix wrapper:"
         noteEcho "  sudo systemctl edit microsoft-identity-device-broker.service"
         noteEcho "  # Add: ExecStart="
-        noteEcho "  # Add: ExecStart=$HOME/.nix-profile/bin/microsoft-identity-device-broker-rosetta"
-      '');
+        noteEcho "  # Add: ExecStart=$HOME/.nix-profile/bin/microsoft-identity-device-broker${wrapperSuffix}"
+
+        # Check if intune-agent timer is enabled
+        if ! systemctl --user is-enabled intune-agent.timer >/dev/null 2>&1; then
+          noteEcho "Intune agent timer not enabled. Enable with:"
+          noteEcho "  systemctl --user enable --now intune-agent.timer"
+        fi
+      '';
   };
 }
