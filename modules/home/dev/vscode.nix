@@ -13,43 +13,46 @@ in {
     programs.vscode = {
       enable = true;
 
-      # Extensions managed by Nix
-      # Find more at: https://search.nixos.org/packages?query=vscode-extensions
-      extensions = with pkgs.vscode-extensions; [
-        # Theme
-        catppuccin.catppuccin-vsc
-        catppuccin.catppuccin-vsc-icons
+      # Use the new profiles API (home-manager 24.11+)
+      profiles.default = {
+        # Extensions managed by Nix
+        # Find more at: https://search.nixos.org/packages?query=vscode-extensions
+        extensions = with pkgs.vscode-extensions; [
+          # Theme
+          catppuccin.catppuccin-vsc
+          catppuccin.catppuccin-vsc-icons
 
-        # Language support examples (uncomment as needed)
-        # golang.go
-        # rust-lang.rust-analyzer
-        # ms-python.python
-        # jnoortheen.nix-ide
-      ];
+          # Language support examples (uncomment as needed)
+          # golang.go
+          # rust-lang.rust-analyzer
+          # ms-python.python
+          # jnoortheen.nix-ide
+        ];
 
-      # Settings managed by Nix
-      userSettings = {
-        # Catppuccin theme configuration
-        "workbench.colorTheme" = "Catppuccin Mocha";
-        "workbench.iconTheme" = "catppuccin-mocha";
+        # Settings managed by Nix
+        userSettings = {
+          # Catppuccin theme configuration
+          "workbench.colorTheme" = "Catppuccin Mocha";
+          "workbench.iconTheme" = "catppuccin-mocha";
 
-        # Editor appearance
-        "editor.fontFamily" = "'JetBrainsMono Nerd Font', monospace";
-        "editor.fontSize" = 14;
-        "editor.lineNumbers" = "relative";
-        "editor.cursorBlinking" = "solid";
-        "editor.cursorStyle" = "block";
+          # Editor appearance
+          "editor.fontFamily" = "'JetBrainsMono Nerd Font', monospace";
+          "editor.fontSize" = 14;
+          "editor.lineNumbers" = "relative";
+          "editor.cursorBlinking" = "solid";
+          "editor.cursorStyle" = "block";
 
-        # Editor behavior
-        "editor.formatOnSave" = true;
-        "editor.tabSize" = 2;
-        "editor.insertSpaces" = true;
+          # Editor behavior
+          "editor.formatOnSave" = true;
+          "editor.tabSize" = 2;
+          "editor.insertSpaces" = true;
 
-        # Terminal
-        "terminal.integrated.fontFamily" = "'JetBrainsMono Nerd Font'";
+          # Terminal
+          "terminal.integrated.fontFamily" = "'JetBrainsMono Nerd Font'";
 
-        # Disable telemetry
-        "telemetry.telemetryLevel" = "off";
+          # Disable telemetry
+          "telemetry.telemetryLevel" = "off";
+        };
       };
     };
   };
