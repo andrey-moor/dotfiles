@@ -55,3 +55,8 @@ vendor/
 # Backup files
 *.bak
 *.backup
+
+# Arch Linux packages
+*.pkg.tar.xz
+*.pkg.tar.zst
+hypr-pkgs/
