@@ -55,9 +55,9 @@ with lib;
       };
 
       linux = {
-        intune.enable = true;
-        intune.debug = true;  # Enable verbose logging for debugging
-        edge.enable = true;
+        intune-rosetta.enable = true;
+        intune-rosetta.debug = true;  # Enable verbose logging for debugging
+        edge-rosetta.enable = true;
       };
     };
   };
