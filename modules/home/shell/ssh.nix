@@ -48,9 +48,9 @@ in {
           identitiesOnly = true;
         };
 
-        # Rocinante - Linux VM (Parallels)
+        # Rocinante - Linux VM (Tailscale)
         "rocinante" = {
-          hostname = "10.211.55.3";
+          hostname = "100.65.74.95";
           user = "andreym";
         };
       };
