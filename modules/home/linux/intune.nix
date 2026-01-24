@@ -65,6 +65,8 @@ let
 
   userBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-broker-wrapped" ''
     export LD_LIBRARY_PATH="${ldLibraryPath}:''${LD_LIBRARY_PATH:-}"
+    export WEBKIT_DISABLE_DMABUF_RENDERER=1
+    export LIBGL_ALWAYS_SOFTWARE=1
     exec /usr/bin/microsoft-identity-broker "$@"
   '';
 
