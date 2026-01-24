@@ -102,22 +102,32 @@ let
     echo "=== Intune System Setup ==="
     echo ""
 
-    echo "[1/4] Spoofing os-release..."
+    echo "[1/6] Spoofing os-release..."
     sudo cp ${fakeOsRelease} /etc/os-release
     sudo cp ${fakeOsRelease} /usr/lib/os-release
     echo "  -> /etc/os-release and /usr/lib/os-release set to Ubuntu 22.04"
 
-    echo "[2/4] Configuring device broker..."
+    echo "[2/6] Configuring device broker..."
     sudo mkdir -p /etc/systemd/system/microsoft-identity-device-broker.service.d
     sudo cp ${deviceBrokerOverride} /etc/systemd/system/microsoft-identity-device-broker.service.d/override.conf
     echo "  -> Device broker override installed"
 
-    echo "[3/4] Configuring pcscd (YubiKey access)..."
+    echo "[3/6] Overriding user broker D-Bus service..."
+    printf '[D-BUS Service]\nName=com.microsoft.identity.broker1\nExec=${userBrokerWrapper}/bin/microsoft-identity-broker-wrapped\n' | sudo tee /usr/share/dbus-1/services/com.microsoft.identity.broker1.service > /dev/null
+    echo "  -> System D-Bus service now points to nix wrapper"
+
+    echo "[4/6] Setting WebKit/GPU environment variables..."
+    sudo sed -i '/^WEBKIT_DISABLE_DMABUF_RENDERER=/d; /^LIBGL_ALWAYS_SOFTWARE=/d' /etc/environment 2>/dev/null || true
+    echo 'WEBKIT_DISABLE_DMABUF_RENDERER=1' | sudo tee -a /etc/environment > /dev/null
+    echo 'LIBGL_ALWAYS_SOFTWARE=1' | sudo tee -a /etc/environment > /dev/null
+    echo "  -> /etc/environment updated (software rendering for WebKit)"
+
+    echo "[5/6] Configuring pcscd (YubiKey access)..."
     sudo mkdir -p /etc/systemd/system/pcscd.service.d
     sudo cp ${pcscdOverride} /etc/systemd/system/pcscd.service.d/override.conf
     echo "  -> pcscd override installed"
 
-    echo "[4/4] Registering YubiKey PKCS#11 module..."
+    echo "[6/6] Registering YubiKey PKCS#11 module..."
     echo 'module: /usr/lib/libykcs11.so' | sudo tee /usr/share/p11-kit/modules/ykcs11.module > /dev/null
     echo "  -> ykcs11 p11-kit module registered"
 
