@@ -1,25 +1,42 @@
-# Rocinante Setup
+# Rocinante
 
-x86_64 Omarchy (Arch Linux) workstation with standalone home-manager.
+x86_64 Omarchy (Arch Linux) workstation managed with standalone home-manager.
+
+- **Access:** Tailscale SSH (`ssh rocinante` from any tailnet machine)
+- **Disk:** LUKS2-encrypted NVMe + btrfs
 
 ## Initial Setup
 
-### 1. Install Nix
+### 1. Tailscale
+
+```bash
+sudo systemctl enable --now tailscaled
+sudo tailscale up --ssh
+```
+
+Requires an SSH ACL rule in the [Tailnet admin panel](https://login.tailscale.com/admin/acls).
+
+### 2. Clone Dotfiles
+
+```bash
+git clone https://github.com/andrey-moor/dotfiles.git ~/dotfiles
+```
+
+### 3. Install Nix
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm
 . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 ```
 
-### 2. Clone and Apply
+### 4. Apply Home-Manager
 
 ```bash
-git clone <repo-url> ~/dotfiles
 cd ~/dotfiles
 nix run home-manager -- switch --flake .#rocinante -b backup
 ```
 
-### 3. Chezmoi (mutable configs)
+### 5. Chezmoi (mutable configs)
 
 ```bash
 chezmoi apply
@@ -27,58 +44,65 @@ chezmoi apply
 
 ## Intune Enrollment
 
-### 4. Device Broker
+Reference: https://github.com/recolic/microsoft-intune-archlinux
 
-The device broker is a system-level D-Bus service. Copy the config and service
-files from the Nix profile, then override ExecStart to use our wrapper:
-
-```bash
-sudo cp ~/.nix-profile/share/dbus-1/system.d/com.microsoft.identity.devicebroker1.conf /usr/share/dbus-1/system.d/
-sudo chmod 644 /usr/share/dbus-1/system.d/com.microsoft.identity.devicebroker1.conf
-
-sudo cp ~/.nix-profile/lib/systemd/system/microsoft-identity-device-broker.service /etc/systemd/system/
-WRAPPER=$(readlink -f ~/.nix-profile/bin/microsoft-identity-device-broker-wrapped)
-sudo mkdir -p /etc/systemd/system/microsoft-identity-device-broker.service.d
-printf "[Service]\nExecStart=\nExecStart=$WRAPPER\n\n[Install]\nWantedBy=multi-user.target\n" | \
-  sudo tee /etc/systemd/system/microsoft-identity-device-broker.service.d/nix.conf
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now microsoft-identity-device-broker
-```
-
-### 5. Keyring
-
-GNOME keyring must have a password-protected "login" keyring set as default
-(passwordless keyrings silently fail due to a known gnome-keyring bug):
+### 6. AUR Packages
 
 ```bash
-mkdir -p ~/.local/share/keyrings
-echo -n login > ~/.local/share/keyrings/default
-# Set keyring password (use seahorse GUI, or login via PAM to auto-create)
-seahorse
+yay -S intune-portal-bin microsoft-identity-broker-bin pcsclite ccid yubico-piv-tool
 ```
 
-### 6. Remove lsb_release (if present)
+### 7. System Setup (one-time)
+
+The `intune-setup` script (installed by home-manager) configures all system-level
+requirements: os-release spoofing, device broker override, pcscd, and p11-kit.
+
+```bash
+intune-setup
+```
+
+This runs the following with sudo:
+- Spoofs `/etc/os-release` and `/usr/lib/os-release` as Ubuntu 22.04
+- Installs device broker systemd override (adds `LD_LIBRARY_PATH` for OpenSSL 3.3.2)
+- Installs pcscd override (removes sandboxing for USB/YubiKey access)
+- Registers YubiKey PKCS#11 module with p11-kit
+
+### 8. Remove lsb_release
 
 ```bash
 sudo mv /usr/bin/lsb_release /usr/bin/lsb_release.bak 2>/dev/null || true
 ```
 
-### 7. Enroll
+### 9. Keyring
+
+GNOME keyring must have a password-protected "login" collection (passwordless
+keyrings silently fail due to a known gnome-keyring bug):
 
 ```bash
-intune-portal-wrapped
+mkdir -p ~/.local/share/keyrings
+echo -n login > ~/.local/share/keyrings/default
+seahorse  # Create "login" keyring with a password via GUI
 ```
 
-os-release spoofing is handled automatically via bubblewrap (no system-wide modification needed).
+### 10. Verify Smart Card
+
+```bash
+yubico-piv-tool -a status
+p11tool --list-tokens  # Should show "YubiKey PIV #..."
+```
+
+### 11. Enroll
+
+```bash
+intune-portal
+```
 
 ## Compliance
 
 ### PAM Password Policy
 
-This creates a compliance-reporting file that intune-agent checks.
-Note: Arch uses `/etc/pam.d/system-auth`, not `common-password` —
-this file is for Intune compliance only (we spoof Ubuntu via bwrap).
+Intune checks `/etc/pam.d/common-password`. This file is for compliance
+reporting only (Arch uses `system-auth` natively):
 
 ```bash
 sudo tee /etc/pam.d/common-password << 'EOF'
@@ -88,24 +112,56 @@ EOF
 sudo chmod 644 /etc/pam.d/common-password
 ```
 
-### Agent Timer
+## Day-to-Day
 
 ```bash
-systemctl --user enable --now intune-agent.timer
-```
+# Update config
+cd ~/dotfiles && git pull
+nix run home-manager -- switch --flake .#rocinante -b backup
 
-## Verify
+# Intune portal (enrollment/re-auth)
+intune-portal
 
-```bash
+# Status and logs
 intune-status
+intune-logs --broker
+intune-logs --device
+intune-logs --agent
 ```
+
+## Architecture
+
+Nix (home-manager) manages:
+- OpenSSL 3.3.2 override (`LD_LIBRARY_PATH` wrappers for all Intune binaries)
+- User broker D-Bus service (auto-activated)
+- Intune-agent systemd timer (hourly compliance reporting)
+- Helper scripts (`intune-setup`, `intune-status`, `intune-logs`)
+
+AUR packages provide:
+- Binaries (`intune-portal`, `intune-agent`, `microsoft-identity-broker`, `microsoft-identity-device-broker`)
+- System D-Bus policies and systemd services
+
+System-level configs (installed by `intune-setup`):
+- `/etc/os-release` — Ubuntu 22.04 spoof
+- Device broker systemd override — `LD_LIBRARY_PATH` + `HOME`
+- pcscd override — removes sandboxing for YubiKey USB access
+- p11-kit module — YubiKey PKCS#11
 
 ## Troubleshooting
 
-Reference: https://github.com/recolic/microsoft-intune-archlinux
-
 ```bash
-intune-logs              # tail broker + device logs
-intune-logs --device     # device broker only
-sudo journalctl -u microsoft-identity-device-broker -f
+# Intune services
+intune-logs --device
+intune-logs --broker
+
+# Smart card / YubiKey
+systemctl status pcscd
+yubico-piv-tool -a status
+p11tool --list-tokens
+
+# Re-run system setup after home-manager switch
+intune-setup
 ```
+
+Note: Run `intune-setup` again after `home-manager switch` if the OpenSSL nix
+store path changes (the device broker override embeds the path).

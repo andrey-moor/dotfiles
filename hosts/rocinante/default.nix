@@ -53,9 +53,8 @@ with lib;
       };
 
       linux = {
-        intune.enable = true;
-        intune.debug = true;  # Enable verbose logging for debugging
         edge.enable = true;
+        intune.enable = true;
       };
     };
   };

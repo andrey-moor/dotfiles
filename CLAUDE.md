@@ -73,32 +73,25 @@ To edit neovim config: edit `chezmoi/dot_config/nvim/...`, then `chezmoi apply`.
 ## Hosts
 
 - **behemoth**: macOS workstation (aarch64-darwin)
-- **rocinante**: aarch64-linux VM running under Parallels on behemoth (uses Rosetta for x86_64 emulation)
+- **rocinante**: x86_64 Arch Linux (Omarchy) workstation, accessed via Tailscale
 - **endurance**: aarch64-linux VM running under Parallels on behemoth with LUKS encryption (Intune compliance)
 
-### Rocinante (Parallels VM)
+### Rocinante (Tailscale)
 
-Rocinante is an aarch64-linux VM with the dotfiles directory mounted from macOS via Parallels shared folders.
+Rocinante is an x86_64 Arch Linux (Omarchy) workstation with dotfiles cloned via git.
 
-**Directory paths:**
-- macOS: `/Users/andreym/Documents/dotfiles`
-- Rocinante: `/media/psf/Home/Documents/dotfiles` (mounted)
+**Access:** `ssh rocinante` (via Tailscale SSH)
 
-**Build/switch from macOS (recommended):**
+**Build/switch:**
 ```bash
-prlctl exec Rocinante "su andreym -s /bin/bash -c '. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && cd /media/psf/Home/Documents/dotfiles && nix run home-manager -- switch --flake .#rocinante'"
-```
-
-**Build/switch from inside Rocinante:**
-```bash
-cd /media/psf/Home/Documents/dotfiles
-nix run home-manager -- switch --flake .#rocinante
+cd ~/dotfiles
+nix run home-manager -- switch --flake .#rocinante -b backup
 ```
 
 **Notes:**
-- Use `su andreym -s /bin/bash -c '...'` because Rocinante's default shell is nushell (doesn't support `&&`)
-- The mounted directory allows editing on macOS and building on Rocinante without git push/pull
-- Rosetta x86_64 emulation is enabled for running x86_64 binaries (intune-portal, identity brokers)
+- Dotfiles live at `/home/andreym/dotfiles` (git clone, not a mount)
+- Native x86_64 — no Rosetta needed
+- See `hosts/rocinante/README.md` for full setup instructions
 
 ### Endurance (Parallels VM - Encrypted)
 
