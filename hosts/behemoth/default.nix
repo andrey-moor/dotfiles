@@ -83,6 +83,7 @@ with lib;
         # System
         "parallels"
         "little-snitch"
+        "tailscale"
         # Design
         "monodraw"
         # Media
