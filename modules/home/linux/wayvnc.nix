@@ -18,10 +18,7 @@ let
     # Resolution options to cycle through
     RESOLUTIONS=(
       "${cfg.nativeResolution}"    # Native 4K
-      "1920x1080@60"               # HD 16:9
-      "1800x1200@60"               # 3:2 Mac-friendly
-      "1620x1080@60"               # 3:2 smaller
-      "1512x982@60"                # Mac effective points
+      "${cfg.remoteResolution}"    # Remote-friendly
     )
 
     # Get current index
