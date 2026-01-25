@@ -113,7 +113,19 @@ in {
     xdg.configFile."wayvnc/config".text = ''
       address=${cfg.address}
       port=${toString cfg.port}
+      enable_auth=true
+      username=${config.home.username}
       password=${cfg.password}
+      rsa_private_key_file=${config.xdg.configHome}/wayvnc/rsa_key.pem
+      relax_encryption=true
+    '';
+
+    # Generate RSA key if missing
+    home.activation.wayvncKey = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      if [ ! -f "${config.xdg.configHome}/wayvnc/rsa_key.pem" ]; then
+        mkdir -p "${config.xdg.configHome}/wayvnc"
+        ${pkgs.openssl}/bin/openssl genrsa -out "${config.xdg.configHome}/wayvnc/rsa_key.pem" 4096
+      fi
     '';
 
     systemd.user.services.wayvnc = {
