@@ -120,11 +120,11 @@ in {
       relax_encryption=true
     '';
 
-    # Generate RSA key if missing
+    # Generate RSA key if missing (traditional format required by wayvnc/nettle)
     home.activation.wayvncKey = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       if [ ! -f "${config.xdg.configHome}/wayvnc/rsa_key.pem" ]; then
         mkdir -p "${config.xdg.configHome}/wayvnc"
-        ${pkgs.openssl}/bin/openssl genrsa -out "${config.xdg.configHome}/wayvnc/rsa_key.pem" 4096
+        ${pkgs.openssl}/bin/openssl genrsa -traditional -out "${config.xdg.configHome}/wayvnc/rsa_key.pem" 4096
       fi
     '';
 

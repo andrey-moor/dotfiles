@@ -97,6 +97,9 @@ with lib;
         "azure-cli"
         "openssh"  # FIDO2/Yubikey SSH support (macOS default lacks it)
       ];
+      masApps = {
+        "Screens 5" = 1663047912;
+      };
     };
 
     # Home-manager user configuration
