@@ -17,6 +17,7 @@ with lib;
     home.packages = [
       pkgs.azure-cli
       pkgs.mesa-demos  # provides glxinfo, glxgears, etc.
+      pkgs.wayvnc      # VNC server for Wayland
     ];
 
     # Enable modules
