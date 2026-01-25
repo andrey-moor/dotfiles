@@ -436,7 +436,11 @@ let
     echo "=== Intune System Setup (Nix libs) ==="
     echo ""
 
-    echo "[1/4] Spoofing os-release..."
+    echo "[1/6] Spoofing os-release..."
+    # Remove symlink if /usr/lib/os-release points to /etc/os-release
+    if [ -L /usr/lib/os-release ]; then
+      sudo rm /usr/lib/os-release
+    fi
     cat << 'OSEOF' | sudo tee /etc/os-release > /dev/null
 NAME="Ubuntu"
 VERSION="22.04.3 LTS (Jammy Jellyfish)"
@@ -449,24 +453,44 @@ OSEOF
     sudo cp /etc/os-release /usr/lib/os-release
     echo "  -> os-release set to Ubuntu 22.04"
 
-    echo "[2/4] Configuring pcscd (YubiKey access)..."
+    echo "[2/6] Configuring device broker to use Nix wrapper..."
+    sudo mkdir -p /etc/systemd/system/microsoft-identity-device-broker.service.d
+    cat << 'DBEOF' | sudo tee /etc/systemd/system/microsoft-identity-device-broker.service.d/override.conf > /dev/null
+[Service]
+ExecStart=
+ExecStart=${deviceBrokerWrapper}/bin/microsoft-identity-device-broker
+Environment=HOME=${config.home.homeDirectory}
+DBEOF
+    echo "  -> Device broker override installed"
+
+    echo "[3/6] Configuring pcscd (YubiKey access)..."
     sudo mkdir -p /etc/systemd/system/pcscd.service.d
     cat << 'PCSCDEOF' | sudo tee /etc/systemd/system/pcscd.service.d/override.conf > /dev/null
 [Service]
 ExecStart=
-ExecStart=/usr/bin/pcscd --foreground --auto-exit
+ExecStart=/usr/bin/pcscd --foreground --auto-exit --disable-polkit
 PCSCDEOF
-    echo "  -> pcscd override installed"
+    echo "  -> pcscd override installed (polkit disabled for user access)"
 
-    echo "[3/4] Enabling pcscd..."
+    echo "[4/6] Reloading systemd and restarting services..."
     sudo systemctl daemon-reload
     sudo systemctl enable --now pcscd.socket
-    echo "  -> pcscd.socket enabled"
+    sudo systemctl restart pcscd.socket 2>/dev/null || true
+    sudo systemctl restart microsoft-identity-device-broker 2>/dev/null || true
+    echo "  -> Services restarted"
 
-    echo "[4/4] Setting up p11-kit module..."
+    echo "[5/6] Setting up system p11-kit module..."
     sudo mkdir -p /etc/pkcs11/modules
     echo "module: ${openscArch}/lib/pkcs11/opensc-pkcs11.so" | sudo tee /etc/pkcs11/modules/opensc.module > /dev/null
     echo "  -> OpenSC p11-kit module registered"
+
+    echo "[6/6] Removing lsb_release if present..."
+    if [ -f /usr/bin/lsb_release ]; then
+      sudo mv /usr/bin/lsb_release /usr/bin/lsb_release.bak
+      echo "  -> lsb_release moved to lsb_release.bak"
+    else
+      echo "  -> lsb_release not found (OK)"
+    fi
 
     echo ""
     echo "Done! System configs installed."
