@@ -437,11 +437,9 @@ let
     echo ""
 
     echo "[1/6] Spoofing os-release..."
-    # Remove symlink if /usr/lib/os-release points to /etc/os-release
-    if [ -L /usr/lib/os-release ]; then
-      sudo rm /usr/lib/os-release
-    fi
-    cat << 'OSEOF' | sudo tee /etc/os-release > /dev/null
+    # Handle symlinks in either direction - remove both and recreate
+    sudo rm -f /etc/os-release /usr/lib/os-release 2>/dev/null || true
+    cat << 'OSEOF' | sudo tee /usr/lib/os-release > /dev/null
 NAME="Ubuntu"
 VERSION="22.04.3 LTS (Jammy Jellyfish)"
 ID=ubuntu
@@ -450,7 +448,7 @@ PRETTY_NAME="Ubuntu 22.04.3 LTS"
 VERSION_ID="22.04"
 VERSION_CODENAME=jammy
 OSEOF
-    sudo cp /etc/os-release /usr/lib/os-release
+    sudo ln -sf ../usr/lib/os-release /etc/os-release
     echo "  -> os-release set to Ubuntu 22.04"
 
     echo "[2/6] Configuring device broker to use Nix wrapper..."
