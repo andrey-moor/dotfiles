@@ -1,108 +1,35 @@
 # Rocinante
 
-x86_64 Omarchy (Arch Linux) workstation managed with standalone home-manager.
+x86_64 Omarchy (Arch Linux) workstation with LUKS2-encrypted NVMe + btrfs.
 
-- **Access:** Tailscale SSH (`ssh rocinante` from any tailnet machine)
-- **Disk:** LUKS2-encrypted NVMe + btrfs
-
-## Initial Setup
-
-### 1. Tailscale
-
-```bash
-sudo systemctl enable --now tailscaled
-sudo tailscale up --ssh
-```
-
-Requires an SSH ACL rule in the [Tailnet admin panel](https://login.tailscale.com/admin/acls).
-
-### 2. Clone Dotfiles
-
-```bash
-git clone https://github.com/andrey-moor/dotfiles.git ~/dotfiles
-```
-
-### 3. Install Nix
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm
-. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-```
-
-### 4. Apply Home-Manager
-
-```bash
-cd ~/dotfiles
-nix run home-manager -- switch --flake .#rocinante -b backup
-```
-
-### 5. Chezmoi (mutable configs)
-
-```bash
-chezmoi apply
-```
+**Access:** `ssh rocinante` (Tailscale SSH)
 
 ## Intune Enrollment
 
 Reference: https://github.com/recolic/microsoft-intune-archlinux
 
-### 6. AUR Packages
+### 1. Install AUR Packages (Level 1 & 2)
 
 ```bash
-yay -S intune-portal-bin microsoft-identity-broker-bin pcsclite ccid yubico-piv-tool
+yay -S microsoft-identity-broker-bin microsoft-edge-stable-bin intune-portal-bin
 ```
 
-### 7. System Setup (one-time)
-
-The `intune-setup` script (installed by home-manager) configures all system-level
-requirements: os-release spoofing, device broker override, pcscd, and p11-kit.
+### 2. Fake Ubuntu os-release
 
 ```bash
-intune-setup
+sudo tee /usr/lib/os-release << 'EOF'
+NAME="Ubuntu"
+VERSION="22.04.3 LTS (Jammy Jellyfish)"
+ID=ubuntu
+ID_LIKE=debian
+PRETTY_NAME="Ubuntu 22.04.3 LTS"
+VERSION_ID="22.04"
+VERSION_CODENAME=jammy
+UBUNTU_CODENAME=jammy
+EOF
 ```
 
-This runs the following with sudo:
-- Spoofs `/etc/os-release` and `/usr/lib/os-release` as Ubuntu 22.04
-- Installs device broker systemd override (adds `LD_LIBRARY_PATH` for OpenSSL 3.3.2)
-- Installs pcscd override (removes sandboxing for USB/YubiKey access)
-- Registers YubiKey PKCS#11 module with p11-kit
-
-### 8. Remove lsb_release
-
-```bash
-sudo mv /usr/bin/lsb_release /usr/bin/lsb_release.bak 2>/dev/null || true
-```
-
-### 9. Keyring
-
-GNOME keyring must have a password-protected "login" collection (passwordless
-keyrings silently fail due to a known gnome-keyring bug):
-
-```bash
-mkdir -p ~/.local/share/keyrings
-echo -n login > ~/.local/share/keyrings/default
-seahorse  # Create "login" keyring with a password via GUI
-```
-
-### 10. Verify Smart Card
-
-```bash
-yubico-piv-tool -a status
-p11tool --list-tokens  # Should show "YubiKey PIV #..."
-```
-
-### 11. Enroll
-
-```bash
-intune-portal
-```
-
-## Compliance
-
-### PAM Password Policy
-
-Intune checks `/etc/pam.d/common-password`. This file is for compliance
-reporting only (Arch uses `system-auth` natively):
+### 3. PAM Password Policy
 
 ```bash
 sudo tee /etc/pam.d/common-password << 'EOF'
@@ -112,56 +39,108 @@ EOF
 sudo chmod 644 /etc/pam.d/common-password
 ```
 
-## Day-to-Day
+Ensure password meets: 12+ chars, 1 uppercase, 1 lowercase, 1 number, 1 symbol.
+
+### 4. Keyring Setup
 
 ```bash
-# Update config
-cd ~/dotfiles && git pull
-nix run home-manager -- switch --flake .#rocinante -b backup
+# Install seahorse, create "login" keyring with password via GUI
+sudo pacman -S seahorse
+seahorse
 
-# Intune portal (enrollment/re-auth)
-intune-portal
-
-# Status and logs
-intune-status
-intune-logs --broker
-intune-logs --device
-intune-logs --agent
+# Set as default
+echo -n login > ~/.local/share/keyrings/default
 ```
 
-## Architecture
+### 5. Fix OpenSSL (BadCertificate bug)
 
-Nix (home-manager) manages:
-- OpenSSL 3.3.2 override (`LD_LIBRARY_PATH` wrappers for all Intune binaries)
-- User broker D-Bus service (auto-activated)
-- Intune-agent systemd timer (hourly compliance reporting)
-- Helper scripts (`intune-setup`, `intune-status`, `intune-logs`)
+```bash
+# Run recolic's fix script
+curl -sL https://raw.githubusercontent.com/recolic/microsoft-intune-archlinux/master/fix-libssl.sh | bash
+```
 
-AUR packages provide:
-- Binaries (`intune-portal`, `intune-agent`, `microsoft-identity-broker`, `microsoft-identity-device-broker`)
-- System D-Bus policies and systemd services
+This installs OpenSSL 3.3.2 libs to `/usr/lib/libcrypto-332.so` and `/usr/lib/libssl-332.so`.
 
-System-level configs (installed by `intune-setup`):
-- `/etc/os-release` — Ubuntu 22.04 spoof
-- Device broker systemd override — `LD_LIBRARY_PATH` + `HOME`
-- pcscd override — removes sandboxing for YubiKey USB access
-- p11-kit module — YubiKey PKCS#11
+### 6. YubiKey / Smart Card Setup
+
+```bash
+# Install packages
+sudo pacman -S pcsc-tools ccid libfido2
+
+# Add user to pcscd group
+sudo usermod -aG pcscd $USER
+
+# Enable pcscd
+sudo systemctl enable --now pcscd.socket
+
+# Reload udev
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
+# Log out and back in for group change
+```
+
+### 7. p11-kit Module for OpenSC
+
+```bash
+sudo mkdir -p /etc/pkcs11/modules
+sudo chmod 755 /etc/pkcs11 /etc/pkcs11/modules
+sudo tee /etc/pkcs11/modules/opensc.module << 'EOF'
+module: /usr/lib/pkcs11/opensc-pkcs11.so
+critical: no
+EOF
+sudo chmod 644 /etc/pkcs11/modules/opensc.module
+```
+
+Verify: `p11-kit list-modules | grep -A5 opensc`
+
+### 8. WebKitGTK Fix
+
+```bash
+# Required for D-Bus spawned WebKitGTK processes
+echo 'WEBKIT_DISABLE_DMABUF_RENDERER=1' | sudo tee -a /etc/environment
+```
+
+Log out and back in after this change.
+
+### 9. Enable Intune Agent Timer
+
+```bash
+systemctl --user enable --now intune-agent.timer
+```
+
+### 10. Enroll
+
+```bash
+env LD_PRELOAD=/usr/lib/libcrypto-332.so:/usr/lib/libssl-332.so intune-portal
+```
+
+## Verify
+
+```bash
+# Smart card
+pcsc_scan -r
+p11-kit list-modules | grep opensc
+
+# Intune agent
+systemctl --user status intune-agent.timer
+```
 
 ## Troubleshooting
 
+### Clear intune-portal data
+
 ```bash
-# Intune services
-intune-logs --device
-intune-logs --broker
-
-# Smart card / YubiKey
-systemctl status pcscd
-yubico-piv-tool -a status
-p11tool --list-tokens
-
-# Re-run system setup after home-manager switch
-intune-setup
+rm -rf ~/.Microsoft ~/.cache/intune-portal ~/.config/intune ~/.local/share/intune-portal
 ```
 
-Note: Run `intune-setup` again after `home-manager switch` if the OpenSSL nix
-store path changes (the device broker override embeds the path).
+### WebKitGTK crashes
+
+Known issue with WebKitGTK 2.50+ on Wayland/AMD. Do NOT set `GDK_BACKEND=x11` or `LIBGL_ALWAYS_SOFTWARE=1` globally - breaks Hyprland.
+
+### Logs
+
+```bash
+journalctl --user -xe | grep -i intune
+sudo journalctl -u microsoft-identity-device-broker
+```

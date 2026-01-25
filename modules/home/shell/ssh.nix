@@ -48,9 +48,8 @@ in {
           identitiesOnly = true;
         };
 
-        # Rocinante - Linux VM (Tailscale)
+        # Rocinante - Linux VM (Tailscale MagicDNS)
         "rocinante" = {
-          hostname = "100.65.74.95";
           user = "andreym";
         };
       };
