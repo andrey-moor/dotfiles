@@ -490,9 +490,9 @@ in {
 
   config = mkIf (cfg.enable && pkgs.stdenv.isLinux && pkgs.stdenv.hostPlatform.isx86_64) {
     home.packages = [
-      # Main applications (from Nix packages)
-      intunePackage
-      brokerPkg
+      # NOTE: We don't add intunePackage or brokerPkg directly to avoid conflicts
+      # with the wrapper scripts that also provide intune-portal, intune-agent, etc.
+      # The wrappers exec the underlying binaries with proper LD_LIBRARY_PATH.
 
       # Keyring support
       pkgs.gnome-keyring
