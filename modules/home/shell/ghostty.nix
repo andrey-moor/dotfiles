@@ -20,6 +20,7 @@ in {
       enableZshIntegration = false;
       enableFishIntegration = false;
       settings = {
+        command = "${pkgs.nushell}/bin/nu";
         theme = "catppuccin-mocha";
         font-family = "JetBrainsMono Nerd Font";
         font-size = 14;

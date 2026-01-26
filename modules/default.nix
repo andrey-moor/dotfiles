@@ -1,9 +1,11 @@
-# modules/default.nix -- System-level module loader
+# modules/default.nix -- System-level module loader (Darwin only)
 #
-# This module is imported at the system level (Darwin or NixOS).
+# This module is imported at the system level for Darwin hosts.
+# NixOS modules are loaded separately in mkNixosHost.
 # Home-manager modules are loaded separately via home-manager integration.
 #
-# Darwin modules guard their config with mkIf pkgs.stdenv.isDarwin.
+# NOTE: This module is only used by Darwin hosts. NixOS hosts load
+# modules/nixos directly from mkNixosHost in lib/mkFlake.nix.
 
 { lib, config, options, pkgs, inputs, ... }:
 

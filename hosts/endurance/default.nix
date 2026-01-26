@@ -14,6 +14,12 @@ with lib;
     home.stateVersion = "24.05";
     home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
 
+    # Additional packages
+    home.packages = [
+      pkgs.azure-cli
+      pkgs.mesa-demos  # provides glxinfo, glxgears, etc.
+    ];
+
     # Enable modules
     modules = {
       # Mounted from macOS via Parallels shared folders
@@ -40,6 +46,7 @@ with lib;
       dev = {
         nix.enable = true;
         neovim.enable = true;
+        vscode.enable = true;
         jj.enable = true;
         go.enable = true;
         rust.enable = true;
@@ -48,9 +55,9 @@ with lib;
       };
 
       linux = {
-        intune.enable = true;
-        intune.debug = true;  # Enable verbose logging for debugging
-        edge.enable = true;
+        intune-rosetta.enable = true;
+        intune-rosetta.debug = true;  # Enable verbose logging for debugging
+        edge-rosetta.enable = true;
       };
     };
   };

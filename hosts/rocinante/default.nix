@@ -1,10 +1,10 @@
-# Rocinante -- Linux workstation (standalone home-manager)
+# Rocinante -- x86_64 Linux workstation (Omarchy, standalone home-manager)
 
 { lib, ... }:
 
 with lib;
 {
-  system = "aarch64-linux";
+  system = "x86_64-linux";
   username = "andreym";
   homeDirectory = "/home/andreym";
 
@@ -12,6 +12,12 @@ with lib;
     # Home-manager state version
     home.stateVersion = "24.05";
     home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
+
+    # Additional packages
+    home.packages = [
+      pkgs.azure-cli
+      pkgs.mesa-demos  # provides glxinfo, glxgears, etc.
+    ];
 
     # Enable modules
     modules = {
@@ -38,6 +44,7 @@ with lib;
       dev = {
         nix.enable = true;
         neovim.enable = true;
+        vscode.enable = true;
         jj.enable = true;
         go.enable = true;
         rust.enable = true;
@@ -46,9 +53,13 @@ with lib;
       };
 
       linux = {
-        intune.enable = true;
-        intune.debug = true;  # Enable verbose logging for debugging
         edge.enable = true;
+        intune-nix.enable = true;
+        intune-nix.debug = true;  # Enable verbose logging for debugging
+        wayvnc = {
+          enable = true;
+          password = "rocinante";
+        };
       };
     };
   };

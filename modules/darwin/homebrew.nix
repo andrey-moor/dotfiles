@@ -17,6 +17,12 @@ in {
       default = [];
       description = "Homebrew formulae to install";
     };
+    masApps = mkOption {
+      type = types.attrsOf types.int;
+      default = {};
+      description = "Mac App Store apps to install (name = id)";
+      example = { "Screens 5" = 1663047912; };
+    };
   };
 
   config = mkIf cfg.enable {
@@ -50,6 +56,9 @@ in {
 
       # CLI tools not in nixpkgs or better via Homebrew
       brews = cfg.brews;
+
+      # Mac App Store apps
+      masApps = cfg.masApps;
     };
   };
 }

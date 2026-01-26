@@ -46,5 +46,6 @@ $env.PATH = ($env.PATH | split row (char esep)
     | prepend '/usr/local/bin/'
     | prepend '/opt/homebrew/bin'
     | prepend '/Applications/Parallels Desktop.app/Contents/MacOS/'
+    | prepend $"($env.HOME)/.cargo/bin"
 )
 

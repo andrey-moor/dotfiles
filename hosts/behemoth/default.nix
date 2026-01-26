@@ -10,6 +10,16 @@ with lib;
     # Disable nix-darwin's Nix management (Determinate Nix handles this)
     nix.enable = false;
 
+    # Remote Builder: Stargazer OrbStack VM
+    # Since Determinate Nix manages nix.conf, add this manually:
+    #
+    #   sudo tee -a /etc/nix/nix.conf <<EOF
+    #   builders = ssh://andreym@stargazer@orb aarch64-linux /Users/andreym/.ssh/id_ed25519 4 2 nixos-test,big-parallel
+    #   builders-use-substitutes = true
+    #   EOF
+    #
+    # Or use: just stargazer-builder-setup
+
     networking.hostName = "behemoth";
     networking.computerName = "Behemoth";
 
@@ -31,7 +41,7 @@ with lib;
           "${config.modules.dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
           "${config.user.dataDir}/litellm:/root/.config/litellm"  # Persist auth tokens
         ];
-        cmd = [ "--config" "/app/config.yaml" ];
+        cmd = [ "--config" "/app/config.yaml" "--num_workers" "4" ];
       };
 
       # RTMP/WebRTC streaming server for screen sharing
@@ -73,17 +83,23 @@ with lib;
         # System
         "parallels"
         "little-snitch"
+        "tailscale"
         # Design
         "monodraw"
         # Media
         "obs"
         "imaging-edge"
+        # Utilities
+        "balenaetcher"
       ];
       brews = [
         # CLI tools better via Homebrew
         "azure-cli"
         "openssh"  # FIDO2/Yubikey SSH support (macOS default lacks it)
       ];
+      masApps = {
+        "Screens 5" = 1663047912;
+      };
     };
 
     # Home-manager user configuration
@@ -128,6 +144,7 @@ with lib;
         dev = {
           nix.enable = true;
           neovim.enable = true;
+          vscode.enable = true;
           jj.enable = true;
           go.enable = true;
           rust.enable = true;
