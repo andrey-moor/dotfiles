@@ -28,6 +28,9 @@ with lib;
     environment.shells = [ pkgs.nushell ];
     environment.systemPackages = [ pkgs.nushell ];
 
+    # XDG base directories (set at launchd level so nushell finds its config)
+    # Note: launchd doesn't expand $HOME, so we use the explicit path
+    launchd.user.envVariables.XDG_CONFIG_HOME = "/Users/${config.user.name}/.config";
 
     # User account configuration
     users.users.${config.user.name} = {

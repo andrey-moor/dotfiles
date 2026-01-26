@@ -23,6 +23,17 @@ with lib;
     networking.hostName = "behemoth";
     networking.computerName = "Behemoth";
 
+    # Ollama local LLM server
+    launchd.user.agents.ollama = {
+      command = "${pkgs.main.ollama}/bin/ollama serve";
+      serviceConfig = {
+        KeepAlive = true;
+        RunAtLoad = true;
+        StandardOutPath = "/tmp/ollama.log";
+        StandardErrorPath = "/tmp/ollama.log";
+      };
+    };
+
     # User configuration
     user.name = "andreym";
 
@@ -114,6 +125,8 @@ with lib;
         _1password-cli  # op CLI for secret management
         uv              # Python package runner (uvx)
         nodejs          # Node.js runtime (npx)
+        goose-cli       # AI coding agent
+        main.ollama     # Local LLM inference
         (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
         yubikey-manager # ykman CLI for Yubikey management
       ];
