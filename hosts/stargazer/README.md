@@ -1,10 +1,38 @@
-# Endurance Setup
+# Stargazer Setup
 
-Encrypted Arch Linux ARM VM in Parallels with LUKS for Intune compliance.
+Encrypted Arch Linux ARM VM in Parallels with LUKS for Microsoft Intune compliance.
 
-## Prerequisites
+## Base Template
 
-After installing Arch via archboot with LUKS (see `docs/rocinante-encrypted-install.md`):
+The base VM template is stored as `ArchBase-Template.pvm.tar.zst`:
+
+```bash
+# Extract
+cd ~/Parallels
+zstd -d ArchBase-Template.pvm.tar.zst -c | tar -xvf -
+
+# Register with Parallels
+prlctl register ~/Parallels/ArchBase-Template.pvm
+
+# Clone for new VM
+prlctl clone ArchBase-Template --name "stargazer"
+prlctl start stargazer
+```
+
+Default credentials:
+- Encryption password: `4815162342`
+- Root password: `481516`
+
+Template contents:
+- Clean Arch Linux ARM (aarch64)
+- LUKS full-disk encryption
+- btrfs filesystem
+- wget & sudo installed
+- Ready for omarchy install
+
+## Intune Setup
+
+After cloning the base template:
 
 ### 1. Install Nix (Determinate)
 
@@ -73,7 +101,7 @@ sudo ln -sf "$GLIBC_PATH/lib/ld-linux-x86-64.so.2" /lib64/
 
 ```bash
 cd /mnt/psf/Home/Documents/dotfiles
-nix run home-manager -- switch --flake .#endurance -b backup
+nix run home-manager -- switch --flake .#stargazer -b backup
 ```
 
 ### 6. Fake Ubuntu os-release

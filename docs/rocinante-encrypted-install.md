@@ -103,6 +103,9 @@ mkdir -p /mnt/boot
 mount ${DISK}1 /mnt/boot
 ```
 
+# Note:
+Only luks password matters here - user password will be set during omarchy installation
+
 ### Step 5: Configure Mirrors and Install Base System
 
 The archboot aarch64 ISO uses **Arch Linux ARM** (ALARM) repositories, not standard Arch Linux.
@@ -240,6 +243,8 @@ After reboot (enter LUKS passphrase at boot):
 ```bash
 # Login as root
 
+pacman -S wget
+
 # Armarchy v3.x for ARM64 (Omarchy for Apple Silicon Parallels VMs)
 # Based on Omarchy v3.2.0 (December 2025)
 # Source: https://github.com/basecamp/omarchy/pull/1897
@@ -252,23 +257,79 @@ The installer will:
 - Configure system settings
 - Reboot into graphical desktop
 
-### Step 9: Apply Nix Configuration
+### Step 9: Configure Rosetta for x86_64 Emulation
 
-After armarchy completes and you're logged into the desktop:
+The Nix configuration uses x86_64-linux packages (for Microsoft Intune) that run via Rosetta emulation. Set this up before installing Nix:
 
 ```bash
-# Install Nix (Determinate installer - enables flakes by default)
-curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+# Register Rosetta as binfmt handler for x86_64 ELF binaries
+# NOTE: Rosetta is mounted at /mnt/psf/RosettaLinux/ (not /media/psf/)
+sudo tee /etc/binfmt.d/rosetta.conf << 'EOF'
+:rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/mnt/psf/RosettaLinux/rosetta:PFC
+EOF
+
+# Activate binfmt configuration
+sudo systemctl restart systemd-binfmt
+
+# Verify Rosetta is registered
+cat /proc/sys/fs/binfmt_misc/rosetta
+# Should show: enabled, interpreter /mnt/psf/RosettaLinux/rosetta
+```
+
+### Step 10: Install Nix with x86_64 Support
+
+```bash
+# Install Nix with extra-platforms for Rosetta x86_64 support
+# The --extra-conf flag adds configuration to /etc/nix/nix.conf
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+  sh -s -- install --extra-conf "extra-platforms = x86_64-linux"
 
 # Source Nix
 . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 
-# The dotfiles are mounted from macOS host via Parallels shared folders
-cd /media/psf/Home/Documents/dotfiles
-
-# Apply home-manager configuration for rocinante
-nix run nixpkgs#home-manager -- switch --flake .#rocinante
+# Verify extra-platforms is configured
+nix show-config | grep extra-platforms
+# Should show: extra-platforms = x86_64-linux
 ```
+
+**Alternative (post-install):** If Nix is already installed without `--extra-conf`:
+```bash
+# Add extra-platforms to custom config (Determinate Nix reads this)
+sudo tee /etc/nix/nix.custom.conf << 'EOF'
+extra-platforms = x86_64-linux
+EOF
+
+# Restart nix-daemon to pick up new config
+sudo systemctl restart nix-daemon
+```
+
+### Step 11: Apply Home-Manager Configuration
+
+```bash
+# The dotfiles are mounted from macOS host via Parallels shared folders
+cd /mnt/psf/Home/Documents/dotfiles
+
+# Apply home-manager configuration for the host (e.g., rocinante, stargazer)
+# Use -b backup to back up existing config files that would be overwritten
+nix run nixpkgs#home-manager -- switch --flake .#rocinante -b backup
+```
+
+**Note:** The `-b backup` flag backs up any existing config files (from armarchy) that home-manager needs to manage. These are saved as `*.backup` files.
+
+### Step 12: Apply Chezmoi Configuration
+
+Home-manager installs packages and declarative configs. Chezmoi manages mutable user configs (neovim, nushell, etc.) that change frequently:
+
+```bash
+# Apply chezmoi-managed configs (neovim, nushell, etc.)
+chezmoi apply
+
+# Verify configs were applied
+ls ~/.config/nvim
+ls ~/.config/nushell
+```
+
+The chezmoi module automatically sets `sourceDir` to the dotfiles chezmoi directory via the Parallels shared folder mount.
 
 ## Post-Install Verification
 
@@ -311,6 +372,35 @@ lsblk -o NAME,FSTYPE,SIZE,MOUNTPOINT | grep -E "(crypt|luks)"
 
 # The root filesystem should be on dm-crypt/LUKS
 ```
+
+# Generalize
+# Generalize hostname (or keep stargazer if you prefer)
+  echo "archbase" > /etc/hostname
+
+  # Clear machine-id (regenerates on next boot)
+  rm -f /etc/machine-id
+  touch /etc/machine-id
+
+  # Clear pacman cache
+  pacman -Scc --noconfirm
+
+  # Clear history
+  rm -f /root/.bash_history
+  history -c
+
+  # Verify encryption is working
+  cryptsetup status cryptroot
+
+  # Shutdown cleanly
+  shutdown -h now
+
+  Then on macOS:
+
+  # Snapshot at clean state
+  prlctl snapshot "stargazer" -n "EncryptedBase-GRUB" -d "Clean LUKS+GRUB base before omarchy"
+
+  # Check size
+  du -sh ~/Parallels/stargazer.pvm
 
 ## Troubleshooting
 
@@ -411,6 +501,40 @@ curl -I http://ca.us.mirror.archlinuxarm.org/aarch64/core/core.db
 # https://github.com/archlinuxarm/PKGBUILDs/blob/master/core/pacman-mirrorlist/mirrorlist
 ```
 
+### Nix Build Fails: "Required system: x86_64-linux"
+
+If `home-manager switch` fails with:
+```
+error: Cannot build '...drv'.
+Required system: 'x86_64-linux' with features {}
+Current system: 'aarch64-linux' with features {...}
+```
+
+This means Nix isn't configured to build x86_64 packages via Rosetta:
+
+```bash
+# 1. Check if Rosetta binfmt is registered
+cat /proc/sys/fs/binfmt_misc/rosetta
+# If not found, register it (note: /mnt/psf not /media/psf):
+sudo tee /etc/binfmt.d/rosetta.conf << 'EOF'
+:rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/mnt/psf/RosettaLinux/rosetta:PFC
+EOF
+sudo systemctl restart systemd-binfmt
+
+# 2. Check if Nix has extra-platforms configured
+nix show-config | grep extra-platforms
+# If not configured or missing x86_64-linux:
+sudo tee /etc/nix/nix.custom.conf << 'EOF'
+extra-platforms = x86_64-linux
+EOF
+sudo systemctl restart nix-daemon
+
+# 3. Verify Rosetta works
+/mnt/psf/RosettaLinux/rosetta /bin/true && echo "Rosetta works"
+```
+
+**Note:** The Determinate Nix installer uses `/etc/nix/nix.custom.conf` for user customizations - don't modify `/etc/nix/nix.conf` directly as it will be overwritten.
+
 ## References
 
 - [Arch Wiki - dm-crypt/Encrypting an entire system](https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system)
@@ -420,3 +544,5 @@ curl -I http://ca.us.mirror.archlinuxarm.org/aarch64/core/core.db
 - [Arch Linux ARM Mirrors](https://archlinuxarm.org/about/mirrors)
 - [Armarchy (Omarchy for ARM64)](https://github.com/basecamp/omarchy/pull/1897)
 - [Omarchy v3.2.0](https://github.com/basecamp/omarchy/releases/tag/v3.2.0)
+- [Determinate Nix Installer](https://docs.determinate.systems/determinate-nix/)
+- [Determinate Nix Advanced Installation](https://docs.determinate.systems/guides/advanced-installation/)
