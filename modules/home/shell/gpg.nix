@@ -46,19 +46,30 @@ in {
     services.gpg-agent = {
       enable = true;
       enableSshSupport = true;
-      # Terminal-based pinentry
-      pinentry.package = pkgs.pinentry-curses;
+      # macOS: GUI pinentry, Linux: curses
+      pinentry.package = if pkgs.stdenv.isDarwin
+        then pkgs.pinentry_mac
+        else pkgs.pinentry-curses;
       # Cache passphrases for 1 hour
       defaultCacheTtl = 3600;
       maxCacheTtl = 7200;
       # SSH key cache
       defaultCacheTtlSsh = 3600;
       maxCacheTtlSsh = 7200;
+      # Don't grab keyboard (can cause issues on macOS)
+      grabKeyboardAndMouse = false;
     };
+
+    # scdaemon config for YubiKey
+    home.file.".gnupg/scdaemon.conf".text = ''
+      # Disable internal CCID driver to avoid conflicts with system CCID
+      disable-ccid
+    '';
 
     # Yubikey/smartcard management tools
     home.packages = with pkgs; [
-      yubikey-manager  # ykman CLI for Yubikey management
+      yubikey-manager         # ykman CLI for Yubikey management
+      yubikey-personalization # ykpersonalize for low-level config
     ];
   };
 }

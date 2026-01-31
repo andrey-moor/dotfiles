@@ -25,7 +25,7 @@ in {
       if [[ ! -f /proc/sys/fs/binfmt_misc/rosetta ]]; then
         noteEcho "Rosetta binfmt not configured. Run this once as root:"
         noteEcho "  sudo tee /etc/binfmt.d/rosetta.conf << 'EOF'"
-        noteEcho ":rosetta:M::\\x7fELF\\x02\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x02\\x00\\x3e\\x00:\\xff\\xff\\xff\\xff\\xff\\xfe\\xfe\\x00\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xfe\\xff\\xff\\xff:/media/psf/RosettaLinux/rosetta:PFC"
+        noteEcho ":rosetta:M::\\x7fELF\\x02\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x02\\x00\\x3e\\x00:\\xff\\xff\\xff\\xff\\xff\\xfe\\xfe\\x00\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xfe\\xff\\xff\\xff:/mnt/psf/RosettaLinux/rosetta:PFC"
         noteEcho "EOF"
         noteEcho "  sudo systemctl restart systemd-binfmt"
       fi

@@ -19,6 +19,9 @@ with lib;
     # Home-manager state version
     home.stateVersion = mkDefault "24.05";
 
+    # Enable home-manager CLI (needed for standalone home-manager on Linux)
+    programs.home-manager.enable = true;
+
     # XDG base directories (also sets XDG_CONFIG_HOME, etc.)
     xdg.enable = true;
 

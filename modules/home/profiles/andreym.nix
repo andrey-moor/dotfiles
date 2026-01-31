@@ -14,7 +14,7 @@ with lib;
     modules.shell.git = {
       userName = "Andrey Moor";
       userEmail = "m@andreym.com";
-      signingKey = "2370425883C97521";  # GPG signing subkey (on Yubikey)
+      signingKey = "622041A533BA5D69";  # GPG signing subkey (on Yubikey Nano)
     };
 
     # Jujutsu VCS (inherits from git config or override here)

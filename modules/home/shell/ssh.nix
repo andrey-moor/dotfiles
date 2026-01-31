@@ -40,11 +40,11 @@ in {
           # No IdentitiesOnly - allow agent to offer keys
         };
 
-        # Microsoft/Work GitHub - uses FIDO2 resident key
+        # Microsoft/Work GitHub - uses FIDO2 resident key on YubiKey Nano
         "github.com-microsoft" = {
           hostname = "github.com";
           user = "git";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_microsoft";
+          identityFile = "~/.ssh/id_ed25519_sk_rk_microsoft_nano";
           identitiesOnly = true;
         };
 
