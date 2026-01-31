@@ -103,19 +103,29 @@ sudo chmod 644 /usr/share/dbus-1/system.d/com.microsoft.identity.devicebroker1.c
 # Reload D-Bus to pick up new policy
 sudo pkill -HUP dbus-daemon
 
-# Systemd service + Rosetta override
+# Systemd service + Rosetta override (with HOME for MSAL initialization)
 sudo cp "$BROKER_PKG/lib/systemd/system/microsoft-identity-device-broker.service" /etc/systemd/system/
 WRAPPER=$(readlink -f ~/.nix-profile/bin/microsoft-identity-device-broker-rosetta)
 sudo mkdir -p /etc/systemd/system/microsoft-identity-device-broker.service.d
 echo "[Service]
 ExecStart=
 ExecStart=$WRAPPER
+Environment=HOME=/root
+Environment=XDG_CONFIG_HOME=/root/.config
+Environment=XDG_CACHE_HOME=/root/.cache
 
 [Install]
 WantedBy=multi-user.target" | sudo tee /etc/systemd/system/microsoft-identity-device-broker.service.d/rosetta.conf
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now microsoft-identity-device-broker
+
+# User-level broker D-Bus service (for intune-portal authentication)
+USER_WRAPPER=$(readlink -f ~/.nix-profile/bin/microsoft-identity-broker-rosetta)
+mkdir -p ~/.local/share/dbus-1/services
+echo "[D-BUS Service]
+Name=com.microsoft.identity.broker1
+Exec=$USER_WRAPPER" > ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service
 ```
 
 ### 8. pcscd for YubiKey
