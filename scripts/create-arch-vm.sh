@@ -57,7 +57,7 @@ log "  ISO: $ISO_PATH"
 
 # Create VM
 prlctl create "$VM_NAME" \
-    --ostype linux-2.6 \
+    --ostype linux \
     --distribution linux
 
 log "Configuring VM resources..."
@@ -74,7 +74,9 @@ prlctl set "$VM_NAME" --rosetta-linux on
 # Enable shared folders
 log "Enabling shared folders..."
 prlctl set "$VM_NAME" --shf-host on
-prlctl set "$VM_NAME" --shf-host-defined Home --enable || true
+# Add dotfiles as a shared folder (will be at /media/psf/dotfiles in VM)
+DOTFILES_PATH="$(cd "$(dirname "$0")/.." && pwd)"
+prlctl set "$VM_NAME" --shf-host-add dotfiles --path "$DOTFILES_PATH" || true
 
 # Configure bridged networking
 log "Configuring bridged networking..."
@@ -96,7 +98,7 @@ echo "  2. Open console in Parallels Desktop"
 echo "  3. Wait for archboot to boot (1-2 minutes)"
 echo "  4. Run these commands in the VM:"
 echo ""
-echo "     curl -fsSL https://raw.githubusercontent.com/yourusername/dotfiles/main/scripts/install-arch.sh | bash"
+echo "     curl -fsSL https://raw.githubusercontent.com/andrey-moor/dotfiles/main/scripts/install-arch.sh | bash"
 echo ""
 echo "  Or if no network, manually run archinstall with the config."
 echo ""
