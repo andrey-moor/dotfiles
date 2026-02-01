@@ -43,21 +43,34 @@ sleep 5
 # ============================================================
 log "Cleaning up any previous state..."
 
-# Unmount any existing mounts (in reverse order)
+# Kill any processes using mounts or disk
+fuser -km /mnt/archinstall 2>/dev/null || true
+fuser -km "$DISK" 2>/dev/null || true
+sleep 1
+
+# Unmount in reverse order (deepest first)
+for mp in /mnt/archinstall/boot/efi /mnt/archinstall/boot /mnt/archinstall; do
+    if mountpoint -q "$mp" 2>/dev/null; then
+        log "Unmounting $mp..."
+        umount -l "$mp" 2>/dev/null || true
+    fi
+done
+
+# Also try recursive unmount
 umount -R /mnt/archinstall 2>/dev/null || true
-umount /mnt/archinstall/boot/efi 2>/dev/null || true
-umount /mnt/archinstall/boot 2>/dev/null || true
-umount /mnt/archinstall 2>/dev/null || true
+sleep 1
 
 # Close LUKS if open
 if [[ -e /dev/mapper/cryptroot ]]; then
     log "Closing existing LUKS mapping..."
-    cryptsetup close cryptroot 2>/dev/null || true
+    dmsetup remove cryptroot 2>/dev/null || cryptsetup close cryptroot 2>/dev/null || true
+    sleep 1
 fi
 
-# Kill any processes using the disk
-fuser -km "$DISK" 2>/dev/null || true
-sleep 1
+# Verify cleanup
+if [[ -e /dev/mapper/cryptroot ]]; then
+    error "Failed to close LUKS - please run: dmsetup remove cryptroot"
+fi
 
 # Check we're in live environment
 if [[ ! -d /run/archiso ]] && [[ $(hostname) != *archboot* ]]; then
