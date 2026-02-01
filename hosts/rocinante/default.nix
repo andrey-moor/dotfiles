@@ -22,7 +22,7 @@ with lib;
     # Additional packages
     home.packages = [
       pkgs.azure-cli
-      pkgs.mesa-demos  # provides glxinfo, glxgears, etc.
+      (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
     # Enable modules
