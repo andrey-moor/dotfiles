@@ -177,6 +177,9 @@ cd /tmp
 curl -fsSL "$CONFIG_BASE/archinstall-config.json" -o config.json
 curl -fsSL "$CONFIG_BASE/archinstall-creds.json" -o creds.json
 
+# Fix bootloader value (archinstall expects "Grub" not "grub-install")
+sed -i 's/"grub-install"/"Grub"/g' config.json
+
 # Install archinstall if not available (archboot is minimal)
 if ! command -v archinstall &>/dev/null; then
     log "Installing archinstall and dependencies..."
