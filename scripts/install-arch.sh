@@ -57,20 +57,36 @@ fi
 # ============================================================
 log "Partitioning $DISK..."
 
-# Wipe and create GPT partition table
-wipefs -af "$DISK"
-sgdisk --zap-all "$DISK"
+# Wipe disk
+wipefs -af "$DISK" 2>/dev/null || true
+dd if=/dev/zero of="$DISK" bs=1M count=10 2>/dev/null || true
 
-# Create partitions:
+# Create GPT partition table and partitions using fdisk
 # 1: EFI System Partition (512MB)
 # 2: Boot partition (1GB, unencrypted)
 # 3: LUKS partition (remaining space)
-sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI" "$DISK"
-sgdisk -n 2:0:+1G -t 2:8300 -c 2:"Boot" "$DISK"
-sgdisk -n 3:0:0 -t 3:8309 -c 3:"LUKS" "$DISK"
+fdisk "$DISK" <<'FDISK'
+g
+n
+1
+
++512M
+t
+1
+n
+2
+
++1G
+n
+3
+
+
+w
+FDISK
 
 # Ensure kernel sees new partitions
-partprobe "$DISK"
+sleep 2
+partprobe "$DISK" 2>/dev/null || true
 sleep 2
 
 log "Partitions created:"
