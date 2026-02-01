@@ -38,6 +38,27 @@ echo ""
 echo "Starting in 5 seconds... (Ctrl+C to abort)"
 sleep 5
 
+# ============================================================
+# CLEANUP: Make script idempotent
+# ============================================================
+log "Cleaning up any previous state..."
+
+# Unmount any existing mounts (in reverse order)
+umount -R /mnt/archinstall 2>/dev/null || true
+umount /mnt/archinstall/boot/efi 2>/dev/null || true
+umount /mnt/archinstall/boot 2>/dev/null || true
+umount /mnt/archinstall 2>/dev/null || true
+
+# Close LUKS if open
+if [[ -e /dev/mapper/cryptroot ]]; then
+    log "Closing existing LUKS mapping..."
+    cryptsetup close cryptroot 2>/dev/null || true
+fi
+
+# Kill any processes using the disk
+fuser -km "$DISK" 2>/dev/null || true
+sleep 1
+
 # Check we're in live environment
 if [[ ! -d /run/archiso ]] && [[ $(hostname) != *archboot* ]]; then
     warn "This script should be run from archboot live environment"
