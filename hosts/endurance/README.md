@@ -2,9 +2,338 @@
 
 Encrypted Arch Linux ARM VM in Parallels with LUKS for Intune compliance.
 
+## VM Template Creation
+
+This section documents creating the base encrypted Arch Linux VM from scratch. If you already have a working VM, skip to [Prerequisites](#prerequisites).
+
+### Step 1: Create VM in Parallels
+
+Create a new VM using Parallels with the correct settings. These settings MUST be configured before first boot.
+
+**Download archboot ISO:**
+
+Get the latest aarch64 archboot ISO from https://archboot.com (look for `archboot-*-aarch64.iso`).
+
+**Create the VM via GUI:**
+
+1. Parallels Desktop > File > New
+2. Choose "Install Windows, Linux or macOS from an image"
+3. Select the archboot ISO
+4. Choose "Other Linux" as the OS type
+5. Name: `ArchBase-Template` (or your preferred name)
+
+**Configure VM settings (BEFORE first boot):**
+
+```bash
+VM_NAME="ArchBase-Template"
+
+# Set resources: 4 CPU cores, 8GB RAM
+prlctl set "$VM_NAME" --cpus 4 --memsize 8192
+
+# Resize disk to 128GB (default is smaller)
+prlctl set "$VM_NAME" --device-set hdd0 --size 131072
+
+# CRITICAL: Enable Rosetta BEFORE first boot (cannot be enabled later)
+prlctl set "$VM_NAME" --rosetta-linux on
+
+# Enable shared folders (macOS home directory)
+prlctl set "$VM_NAME" --shf-host on
+prlctl set "$VM_NAME" --shf-host-defined home --enable
+
+# Set bridged networking (VM gets own IP)
+prlctl set "$VM_NAME" --device-set net0 --type bridged
+```
+
+**Verify settings:**
+
+```bash
+prlctl list -i "$VM_NAME" | grep -E "(cpu|memsize|rosetta|shf)"
+```
+
+### Step 2: Boot and Partition
+
+Start the VM and boot from the archboot ISO.
+
+```bash
+prlctl start "$VM_NAME"
+```
+
+Once booted into the archboot environment, verify you have network connectivity:
+
+```bash
+ip addr
+ping -c 3 archlinux.org
+```
+
+**Partition the disk:**
+
+Create three partitions: EFI (512MB), /boot (1GB), and LUKS (remaining space).
+
+```bash
+# List disks - should show /dev/sda as the 128GB virtual disk
+lsblk
+
+# Partition with fdisk
+fdisk /dev/sda
+```
+
+In fdisk:
+```
+g        # Create new GPT partition table
+n        # New partition (EFI)
+1        # Partition number 1
+[Enter]  # Default first sector
++512M    # 512MB for EFI
+t        # Change type
+1        # Type 1 = EFI System
+
+n        # New partition (boot)
+2        # Partition number 2
+[Enter]  # Default first sector
++1G      # 1GB for /boot
+
+n        # New partition (LUKS root)
+3        # Partition number 3
+[Enter]  # Default first sector
+[Enter]  # Use remaining space
+
+w        # Write and exit
+```
+
+**Format EFI and boot partitions:**
+
+```bash
+mkfs.fat -F32 /dev/sda1
+mkfs.ext4 /dev/sda2
+```
+
+### Step 3: LUKS Setup
+
+Create LUKS2 encrypted partition with argon2id key derivation. Since /boot is unencrypted and separate, GRUB doesn't need to decrypt the LUKS partition - the initramfs encrypt hook handles decryption, which fully supports argon2id.
+
+```bash
+# Create LUKS2 partition with argon2id (you'll be prompted for passphrase)
+cryptsetup luksFormat --type luks2 \
+  --cipher aes-xts-plain64 \
+  --key-size 512 \
+  --hash sha512 \
+  --pbkdf argon2id \
+  /dev/sda3
+```
+
+**Open the encrypted partition and format:**
+
+```bash
+# Open the LUKS partition (enter passphrase)
+cryptsetup open /dev/sda3 cryptroot
+
+# Format as ext4
+mkfs.ext4 /dev/mapper/cryptroot
+```
+
+### Step 4: Mount for archinstall
+
+Mount the filesystems in the correct hierarchy for archinstall's pre_mounted_config mode.
+
+```bash
+# Mount root
+mount /dev/mapper/cryptroot /mnt/archinstall
+
+# Create mount points
+mkdir -p /mnt/archinstall/boot
+mkdir -p /mnt/archinstall/boot/efi
+
+# Mount boot partitions
+mount /dev/sda2 /mnt/archinstall/boot
+mount /dev/sda1 /mnt/archinstall/boot/efi
+```
+
+**Verify mount layout:**
+
+```bash
+lsblk -f
+# Should show:
+# sda1 -> /mnt/archinstall/boot/efi (FAT32)
+# sda2 -> /mnt/archinstall/boot (ext4)
+# sda3 -> LUKS -> cryptroot -> /mnt/archinstall (ext4)
+```
+
+### Step 5: Run archinstall
+
+Run archinstall with pre_mounted_config mode. This tells archinstall to use the already-mounted filesystems instead of partitioning itself.
+
+```bash
+archinstall --config <(cat << 'EOF'
+{
+  "archinstall-language": "English",
+  "bootloader": "Grub",
+  "config_version": "2.8.1",
+  "debug": false,
+  "disk_config": {
+    "config_type": "pre_mounted_config",
+    "mountpoint": "/mnt/archinstall"
+  },
+  "hostname": "template",
+  "kernels": ["linux"],
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_enc": "UTF-8",
+    "sys_lang": "en_US"
+  },
+  "network_config": {
+    "type": "nm"
+  },
+  "ntp": true,
+  "packages": ["wget", "sudo", "openssh", "base-devel", "git", "vim"],
+  "profile_config": {
+    "profile": null
+  },
+  "silent": false,
+  "swap": false,
+  "timezone": "America/Los_Angeles"
+}
+EOF
+)
+```
+
+archinstall will prompt you to:
+- Set a root password
+- Create a user account (create a generic "user" account - you'll personalize later)
+- Confirm installation
+
+After archinstall completes, **do NOT reboot yet**. We need to configure GRUB for LUKS decryption.
+
+### Step 6: Configure GRUB
+
+archinstall installs GRUB but doesn't configure it for LUKS decryption. We need to add the cryptdevice parameter and ensure the initramfs has the encrypt hook.
+
+**Chroot into the new system:**
+
+```bash
+arch-chroot /mnt/archinstall
+```
+
+**Get the LUKS partition UUID:**
+
+```bash
+LUKS_UUID=$(blkid -s UUID -o value /dev/sda3)
+echo "LUKS UUID: $LUKS_UUID"
+```
+
+**Configure GRUB for LUKS:**
+
+```bash
+# Edit GRUB config
+sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot\"|" /etc/default/grub
+```
+
+**Verify mkinitcpio HOOKS:**
+
+The encrypt hook must be present and in the correct order (keyboard before encrypt).
+
+```bash
+# Check current HOOKS
+grep "^HOOKS" /etc/mkinitcpio.conf
+```
+
+If the encrypt hook is missing or keyboard comes after encrypt, edit the file:
+
+```bash
+# Should look like:
+# HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)
+
+# If needed, edit:
+vim /etc/mkinitcpio.conf
+
+# Regenerate initramfs
+mkinitcpio -P
+```
+
+**Create ARM kernel symlink:**
+
+On ARM64, the kernel is named `Image` but GRUB expects `vmlinuz-linux`. Create a symlink:
+
+```bash
+cp /boot/Image /boot/vmlinuz-linux
+```
+
+**Install and configure GRUB:**
+
+```bash
+# Install GRUB for ARM64 UEFI
+grub-install --target=arm64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
+
+# Generate GRUB config
+grub-mkconfig -o /boot/grub/grub.cfg
+```
+
+**Verify grub-mkconfig output:**
+
+The output should show BOTH:
+- `Found linux image: /boot/vmlinuz-linux`
+- `Found initrd image: /boot/initramfs-linux.img`
+
+If it doesn't find the initrd, the kernel symlink is missing or wrong.
+
+**Enable SSH:**
+
+```bash
+systemctl enable sshd
+```
+
+**Exit chroot and unmount:**
+
+```bash
+exit
+umount -R /mnt/archinstall
+```
+
+### Step 7: First Boot Verification
+
+Reboot the VM and verify LUKS decryption works.
+
+```bash
+reboot
+```
+
+**What to expect:**
+
+1. GRUB menu appears
+2. System prompts for LUKS passphrase
+3. After entering passphrase, system decrypts and boots
+4. Login prompt appears (login as the user you created)
+
+**Verification commands (after login):**
+
+```bash
+# Verify encrypted root is mounted
+lsblk
+# Should show: sda3 -> crypt -> cryptroot -> /
+
+# Verify kernel command line has cryptdevice
+cat /proc/cmdline
+# Should contain: cryptdevice=UUID=...:cryptroot root=/dev/mapper/cryptroot
+
+# Verify network works
+ip addr
+ping -c 3 archlinux.org
+
+# Verify SSH is running
+systemctl status sshd
+```
+
+**If boot fails:**
+
+- No passphrase prompt: Check mkinitcpio HOOKS (encrypt hook missing or wrong order)
+- Wrong password errors: Verify LUKS_UUID in /etc/default/grub matches `blkid /dev/sda3`
+- Kernel not found: Check /boot/vmlinuz-linux symlink exists
+- initramfs not found: Run `mkinitcpio -P` and `grub-mkconfig -o /boot/grub/grub.cfg`
+
+---
+
 ## Prerequisites
 
-After installing Arch via archboot with LUKS (see `docs/rocinante-encrypted-install.md`):
+After creating the base encrypted Arch Linux VM (see [VM Template Creation](#vm-template-creation) above):
 
 ### 1. Install Nix (Determinate)
 
