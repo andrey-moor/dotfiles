@@ -47,6 +47,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     mcp-hub.url = "github:ravitemer/mcp-hub";
+    nixgl = {
+      url = "github:nix-community/nixGL";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs @ { self, nixpkgs, ... }:

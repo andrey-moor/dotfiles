@@ -8,10 +8,16 @@ with lib;
   username = "andreym";
   homeDirectory = "/home/andreym";
 
-  config = { config, pkgs, ... }: {
+  config = { config, pkgs, inputs, ... }: {
     # Home-manager state version
     home.stateVersion = "24.05";
     home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
+
+    # nixGL for GPU acceleration with Nix apps on non-NixOS
+    nixGL = {
+      packages = inputs.nixgl.packages;
+      defaultWrapper = "mesa";  # AMD GPU
+    };
 
     # Additional packages
     home.packages = [

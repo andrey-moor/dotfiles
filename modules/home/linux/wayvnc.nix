@@ -10,6 +10,12 @@ with lib;
 let
   cfg = config.modules.linux.wayvnc;
 
+  # Wrap wayvnc with nixGL for GPU support on non-NixOS systems
+  # config.lib.nixGL.wrap is a no-op when nixGL isn't configured
+  wayvncPkg = if cfg.gpu
+    then config.lib.nixGL.wrap pkgs.wayvnc
+    else pkgs.wayvnc;
+
   # Resolution cycle script - rotates through options
   cycleResolution = pkgs.writeShellScriptBin "cycle-resolution" ''
     MONITOR="${cfg.monitor}"
@@ -114,7 +120,7 @@ in {
 
   config = mkIf (cfg.enable && pkgs.stdenv.isLinux) {
     home.packages = [
-      pkgs.wayvnc
+      wayvncPkg
       cycleResolution
       setResolution
     ];
@@ -144,7 +150,7 @@ in {
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
-        ExecStart = "${pkgs.wayvnc}/bin/wayvnc"
+        ExecStart = "${wayvncPkg}/bin/wayvnc"
           + optionalString cfg.gpu " --gpu"
           + " --max-fps=${toString cfg.maxFps}";
         Restart = "on-failure";
