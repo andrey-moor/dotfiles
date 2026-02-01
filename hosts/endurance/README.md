@@ -113,6 +113,8 @@ ExecStart=$WRAPPER
 Environment=HOME=/root
 Environment=XDG_CONFIG_HOME=/root/.config
 Environment=XDG_CACHE_HOME=/root/.cache
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target" | sudo tee /etc/systemd/system/microsoft-identity-device-broker.service.d/rosetta.conf
@@ -155,6 +157,19 @@ critical: no" | sudo tee /etc/pkcs11/modules/opensc-x86.module
 echo "module: /usr/lib/pkcs11/opensc-pkcs11.so
 critical: no" | sudo tee /etc/pkcs11/modules/opensc.module
 sudo chmod 644 /etc/pkcs11/modules/*.module
+
+# Add Parallels Proxy CCID to ccid driver (required for smart card sharing)
+sudo sed -i.bak '
+  /<key>ifdVendorID<\/key>/,/<\/array>/ {
+    /<\/array>/ i\                <string>0x203A</string>
+  }
+  /<key>ifdProductID<\/key>/,/<\/array>/ {
+    /<\/array>/ i\                <string>0xFFFD</string>
+  }
+  /<key>ifdFriendlyName<\/key>/,/<\/array>/ {
+    /<\/array>/ i\                <string>Parallels Proxy CCID</string>
+  }
+' /usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Info.plist
 ```
 
 **Parallels**: Enable **Hardware > USB & Bluetooth > Share smart card readers with Linux**
@@ -237,6 +252,12 @@ The `rosetta-binfmt.path` unit should handle this automatically by watching for 
 # Reload D-Bus config without restarting
 sudo pkill -HUP dbus-daemon
 sudo systemctl restart microsoft-identity-device-broker
+```
+
+**Device broker not running** (intune-portal crashes or shows auth errors):
+```bash
+sudo systemctl restart microsoft-identity-device-broker
+systemctl status microsoft-identity-device-broker
 ```
 
 **Permission errors after running commands via prlctl exec**:

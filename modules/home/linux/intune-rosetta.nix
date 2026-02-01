@@ -331,14 +331,26 @@ let
     # This agent collects device compliance data (disk encryption, password policy, etc.)
     # and sends it to Microsoft Intune for evaluation.
     # Runs periodically via intune-agent.timer (every hour after 5min startup delay)
+    #
+    # NOTE: Agent uses D-Bus to call the broker, which uses gnome-keyring for credentials.
+    # When run via systemd timer, we need to ensure keyring access.
 
     # LD_LIBRARY_PATH - same as intune-portal for consistency
     export LD_LIBRARY_PATH="${libPaths.opensslArch}:${libPaths.glvnd}:${libPaths.mesa}/lib:${libPaths.webkitgtk}:${libPaths.libsoup}:${libPaths.libsecret}:${libPaths.gtk3}:${libPaths.gdk-pixbuf}:${libPaths.cairo}:${libPaths.pango}:${libPaths.harfbuzz}:${libPaths.fontconfig}:${libPaths.freetype}:${libPaths.atk}:${libPaths.at-spi2-atk}:${libPaths.at-spi2-core}:${libPaths.xorg-libX11}:${libPaths.xorg-libXext}:${libPaths.xorg-libXrender}:${libPaths.xorg-libXi}:${libPaths.xorg-libXcursor}:${libPaths.xorg-libXrandr}:${libPaths.xorg-libXfixes}:${libPaths.xorg-libXcomposite}:${libPaths.xorg-libXdamage}:${libPaths.xorg-libxcb}:${libPaths.libxkbcommon}:${libPaths.dbus}:${libPaths.glib}:${libPaths.systemd}:${libPaths.util-linux}:${libPaths.curl}:${libPaths.zlib}:${libPaths.libssh2}:${libPaths.nghttp2}:${libPaths.brotli}:${libPaths.icu}:${libPaths.libstdcxx}:${libPaths.zstd}:${libPaths.expat}:${libPaths.pcre2}:${libPaths.sqlite}:${libPaths.libpsl}:${libPaths.libidn}:${libPaths.libpng}:${libPaths.libjpeg}:${libPaths.libwebp}:${libPaths.lcms2}:${libPaths.gstreamer}:${libPaths.gst-plugins-base}:${libPaths.libxml2}:${libPaths.libxslt}:${libPaths.enchant}:${libPaths.libnotify}:${libPaths.wayland}:${libPaths.gnutls}:${libPaths.nettle}:${libPaths.libtasn1}:${libPaths.libidn2}:${libPaths.libfido2}/lib:${libPaths.opensc}/lib:${libPaths.libp11}/lib:${libPaths.pcsclite}/lib:${libPaths.p11kit}/lib:''${LD_LIBRARY_PATH:-}"
 
     ${tlsEnvVars}
 
+    # Set XDG paths for keyring/libsecret access
+    export HOME="''${HOME:-/home/$(whoami)}"
+    export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+    # Gnome keyring access (needed for D-Bus activated broker to read credentials)
+    export GNOME_KEYRING_CONTROL="''${GNOME_KEYRING_CONTROL:-$XDG_RUNTIME_DIR/keyring}"
+
     ${optionalString cfg.debug ''
       echo "[DEBUG] intune-agent starting at $(date)" >&2
+      echo "[DEBUG] HOME=$HOME XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >&2
+      echo "[DEBUG] GNOME_KEYRING_CONTROL=$GNOME_KEYRING_CONTROL" >&2
     ''}
 
     exec ${intunePackage}/bin/intune-agent "$@"
@@ -371,6 +383,10 @@ let
     ${tlsEnvVars}
     ${pkcs11EnvVars}
 
+    # Keyring access for credential storage (needed when D-Bus activated by systemd timer)
+    export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    export GNOME_KEYRING_CONTROL="''${GNOME_KEYRING_CONTROL:-$XDG_RUNTIME_DIR/keyring}"
+
     # OpenSSL PKCS#11 engine config (for legacy OpenSSL apps)
     export OPENSSL_CONF="${opensslConf}"
     export OPENSSL_ENGINES="${pkgsX86.libp11}/lib/engines-3"
@@ -379,6 +395,7 @@ let
 
     ${optionalString cfg.debug ''
       echo "[DEBUG] Launching user broker (${brokerPkg.version})..." >&2
+      echo "[DEBUG] XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR GNOME_KEYRING_CONTROL=$GNOME_KEYRING_CONTROL" >&2
     ''}
 
     exec "${brokerPkg}/bin/microsoft-identity-broker" "$@"
@@ -967,12 +984,22 @@ trust-policy: no
     systemd.user.services.intune-agent = {
       Unit = {
         Description = "Intune Agent - compliance reporting";
+        # Require graphical session for keyring access
+        After = [ "graphical-session.target" "gnome-keyring.service" ];
       };
       Service = {
         Type = "oneshot";
         ExecStart = "${intuneAgentWrapper}/bin/intune-agent${wrapperSuffix}";
         StateDirectory = "intune";
         Slice = "background.slice";
+        # D-Bus and keyring access for credential storage
+        # The %t expands to XDG_RUNTIME_DIR (/run/user/UID)
+        # DBUS_SESSION_BUS_ADDRESS is needed because systemd user manager
+        # doesn't inherit it from the graphical session
+        Environment = [
+          "DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus"
+          "GNOME_KEYRING_CONTROL=%t/keyring"
+        ];
       };
     };
 
