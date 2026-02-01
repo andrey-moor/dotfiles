@@ -1,0 +1,10 @@
+{
+    "!root-password": "temppass",
+    "!users": [
+        {
+            "username": "user",
+            "!password": "temppass",
+            "sudo": true
+        }
+    ]
+}
