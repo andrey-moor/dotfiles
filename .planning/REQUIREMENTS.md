@@ -126,4 +126,4 @@ Deferred to future. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-01-31 after initial definition*
+*Last updated: 2026-01-31 after roadmap creation*
