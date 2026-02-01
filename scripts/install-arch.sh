@@ -143,6 +143,12 @@ cd /tmp
 curl -fsSL "$CONFIG_BASE/archinstall-config.json" -o config.json
 curl -fsSL "$CONFIG_BASE/archinstall-creds.json" -o creds.json
 
+# Install archinstall if not available (archboot is minimal)
+if ! command -v archinstall &>/dev/null; then
+    log "Installing archinstall and dependencies..."
+    pacman -Sy --noconfirm archinstall libxcrypt
+fi
+
 log "Running archinstall with pre_mounted_config..."
 archinstall --config config.json --creds creds.json
 
