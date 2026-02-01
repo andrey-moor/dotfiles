@@ -14,7 +14,7 @@ with lib;
     home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
 
     # nixGL for GPU acceleration with Nix apps on non-NixOS
-    nixGL = {
+    targets.genericLinux.nixGL = {
       packages = inputs.nixgl.packages;
       defaultWrapper = "mesa";  # AMD GPU
     };
