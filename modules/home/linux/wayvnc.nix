@@ -98,6 +98,18 @@ in {
       default = "1920x1080@60";
       description = "Preferred remote resolution (used by set-resolution remote)";
     };
+
+    gpu = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Enable GPU features (H.264 hardware encoding)";
+    };
+
+    maxFps = mkOption {
+      type = types.int;
+      default = 120;
+      description = "Max frame rate (120 recommended to avoid bottleneck for 60fps)";
+    };
   };
 
   config = mkIf (cfg.enable && pkgs.stdenv.isLinux) {
@@ -132,7 +144,9 @@ in {
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
-        ExecStart = "${pkgs.wayvnc}/bin/wayvnc";
+        ExecStart = "${pkgs.wayvnc}/bin/wayvnc"
+          + optionalString cfg.gpu " --gpu"
+          + " --max-fps=${toString cfg.maxFps}";
         Restart = "on-failure";
         RestartSec = 5;
       };
