@@ -1,7 +1,7 @@
 {
     "config_version": "2.8.1",
     "archinstall-language": "English",
-    "bootloader": "grub-install",
+    "bootloader": "Grub",
     "debug": false,
     "disk_config": {
         "config_type": "pre_mounted_config",
