@@ -3,7 +3,14 @@
 { lib, config, pkgs, ... }:
 
 with lib;
-let cfg = config.modules.shell.ghostty;
+let
+  cfg = config.modules.shell.ghostty;
+
+  # Wrap with nixGL on Linux for GPU support
+  # Use hiPrio to avoid conflicts with unwrapped version
+  ghosttyPkg = if pkgs.stdenv.isDarwin
+    then null  # macOS uses Homebrew
+    else lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);
 in {
   options.modules.shell.ghostty = {
     enable = mkEnableOption "Ghostty terminal emulator";
@@ -11,11 +18,10 @@ in {
 
   config = mkIf cfg.enable {
     # On macOS, ghostty is installed via Homebrew cask
-    # This module only provides config, the package comes from brew
+    # On Linux, wrap with nixGL for GPU acceleration
     programs.ghostty = {
       enable = true;
-      # Don't install package on Darwin - brew handles it
-      package = if pkgs.stdenv.isDarwin then null else pkgs.ghostty;
+      package = ghosttyPkg;
       enableBashIntegration = false;
       enableZshIntegration = false;
       enableFishIntegration = false;
