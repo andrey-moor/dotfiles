@@ -1,98 +1,180 @@
 #!/usr/bin/env bash
 # Automated Arch Linux ARM installation for Parallels VM
-# Run this inside archboot live environment
+# Uses pre_mounted_config approach: manual partition/LUKS, archinstall for base
 #
-# Usage: curl -fsSL <raw-url> | bash
-#    or: bash install-arch.sh [config-url]
+# Run this inside archboot live environment:
+#   curl -fsSL https://raw.githubusercontent.com/andrey-moor/dotfiles/main/scripts/install-arch.sh | bash
 
 set -euo pipefail
 
 CONFIG_BASE="${1:-https://raw.githubusercontent.com/andrey-moor/dotfiles/main/scripts}"
+DISK="${DISK:-/dev/sda}"
+LUKS_PASS="${LUKS_PASS:-temppass}"
+USER_PASS="${USER_PASS:-temppass}"
+ROOT_PASS="${ROOT_PASS:-temppass}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[+]${NC} $1"; }
+warn() { echo -e "${YELLOW}[!]${NC} $1"; }
+error() { echo -e "${RED}[x]${NC} $1"; exit 1; }
 
 echo "=================================================="
 echo " Arch Linux ARM Automated Installation"
 echo " For Parallels VM with LUKS encryption"
 echo "=================================================="
 echo ""
+echo " Disk: $DISK"
+echo " LUKS passphrase: $LUKS_PASS"
+echo " User: user / $USER_PASS"
+echo " Root: $ROOT_PASS"
+echo ""
+warn "CHANGE ALL PASSWORDS AFTER INSTALLATION!"
+echo ""
+echo "Starting in 5 seconds... (Ctrl+C to abort)"
+sleep 5
 
 # Check we're in live environment
-if [[ ! -d /run/archiso ]] && [[ ! -f /etc/arch-release ]]; then
-    echo "[!] This script should be run from archboot live environment"
-    exit 1
+if [[ ! -d /run/archiso ]] && [[ $(hostname) != *archboot* ]]; then
+    warn "This script should be run from archboot live environment"
 fi
 
 # Ensure network is up
-echo "[*] Checking network..."
-if ! ping -c 1 archlinux.org &>/dev/null; then
-    echo "[!] No network connectivity. Trying DHCP..."
-    dhcpcd || dhclient || echo "DHCP failed - check network manually"
+log "Checking network..."
+if ! ping -c 1 -W 3 archlinux.org &>/dev/null; then
+    warn "No network connectivity. Trying DHCP..."
+    dhcpcd 2>/dev/null || dhclient 2>/dev/null || true
     sleep 3
+    ping -c 1 archlinux.org &>/dev/null || error "No network - check manually"
 fi
 
-# Download configs
-echo "[*] Downloading archinstall configuration..."
+# ============================================================
+# PHASE 1: Partition disk
+# ============================================================
+log "Partitioning $DISK..."
+
+# Wipe and create GPT partition table
+wipefs -af "$DISK"
+sgdisk --zap-all "$DISK"
+
+# Create partitions:
+# 1: EFI System Partition (512MB)
+# 2: Boot partition (1GB, unencrypted)
+# 3: LUKS partition (remaining space)
+sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI" "$DISK"
+sgdisk -n 2:0:+1G -t 2:8300 -c 2:"Boot" "$DISK"
+sgdisk -n 3:0:0 -t 3:8309 -c 3:"LUKS" "$DISK"
+
+# Ensure kernel sees new partitions
+partprobe "$DISK"
+sleep 2
+
+log "Partitions created:"
+lsblk "$DISK"
+
+# ============================================================
+# PHASE 2: Set up LUKS encryption
+# ============================================================
+log "Setting up LUKS2 encryption with argon2id..."
+
+# LUKS2 with argon2id (safe because /boot is unencrypted, GRUB doesn't decrypt)
+echo -n "$LUKS_PASS" | cryptsetup luksFormat --type luks2 \
+    --cipher aes-xts-plain64 \
+    --key-size 512 \
+    --hash sha512 \
+    --pbkdf argon2id \
+    --batch-mode "${DISK}3"
+
+log "Opening LUKS partition..."
+echo -n "$LUKS_PASS" | cryptsetup open "${DISK}3" cryptroot
+
+# ============================================================
+# PHASE 3: Format filesystems
+# ============================================================
+log "Formatting filesystems..."
+
+mkfs.fat -F32 "${DISK}1"
+mkfs.ext4 -F "${DISK}2"
+mkfs.ext4 -F /dev/mapper/cryptroot
+
+# ============================================================
+# PHASE 4: Mount for archinstall
+# ============================================================
+log "Mounting filesystems to /mnt/archinstall..."
+
+MOUNT_ROOT="/mnt/archinstall"
+mkdir -p "$MOUNT_ROOT"
+
+mount /dev/mapper/cryptroot "$MOUNT_ROOT"
+mkdir -p "$MOUNT_ROOT/boot"
+mount "${DISK}2" "$MOUNT_ROOT/boot"
+mkdir -p "$MOUNT_ROOT/boot/efi"
+mount "${DISK}1" "$MOUNT_ROOT/boot/efi"
+
+log "Mount layout:"
+findmnt -R "$MOUNT_ROOT"
+
+# ============================================================
+# PHASE 5: Download and run archinstall with pre_mounted_config
+# ============================================================
+log "Downloading archinstall configuration..."
+
 cd /tmp
 curl -fsSL "$CONFIG_BASE/archinstall-config.json" -o config.json
 curl -fsSL "$CONFIG_BASE/archinstall-creds.json" -o creds.json
 
-echo "[*] Configuration downloaded. Starting archinstall..."
-echo ""
-echo "    LUKS password will be: temppass"
-echo "    User account: user / temppass"
-echo "    Root password: temppass"
-echo ""
-echo "    CHANGE THESE AFTER INSTALLATION!"
-echo ""
-sleep 3
+log "Running archinstall with pre_mounted_config..."
+archinstall --config config.json --creds creds.json
 
-# Run archinstall
-archinstall --config config.json --creds creds.json --silent
+# ============================================================
+# PHASE 6: Post-install GRUB configuration
+# ============================================================
+log "Configuring GRUB for LUKS..."
 
-echo ""
-echo "[*] archinstall completed. Applying ARM64 GRUB fixes..."
+# Get LUKS UUID
+LUKS_UUID=$(blkid -s UUID -o value "${DISK}3")
+log "LUKS UUID: $LUKS_UUID"
 
-# Mount installed system if not already mounted
-if [[ ! -d /mnt/archinstall/boot ]]; then
-    echo "[!] /mnt/archinstall not found - archinstall may have failed"
-    exit 1
+# ARM64 kernel symlink fix (GRUB expects vmlinuz-linux, ARM uses Image)
+if [[ -f "$MOUNT_ROOT/boot/Image" ]] && [[ ! -f "$MOUNT_ROOT/boot/vmlinuz-linux" ]]; then
+    log "Creating ARM64 kernel symlink..."
+    cp "$MOUNT_ROOT/boot/Image" "$MOUNT_ROOT/boot/vmlinuz-linux"
 fi
 
-# ARM64 kernel symlink fix
-# GRUB expects vmlinuz-linux but ARM uses Image
-if [[ -f /mnt/archinstall/boot/Image ]] && [[ ! -f /mnt/archinstall/boot/vmlinuz-linux ]]; then
-    echo "[*] Creating ARM64 kernel symlink..."
-    cp /mnt/archinstall/boot/Image /mnt/archinstall/boot/vmlinuz-linux
-fi
+# Configure mkinitcpio with encrypt hook
+log "Configuring mkinitcpio HOOKS..."
+sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/' \
+    "$MOUNT_ROOT/etc/mkinitcpio.conf"
 
-# Ensure encrypt hook is in mkinitcpio.conf
-echo "[*] Verifying mkinitcpio HOOKS..."
-if ! grep -q "encrypt" /mnt/archinstall/etc/mkinitcpio.conf; then
-    echo "[*] Adding encrypt hook to mkinitcpio.conf..."
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/' \
-        /mnt/archinstall/etc/mkinitcpio.conf
-fi
+# Configure GRUB
+log "Configuring GRUB..."
+sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot\"|" \
+    "$MOUNT_ROOT/etc/default/grub"
 
-# Chroot and regenerate initramfs + GRUB config
-echo "[*] Regenerating initramfs and GRUB config..."
-arch-chroot /mnt/archinstall /bin/bash -c '
+# Chroot and finalize
+log "Finalizing installation in chroot..."
+arch-chroot "$MOUNT_ROOT" /bin/bash -c "
     # Regenerate initramfs with encrypt hook
     mkinitcpio -P
 
-    # Get LUKS UUID and update GRUB
-    LUKS_UUID=$(blkid -s UUID -o value /dev/sda3)
+    # Install GRUB for ARM64 UEFI
+    grub-install --target=arm64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 
-    # Update GRUB config
-    sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$LUKS_UUID:cryptroot root=/dev/mapper/cryptroot\"|" /etc/default/grub
-
-    # Regenerate GRUB config
+    # Generate GRUB config
     grub-mkconfig -o /boot/grub/grub.cfg
 
     # Enable services
-    systemctl enable sshd
-    systemctl enable NetworkManager
-'
+    systemctl enable sshd || true
+    systemctl enable NetworkManager || true
+"
 
-# Eject CD and prepare for reboot
+# ============================================================
+# DONE
+# ============================================================
 echo ""
 echo "=================================================="
 echo " Installation Complete!"
@@ -101,15 +183,15 @@ echo ""
 echo " The VM will boot with LUKS encryption."
 echo ""
 echo " Default credentials (CHANGE IMMEDIATELY):"
-echo "   LUKS passphrase: temppass"
-echo "   User: user / temppass"
-echo "   Root: root / temppass"
+echo "   LUKS passphrase: $LUKS_PASS"
+echo "   User: user / $USER_PASS"
+echo "   Root: root / $ROOT_PASS"
 echo ""
 echo " After reboot:"
-echo "   1. Enter LUKS passphrase: temppass"
+echo "   1. Enter LUKS passphrase at boot"
 echo "   2. Login as user"
 echo "   3. Change LUKS passphrase:"
-echo "      sudo cryptsetup luksChangeKey /dev/sda3"
+echo "      sudo cryptsetup luksChangeKey ${DISK}3"
 echo "   4. Change user password:"
 echo "      passwd"
 echo ""

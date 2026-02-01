@@ -1,52 +1,11 @@
 {
     "config_version": "2.8.1",
-    "additional-repositories": [],
     "archinstall-language": "English",
     "bootloader": "grub-install",
     "debug": false,
     "disk_config": {
-        "config_type": "default_layout",
-        "device_modifications": [
-            {
-                "device": "/dev/sda",
-                "wipe": true,
-                "partitions": [
-                    {
-                        "type": "primary",
-                        "start": "1MiB",
-                        "size": "512MiB",
-                        "fs_type": "fat32",
-                        "mount_options": [],
-                        "mountpoint": "/boot/efi",
-                        "flags": ["esp", "boot"]
-                    },
-                    {
-                        "type": "primary",
-                        "start": "513MiB",
-                        "size": "1GiB",
-                        "fs_type": "ext4",
-                        "mount_options": [],
-                        "mountpoint": "/boot",
-                        "flags": []
-                    },
-                    {
-                        "type": "primary",
-                        "start": "1537MiB",
-                        "size": "100%",
-                        "fs_type": "ext4",
-                        "mount_options": [],
-                        "mountpoint": "/",
-                        "flags": []
-                    }
-                ]
-            }
-        ]
-    },
-    "disk_encryption": {
-        "encryption_type": "luks",
-        "partitions": ["/"],
-        "encryption_password": "temppass",
-        "hsm_device": null
+        "config_type": "pre_mounted_config",
+        "mountpoint": "/mnt/archinstall"
     },
     "hostname": "archtemplate",
     "kernels": ["linux"],
@@ -55,20 +14,10 @@
         "sys_enc": "UTF-8",
         "sys_lang": "en_US"
     },
-    "mirror_config": {
-        "mirror_regions": {
-            "United States": [
-                "https://mirrors.kernel.org/archlinux/$repo/os/$arch",
-                "https://mirror.rackspace.com/archlinux/$repo/os/$arch"
-            ]
-        }
-    },
     "network_config": {
         "type": "nm"
     },
-    "no_pkg_lookups": false,
     "ntp": true,
-    "offline": false,
     "packages": [
         "wget",
         "curl",
@@ -77,15 +26,14 @@
         "base-devel",
         "git",
         "vim",
-        "networkmanager"
+        "networkmanager",
+        "grub",
+        "efibootmgr"
     ],
     "parallel_downloads": 5,
     "profile_config": {
         "profile": null
     },
-    "script": "guided",
-    "silent": true,
     "swap": false,
-    "timezone": "America/Los_Angeles",
-    "version": "2.8.1"
+    "timezone": "America/Los_Angeles"
 }
