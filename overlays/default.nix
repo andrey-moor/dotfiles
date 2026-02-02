@@ -1,5 +1,11 @@
 # Custom overlays for extending nixpkgs
 final: prev: {
+  # FIXME: nushell 0.110.0 test fails in sandbox with I/O permission error
+  # Test: shell::environment::env::path_is_a_list_in_repl
+  # Skip tests until upstream fixes or cached binary is available
+  nushell = prev.nushell.overrideAttrs (oldAttrs: {
+    doCheck = false;
+  });
   ghidra-extensions = prev.ghidra-extensions // {
     ghydramcp = final.callPackage ./ghidra-extensions/ghydramcp.nix { };
   };

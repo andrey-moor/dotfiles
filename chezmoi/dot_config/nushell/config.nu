@@ -12,7 +12,7 @@ $env.VISUAL = "nvim"
 source catppuccin_mocha.nu
 
 # nu_scripts path (managed by nix)
-const NU_SCRIPTS = $"($nu.home-path)/.local/share/nushell/nu_scripts"
+const NU_SCRIPTS = $"($nu.home-dir)/.local/share/nushell/nu_scripts"
 
 # completions
 source $"($NU_SCRIPTS)/custom-completions/docker/docker-completions.nu"

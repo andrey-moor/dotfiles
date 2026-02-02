@@ -42,7 +42,7 @@ $env.PATH = ($env.PATH | split row (char esep)
     | prepend '/nix/var/nix/profiles/default/bin'
     | prepend '/run/current-system/sw/bin'
     | prepend $"/etc/profiles/per-user/($env.USER)/bin"
-    | prepend $"($nu.home-path)/.nix-profile/bin"
+    | prepend $"($nu.home-dir)/.nix-profile/bin"
     | prepend '/usr/local/bin/'
     | prepend '/opt/homebrew/bin'
     | prepend '/Applications/Parallels Desktop.app/Contents/MacOS/'
