@@ -1,65 +1,81 @@
 # Phase 1: VM Template Creation - Context
 
-**Gathered:** 2026-01-31
+**Gathered:** 2026-02-01
 **Status:** Ready for planning
 
 <domain>
 ## Phase Boundary
 
-Create an encrypted, generalized Arch Linux ARM VM template with GRUB bootloader and Omarchy desktop, ready for cloning. The template serves as a base image — personalization happens post-clone.
+Create an encrypted, generalized Arch Linux ARM VM template with working bootloader (GRUB or Limine) and Omarchy desktop, ready for cloning. The template serves as a base image — personalization happens post-clone. Intune compliance requires disk encryption.
 
 </domain>
 
 <decisions>
 ## Implementation Decisions
 
+### Installation Approach
+- Source: archboot ISO (boots to shell, manual install)
+- Process: Semi-manual with Claude typing assist via `prlctl send-key-event`
+- Sequence: (1) LUKS setup → (2) Base Arch install → (3) Omarchy from PR #1897
+- Claude can type commands when user requests, including LUKS passphrase if user provides it (never hardcoded)
+
 ### VM Configuration
 - Resources: 4 CPU cores, 8GB RAM (standard dev workload)
 - Shared folders: Mount full macOS home directory (access to dotfiles and other files)
 - Rosetta: Enable in template (not post-clone)
-- Network: Bridged networking (VM gets own IP, better for SSH access)
-
-### Disk/Encryption Setup
-- Partition scheme: EFI + /boot + LUKS (separate unencrypted /boot for GRUB reliability)
-- LUKS: Version 2 with argon2id key derivation
-- Filesystem: ext4 inside LUKS (simple, fast, good tooling)
+- Network: DHCP automatic via dhcpcd or NetworkManager
 - Disk size: 128GB
 
-### Base System State
-- Installation method: archinstall script with preset answers
-- Desktop: Omarchy (Hyprland) — use PR #1897 for ARM64 support
-- User account: Generic "user" account (personalized during clone)
-- Services: SSH + NetworkManager enabled (display manager configured later via Nix)
+### Disk/Encryption Setup
+- Partition scheme: EFI + /boot + LUKS (separate unencrypted /boot for bootloader reliability)
+- LUKS: Version 2 with argon2id key derivation
+- Filesystem: ext4 inside LUKS (simple, fast, good tooling)
 
-### Template Documentation
+### Bootloader
+- **Research needed**: Limine (Omarchy default) vs GRUB for LUKS on ARM64
+- Research should determine which is more compatible with LUKS2 + argon2id on ARM64
+
+### Omarchy Installation
+- Use PR #1897: https://github.com/basecamp/omarchy/pull/1897 (ARM64 support)
+- Install method: `curl | bash` from PR branch
+- Installed AFTER base Arch + LUKS is working
+
+### Template State
+- User account: Generic "user" account (personalized during clone)
+- Services: SSH + NetworkManager enabled
+- Template should be minimal — Nix/home-manager (Phase 2) handles real configuration
+
+### Documentation
 - Location: hosts/endurance/README.md (discoverable next to Nix config)
-- Style: Conceptual explanations followed by exact commands
-- Screenshots: Text-only (easier to maintain)
+- Style: Step-by-step guide with Claude typing assist suggestions
+- Format: Text-only (easier to maintain)
 
 ### Claude's Discretion
 - Troubleshooting placement (inline vs separate section)
-- Exact archinstall preset configuration
-- GRUB configuration details for LUKS2
+- Exact partitioning commands for archboot
+- mkinitcpio HOOKS configuration for LUKS
 
 </decisions>
 
 <specifics>
 ## Specific Ideas
 
-- Omarchy ARM64 support: Must use https://github.com/basecamp/omarchy/pull/1897
-- Template should be minimal enough that Nix/home-manager (Phase 2) handles the real configuration
-- SSH must work for prlctl exec commands from macOS host
+- Claude typing assist: Use vm-type.sh and VM-KEYBOARD.md for send-key-event automation
+- LUKS passphrase: User provides at runtime, never stored in scripts
+- Omarchy ARM64: Must use PR #1897, not mainline
+- Template minimal: SSH must work for prlctl exec commands from macOS host
 
 </specifics>
 
 <deferred>
 ## Deferred Ideas
 
-None — discussion stayed within phase scope
+- Full automation of VM creation (the archinstall scripting approach we abandoned)
+- Clone scripts for VM duplication — Phase 3
 
 </deferred>
 
 ---
 
 *Phase: 01-vm-template-creation*
-*Context gathered: 2026-01-31*
+*Context gathered: 2026-02-01*
