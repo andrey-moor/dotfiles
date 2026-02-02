@@ -87,9 +87,9 @@ build_json() {
         fi
 
         if needs_shift "$char"; then
-            # Shift + key sequence
+            # Shift + key sequence (delay after shift press ensures it registers)
             if [[ "$first" != true ]]; then json+=","; fi
-            json+="{\"scancode\":$SHIFT,\"event\":\"press\"}"
+            json+="{\"scancode\":$SHIFT,\"event\":\"press\",\"delay\":$DELAY}"
             json+=",{\"scancode\":$code,\"delay\":$DELAY}"
             json+=",{\"scancode\":$SHIFT,\"event\":\"release\"}"
             first=false
