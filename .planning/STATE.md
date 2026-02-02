@@ -48,7 +48,8 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+1 pending todo(s) in `.planning/todos/pending/`:
+- **Retry encrypted VM installation with fixed prl-type.sh** (tooling)
 
 ### Blockers/Concerns
 
