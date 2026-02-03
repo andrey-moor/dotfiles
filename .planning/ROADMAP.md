@@ -96,10 +96,12 @@ Plans:
   3. microsoft-identity-device-broker systemd service starts and stays running
   4. pcscd detects YubiKey when inserted
   5. OpenSC PKCS#11 module can list certificates from YubiKey
-**Plans**: TBD
+**Plans**: 3 plans (Wave 1 -> Wave 2)
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md — Automate Intune system prerequisites (D-Bus policy, pcscd, PKCS#11)
+- [ ] 05-02-PLAN.md — Implement comprehensive intune-health diagnostic script
+- [ ] 05-03-PLAN.md — Validate on stargazer VM and update documentation
 
 ### Phase 6: Enrollment and Compliance
 **Goal**: Complete device enrollment with YubiKey authentication and verify compliance reporting works.
@@ -140,11 +142,11 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 2. Rosetta and Nix Infrastructure | 2/2 | Complete | 2026-02-02 |
 | 3. VM Automation Scripts | 1/1 | Complete | 2026-02-02 |
 | 4. Nix Module Refactoring | 3/3 | Complete | 2026-02-03 |
-| 5. Intune Components | 0/? | Not started | - |
+| 5. Intune Components | 0/3 | Ready | - |
 | 6. Enrollment and Compliance | 0/? | Not started | - |
 | 7. Documentation | 0/? | Not started | - |
 
 ---
 *Created: 2026-01-31*
-*Last updated: 2026-02-03 (Phase 4 complete)*
+*Last updated: 2026-02-03 (Phase 5 planned)*
 *Requirements: 26 mapped*
