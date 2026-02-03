@@ -36,21 +36,22 @@ else
 fi
 
 # ============================================================================
-# 2. Path watcher for boot race condition
+# 2. Rosetta binfmt boot service
 # ============================================================================
-# Parallels mounts /mnt/psf after boot, creating a race with systemd-binfmt.
-# This path unit watches for the Rosetta binary and triggers binfmt re-registration.
-log "Checking Rosetta path watcher..."
+# Parallels mounts /mnt/psf asynchronously after prltoolsd starts, creating a
+# race with systemd-binfmt. We use a retry loop to wait for the mount to appear.
+# Path watcher kept as fallback for edge cases.
+log "Checking Rosetta binfmt boot service..."
 
-if [[ -f /etc/systemd/system/rosetta-binfmt.path ]]; then
-    skip "Rosetta path watcher"
+if [[ -f /etc/systemd/system/rosetta-binfmt.service ]] && grep -q "for i in" /etc/systemd/system/rosetta-binfmt.service 2>/dev/null; then
+    skip "Rosetta binfmt boot service"
 else
-    log "Installing Rosetta binfmt path watcher..."
+    log "Installing Rosetta binfmt boot service..."
 
-    # Path unit - watches for Rosetta binary
+    # Path unit - fallback watcher for Rosetta binary
     cat << 'EOF' | sudo tee /etc/systemd/system/rosetta-binfmt.path > /dev/null
 [Unit]
-Description=Watch for Rosetta binary to appear
+Description=Watch for Rosetta binary to appear (fallback)
 
 [Path]
 PathExists=/mnt/psf/RosettaLinux/rosetta
@@ -60,20 +61,25 @@ Unit=rosetta-binfmt.service
 WantedBy=multi-user.target
 EOF
 
-    # Service unit - restarts binfmt when path appears
+    # Service unit - waits for Rosetta binary with retry loop (prltoolsd mounts async)
     cat << 'EOF' | sudo tee /etc/systemd/system/rosetta-binfmt.service > /dev/null
 [Unit]
 Description=Register Rosetta binfmt after mount
+After=prltoolsd.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/systemctl restart systemd-binfmt
+ExecStart=/bin/bash -c "for i in {1..30}; do [ -f /mnt/psf/RosettaLinux/rosetta ] && systemctl restart systemd-binfmt && exit 0; sleep 1; done; echo Rosetta not found after 30s"
 RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
     sudo systemctl daemon-reload
     sudo systemctl enable rosetta-binfmt.path
-    log "Rosetta path watcher installed and enabled"
+    sudo systemctl enable rosetta-binfmt.service
+    log "Rosetta binfmt boot service installed and enabled"
 fi
 
 # ============================================================================
