@@ -17,12 +17,15 @@ let
   # ============================================================================
   # ARCHITECTURE DETECTION
   # Detect operating mode once at top, everything downstream uses the mode.
+  # NOTE: For aarch64-linux we ASSUME Rosetta mode since native arm64 Intune
+  # packages don't exist yet. The Rosetta binary check is done at runtime by
+  # the prerequisites script, not here (builtins.pathExists runs at Nix eval
+  # time on the build machine, not the target).
   # ============================================================================
 
   mode =
     if pkgs.stdenv.hostPlatform.isx86_64 then "native-x86_64"
-    else if pkgs.stdenv.hostPlatform.isAarch64 && builtins.pathExists "/mnt/psf/RosettaLinux/rosetta"
-    then "rosetta"
+    else if pkgs.stdenv.hostPlatform.isAarch64 then "rosetta"
     else null;  # Future: native-arm64 when Microsoft ships arm64 packages
 
   isRosetta = mode == "rosetta";
