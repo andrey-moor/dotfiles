@@ -2,125 +2,246 @@
 
 Encrypted Arch Linux ARM VM in Parallels with LUKS for Microsoft Intune compliance.
 
-## Base Template
+**What is stargazer?** An Intune-compliant Arch Linux workstation running on Apple Silicon via Parallels Desktop. Uses LUKS full-disk encryption (required for Intune) and Omarchy (Hyprland desktop).
 
-The base VM template is stored as `ArchBase-Template.pvm.tar.zst`:
+## Prerequisites
+
+Before starting, ensure you have:
+
+- **macOS on Apple Silicon** (M1/M2/M3)
+- **Parallels Desktop** (Pro or Business edition for prlctl CLI)
+- **Dotfiles repository** cloned to `~/Documents/dotfiles`
+- **Template file**: `ArchBase-LUKS-GRUB.pvmp` (see [Appendix A](#appendix-a-template-source) if you need to create it)
+
+## Overview
+
+The setup workflow:
+
+1. **Import** - Import the `.pvmp` template into Parallels
+2. **Boot** - Start VM and enter LUKS passphrase
+3. **Security** - Change the default LUKS passphrase
+4. **Omarchy** - Install the Omarchy desktop (armarchy for ARM)
+5. **GRUB Fix** - Restore GRUB bootloader (critical!)
+6. **Prerequisites** - Run Rosetta/Nix setup script
+7. **Home-Manager** - Apply Nix configuration
+8. **Intune** - Configure Microsoft Intune components
+
+---
+
+## 1. Import Template
+
+Import the encrypted base template into Parallels.
+
+### Option A: GUI Import
+
+1. Open Parallels Desktop
+2. **File > Open** (or drag `.pvmp` file to Parallels)
+3. Select the `ArchBase-LUKS-GRUB.pvmp` file
+4. Name the VM `stargazer`
+5. Choose location (default `~/Parallels/` is fine)
+
+### Option B: CLI Import
 
 ```bash
-# Extract
-cd ~/Parallels
-zstd -d ArchBase-Template.pvm.tar.zst -c | tar -xvf -
+# Import the .pvmp template
+prlctl import ~/Downloads/ArchBase-LUKS-GRUB.pvmp --name stargazer
+```
 
-# Register with Parallels
-prlctl register ~/Parallels/ArchBase-Template.pvm
+### Configure VM Settings
 
-# Clone for new VM
-prlctl clone ArchBase-Template --name "stargazer"
+After import, configure resources:
+
+```bash
+# Set CPU and memory
+prlctl set stargazer --cpus 4 --memsize 8192
+
+# Enable Rosetta (x86_64 emulation)
+prlctl set stargazer --rosetta-linux on
+
+# Enable shared folders (for dotfiles access)
+prlctl set stargazer --shf-host on
+```
+
+Or configure via Parallels GUI: **Configuration > Hardware** (CPU/Memory) and **Options > Sharing** (shared folders).
+
+---
+
+## 2. First Boot
+
+Start the VM and unlock encryption.
+
+```bash
 prlctl start stargazer
 ```
 
-Default credentials:
-- Encryption password: `4815162342`
-- Root password: `481516`
+Or click **Start** in Parallels Control Center.
 
-Template contents:
-- Clean Arch Linux ARM (aarch64)
-- LUKS full-disk encryption
-- btrfs filesystem
-- wget & sudo installed
-- Ready for omarchy install
+**At the GRUB menu:** Press Enter or wait for timeout.
 
-## Intune Setup
+**At the LUKS prompt:**
+- Enter passphrase: `4815162342`
 
-After cloning the base template:
+**At the login prompt:**
+- Username: `root`
+- Password: `481516`
 
-### 1. Install Nix (Determinate)
+---
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm
-```
+## 3. Change LUKS Passphrase (Security)
 
-Fix permissions (Determinate creates with 600):
-```bash
-sudo chmod 644 /etc/systemd/system/nix-daemon.service /etc/systemd/system/nix-daemon.socket /etc/systemd/system/determinate-nixd.socket
-```
-
-### 2. Enable x86_64 Platform
+**IMPORTANT:** The template uses a known passphrase. Change it immediately for security.
 
 ```bash
-echo "extra-platforms = x86_64-linux" | sudo tee -a /etc/nix/nix.custom.conf
-sudo chmod 644 /etc/nix/nix.conf
-sudo systemctl restart nix-daemon
+cryptsetup luksChangeKey /dev/vda2
 ```
 
-### 3. Rosetta binfmt
+When prompted:
+1. Enter current passphrase: `4815162342`
+2. Enter your new passphrase (strong, you'll type it at every boot)
+3. Confirm new passphrase
+
+**Passphrase tips:**
+- Use a memorable but strong phrase (you'll type it often)
+- Consider a passphrase like `correct-horse-battery-staple`
+- This is separate from your user password
+
+---
+
+## 4. Install Omarchy (armarchy)
+
+Install the Omarchy desktop environment using the ARM64 installer.
+
+### What armarchy does:
+
+- Installs Hyprland (Wayland compositor)
+- Configures desktop environment (waybar, rofi, etc.)
+- Creates your user account
+- Installs Parallels Tools for shared folders
+
+### Run the installer:
+
+**From inside the VM:**
 
 ```bash
-echo ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/mnt/psf/RosettaLinux/rosetta:PFC' | sudo tee /etc/binfmt.d/rosetta.conf
-sudo systemctl restart systemd-binfmt
+curl -fsSL hdwy.link/armarchy-3-x | bash
 ```
 
-Create path unit to trigger binfmt when Rosetta mount appears (Parallels mounts are created by prltoolsd, not systemd, so mount dependencies don't work):
-```bash
-cat << 'EOF' | sudo tee /etc/systemd/system/rosetta-binfmt.path
-[Unit]
-Description=Watch for Rosetta binary to appear
-
-[Path]
-PathExists=/mnt/psf/RosettaLinux/rosetta
-Unit=rosetta-binfmt.service
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-cat << 'EOF' | sudo tee /etc/systemd/system/rosetta-binfmt.service
-[Unit]
-Description=Register Rosetta binfmt after mount
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl restart systemd-binfmt
-RemainAfterExit=yes
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable rosetta-binfmt.path
-```
-
-### 4. x86_64 Dynamic Linker
+**Or type from macOS using prl-type.sh:**
 
 ```bash
-GLIBC_PATH=$(nix build --no-link --print-out-paths nixpkgs#pkgsCross.gnu64.glibc)
-sudo mkdir -p /lib64
-sudo chmod 755 /lib64
-sudo ln -sf "$GLIBC_PATH/lib/ld-linux-x86-64.so.2" /lib64/
+./scripts/prl-type.sh stargazer "curl -fsSL hdwy.link/armarchy-3-x | bash"
+# Then press Enter in the VM console
 ```
 
-### 5. Apply Home-Manager
+### Installer prompts:
+
+The installer will ask for:
+- **Your name** (display name)
+- **Your email** (for git config)
+- **Username** (login name, e.g., `andreym`)
+- **Password** (must meet Intune requirements)
+
+**Password requirements for Intune compliance:**
+- 12+ characters minimum
+- At least 1 uppercase letter (A-Z)
+- At least 1 lowercase letter (a-z)
+- At least 1 digit (0-9)
+- At least 1 symbol (!@#$%^&*...)
+
+Example: `MyP@ssw0rd123!` or `Secure-Pass-2024!`
+
+**DO NOT REBOOT when prompted by armarchy!** You must fix GRUB first (next step).
+
+---
+
+## 5. Restore GRUB Bootloader (Critical!)
+
+**WARNING:** armarchy installs the Limine bootloader, which breaks LUKS boot. You MUST restore GRUB before rebooting.
+
+If you skip this step, your VM will not boot properly - you'll see "Omarchy Bootloader" instead of GRUB, and LUKS decryption will fail.
+
+### Restore GRUB:
+
+```bash
+sudo cp /boot/EFI/GRUB/grubaa64.efi /boot/EFI/BOOT/BOOTAA64.EFI
+```
+
+### Verify the fix:
+
+```bash
+ls -la /boot/EFI/BOOT/BOOTAA64.EFI
+```
+
+The file should be **~160KB**. If it's ~90KB, that's Limine (wrong) - run the copy command again.
+
+### Now reboot:
+
+```bash
+sudo reboot
+```
+
+After reboot:
+1. GRUB menu appears (not "Omarchy Bootloader")
+2. LUKS passphrase prompt appears
+3. Login manager appears (log in with your new user, not root)
+
+---
+
+## 6. Run Prerequisites Script
+
+After logging in as your new user (not root), run the prerequisites script to configure Rosetta and Nix.
+
+**From inside the VM:**
+
+```bash
+/mnt/psf/Home/Documents/dotfiles/scripts/prerequisites.sh
+```
+
+**Or type from macOS:**
+
+```bash
+./scripts/prl-type.sh stargazer "/mnt/psf/Home/Documents/dotfiles/scripts/prerequisites.sh"
+```
+
+### What prerequisites.sh configures:
+
+- **Rosetta binfmt** - Enables x86_64 binary execution via Apple's Rosetta
+- **Rosetta boot service** - Ensures Rosetta binfmt survives reboot
+- **Nix installation** - Installs Determinate Nix package manager
+- **extra-platforms** - Enables Nix to build x86_64 packages
+- **Dynamic linker** - Creates /lib64/ld-linux-x86-64.so.2 symlink
+- **os-release spoof** - Spoofs Ubuntu 22.04 for Microsoft tools
+
+The script is idempotent - safe to run multiple times.
+
+---
+
+## 7. Apply Home-Manager Configuration
+
+Apply the Nix-based home configuration.
 
 ```bash
 cd /mnt/psf/Home/Documents/dotfiles
 nix run home-manager -- switch --flake .#stargazer -b backup
 ```
 
-### 6. Fake Ubuntu os-release
+This installs:
+- Shell configuration (nushell, starship)
+- Development tools
+- Microsoft Intune packages (intune-portal, device broker, intune-agent)
+- Various CLI utilities
 
-```bash
-sudo cp /usr/lib/os-release /usr/lib/os-release.arch.bak
-sudo tee /usr/lib/os-release << 'EOF'
-NAME="Ubuntu"
-VERSION="22.04.3 LTS (Jammy Jellyfish)"
-ID=ubuntu
-ID_LIKE=debian
-PRETTY_NAME="Ubuntu 22.04.3 LTS"
-VERSION_ID="22.04"
-VERSION_CODENAME=jammy
-UBUNTU_CODENAME=jammy
-EOF
-```
+The first run may take several minutes to download and build packages.
 
-### 7. Device Broker D-Bus + Systemd
+---
+
+## 8. Intune Setup
+
+Configure the Microsoft Intune components for device compliance.
+
+### 8.1 Device Broker D-Bus + Systemd
+
+The device broker handles Microsoft authentication:
 
 ```bash
 # D-Bus policy (use /usr/share, NOT /etc - don't restart dbus!)
@@ -158,7 +279,9 @@ Name=com.microsoft.identity.broker1
 Exec=$USER_WRAPPER" > ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service
 ```
 
-### 8. pcscd for YubiKey
+### 8.2 pcscd for YubiKey
+
+Configure smart card daemon for YubiKey authentication:
 
 ```bash
 # Install packages
@@ -200,18 +323,20 @@ sudo sed -i.bak '
 ' /usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Info.plist
 ```
 
-**Parallels**: Enable **Hardware > USB & Bluetooth > Share smart card readers with Linux**
+**Parallels Setting:** Enable **Hardware > USB & Bluetooth > Share smart card readers with Linux**
 
-### 9. Keyring Default
+### 8.3 Keyring Default
 
 Set login keyring as default (auto-unlocked at login):
+
 ```bash
 echo -n login > ~/.local/share/keyrings/default
 ```
 
-### 10. Intune Compliance (PAM Password Policy)
+### 8.4 Intune Compliance (PAM Password Policy)
 
 Intune checks `/etc/pam.d/common-password` for password complexity:
+
 ```bash
 sudo tee /etc/pam.d/common-password << 'EOF'
 # /etc/pam.d/common-password - password-related modules for PAM
@@ -228,21 +353,21 @@ EOF
 sudo chmod 644 /etc/pam.d/common-password
 ```
 
-**Ensure your password meets**: 12+ chars, 1 uppercase, 1 lowercase, 1 number, 1 symbol.
-
-### 11. Enable Intune Agent Timer
+### 8.5 Enable Intune Agent Timer
 
 The intune-agent periodically reports compliance status to Microsoft:
+
 ```bash
 systemctl --user enable --now intune-agent.timer
 ```
 
 To trigger an immediate compliance report:
+
 ```bash
 intune-agent-rosetta
 ```
 
-### 12. Apply Chezmoi Configuration
+### 8.6 Apply Chezmoi Configuration
 
 Home-manager installs packages and declarative configs. Chezmoi manages mutable user configs (neovim, nushell, etc.):
 
@@ -250,24 +375,73 @@ Home-manager installs packages and declarative configs. Chezmoi manages mutable 
 chezmoi apply
 ```
 
-## Verify
+---
+
+## 9. Verify
+
+Verify all components are working:
 
 ```bash
-intune-status                    # Check all components
-systemctl --user list-timers     # Verify intune-agent.timer is active
-pcsc_scan -r                     # Should show YubiKey reader
-intune-portal-rosetta            # Launch portal
+# Check all Intune components
+intune-status
+
+# Verify intune-agent timer is active
+systemctl --user list-timers
+
+# Check YubiKey reader (insert YubiKey first)
+pcsc_scan -r
+
+# Launch Intune portal
+intune-portal-rosetta
 ```
 
 To check compliance reporting:
+
 ```bash
-intune-agent-rosetta             # Trigger manual compliance report
+# Trigger manual compliance report
+intune-agent-rosetta
+
+# Check logs
 journalctl --user -u intune-agent --since "5 minutes ago"
 ```
 
-## Troubleshooting
+---
 
-**Rosetta binfmt not registered** (check with `cat /proc/sys/fs/binfmt_misc/rosetta`):
+## 10. Troubleshooting
+
+### No LUKS passphrase prompt after reboot
+
+**Cause:** GRUB fix was not applied before reboot.
+
+**Solution:** Boot from snapshot and redo setup, or recover manually:
+
+1. In Parallels, reset VM to pre-armarchy state if you have a snapshot
+2. Or boot from archboot ISO and fix manually:
+
+```bash
+# Boot from archboot ISO
+cryptsetup open /dev/vda2 cryptroot
+mount /dev/mapper/cryptroot /mnt
+mount /dev/vda1 /mnt/boot
+cp /mnt/boot/EFI/GRUB/grubaa64.efi /mnt/boot/EFI/BOOT/BOOTAA64.EFI
+umount -R /mnt
+reboot
+```
+
+### "Omarchy Bootloader" appears instead of GRUB
+
+This means Limine is booting instead of GRUB. See recovery steps above.
+
+### Rosetta binfmt not registered
+
+Check registration status:
+
+```bash
+cat /proc/sys/fs/binfmt_misc/rosetta
+```
+
+If not registered:
+
 ```bash
 sudo systemctl restart systemd-binfmt
 sudo systemctl restart microsoft-identity-device-broker
@@ -275,21 +449,232 @@ sudo systemctl restart microsoft-identity-device-broker
 
 The `rosetta-binfmt.path` unit should handle this automatically by watching for the Rosetta binary to appear after boot.
 
-**Device broker fails to start with D-Bus error**:
+### Device broker fails to start with D-Bus error
+
 ```bash
 # Reload D-Bus config without restarting
 sudo pkill -HUP dbus-daemon
 sudo systemctl restart microsoft-identity-device-broker
 ```
 
-**Device broker not running** (intune-portal crashes or shows auth errors):
+### Device broker not running (intune-portal crashes)
+
 ```bash
 sudo systemctl restart microsoft-identity-device-broker
 systemctl status microsoft-identity-device-broker
 ```
 
-**Permission errors after running commands via prlctl exec**:
+### Permission errors after running commands via prlctl exec
+
 Commands run via `prlctl exec` run as root, creating files owned by root in user directories. Fix with:
+
 ```bash
 sudo chown -R $USER:$USER ~/.config ~/.local
 ```
+
+### Shared folders not visible (/mnt/psf empty)
+
+```bash
+# Check if mount exists
+mount | grep psf
+
+# Wait for prltoolsd (may take 10-15 seconds after boot)
+sleep 15 && ls /mnt/psf/Home
+
+# If still not working, check Parallels Tools
+lsmod | grep prl
+```
+
+### intune-portal authentication fails
+
+1. Check device broker is running: `systemctl status microsoft-identity-device-broker`
+2. Check user broker service exists: `ls ~/.local/share/dbus-1/services/`
+3. Try restarting: `sudo systemctl restart microsoft-identity-device-broker`
+
+---
+
+## Quick Reference: prl-type.sh
+
+The `prl-type.sh` script types text into the VM console from macOS. Useful when you can't copy-paste.
+
+### Basic usage:
+
+```bash
+# Type a command (VM must be at a prompt)
+./scripts/prl-type.sh stargazer "echo hello"
+
+# With custom delay (slower, more reliable)
+DELAY=50 ./scripts/prl-type.sh stargazer "complex command"
+
+# For a different VM
+VM=endurance ./scripts/prl-type.sh "echo hello"
+```
+
+### Common examples:
+
+```bash
+# Type the armarchy installer command
+./scripts/prl-type.sh stargazer "curl -fsSL hdwy.link/armarchy-3-x | bash"
+
+# Type the prerequisites script path
+./scripts/prl-type.sh stargazer "/mnt/psf/Home/Documents/dotfiles/scripts/prerequisites.sh"
+
+# Type LUKS passphrase change command
+./scripts/prl-type.sh stargazer "cryptsetup luksChangeKey /dev/vda2"
+
+# Type the GRUB fix
+./scripts/prl-type.sh stargazer "sudo cp /boot/EFI/GRUB/grubaa64.efi /boot/EFI/BOOT/BOOTAA64.EFI"
+```
+
+**Note:** After typing, you still need to press Enter in the VM console. The script types but doesn't submit.
+
+---
+
+## Appendix A: Template Source
+
+### Creating the .pvmp Template
+
+If you need to create the template from scratch, follow these guides in order:
+
+1. **Base encrypted system:** [docs/arch-arm-encrypted-install.md](../../docs/arch-arm-encrypted-install.md)
+   - Creates LUKS-encrypted Arch Linux with GRUB bootloader
+
+2. **Create the template snapshot:**
+   ```bash
+   # After base system is working, create snapshot
+   prlctl snapshot ArchBase-Template -n "EncryptedBase-GRUB" -d "LUKS+GRUB base, before Omarchy"
+   ```
+
+3. **Export as .pvmp:**
+   ```bash
+   # Ensure VM is stopped
+   prlctl stop ArchBase-Template
+
+   # Revert to the clean snapshot
+   prlctl snapshot-switch ArchBase-Template --id "EncryptedBase-GRUB"
+
+   # Pack as template
+   prlctl pack ArchBase-Template --output ~/ArchBase-LUKS-GRUB.pvmp
+   ```
+
+### Template Contents
+
+The template provides:
+- Clean Arch Linux ARM (aarch64)
+- LUKS2 full-disk encryption
+- GRUB bootloader configured for LUKS
+- btrfs filesystem
+- Minimal packages (wget, sudo)
+- Ready for Omarchy installation
+
+### Template Credentials
+
+| Item | Value |
+|------|-------|
+| LUKS passphrase | `4815162342` |
+| Root password | `481516` |
+
+**Always change the LUKS passphrase after importing!**
+
+---
+
+## Appendix B: prlctl Quick Reference
+
+Common Parallels CLI commands:
+
+### VM Lifecycle
+
+```bash
+# Start VM
+prlctl start stargazer
+
+# Stop VM (graceful)
+prlctl stop stargazer
+
+# Stop VM (force)
+prlctl stop stargazer --kill
+
+# Suspend VM
+prlctl suspend stargazer
+
+# Resume VM
+prlctl resume stargazer
+```
+
+### VM Information
+
+```bash
+# List all VMs
+prlctl list -a
+
+# Show VM details
+prlctl list -i stargazer
+
+# Check VM status
+prlctl list | grep stargazer
+```
+
+### Configuration
+
+```bash
+# Set CPU cores
+prlctl set stargazer --cpus 4
+
+# Set memory (MB)
+prlctl set stargazer --memsize 8192
+
+# Enable Rosetta
+prlctl set stargazer --rosetta-linux on
+
+# Enable shared folders
+prlctl set stargazer --shf-host on
+```
+
+### Snapshots
+
+```bash
+# List snapshots
+prlctl snapshot-list stargazer
+
+# Create snapshot
+prlctl snapshot stargazer -n "snapshot-name" -d "description"
+
+# Revert to snapshot
+prlctl snapshot-switch stargazer --id "{snapshot-uuid}"
+
+# Delete snapshot
+prlctl snapshot-delete stargazer --id "{snapshot-uuid}"
+```
+
+### Remote Execution
+
+```bash
+# Run command in VM (as root)
+prlctl exec stargazer "hostname"
+
+# Run command as specific user
+prlctl exec stargazer --user andreym "whoami"
+
+# Take screenshot
+prlctl capture stargazer --file /tmp/screenshot.png
+```
+
+### Cloning
+
+```bash
+# Clone VM
+prlctl clone stargazer --name new-vm-name
+
+# Clone from specific snapshot
+prlctl snapshot-switch stargazer --id "{snapshot-uuid}"
+prlctl clone stargazer --name new-vm-name
+```
+
+---
+
+## References
+
+- [Parallels CLI Reference](https://download.parallels.com/desktop/v19/docs/en_US/Parallels%20Desktop%20Pro%20Edition%20Command-Line%20Reference.pdf)
+- [Omarchy (armarchy for ARM64)](https://github.com/basecamp/omarchy)
+- [Microsoft Intune for Linux](https://learn.microsoft.com/en-us/mem/intune/user-help/microsoft-intune-app-linux)
+- [Arch Linux ARM](https://archlinuxarm.org/)
