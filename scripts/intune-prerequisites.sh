@@ -335,34 +335,47 @@ check_item() {
     fi
 }
 
+# Variant that uses sudo for permission-restricted files
+check_item_sudo() {
+    local name="$1"
+    local condition="$2"
+    if sudo bash -c "$condition" >/dev/null 2>&1; then
+        pass "$name"
+        return 0
+    else
+        fail "$name"
+        return 1
+    fi
+}
+
 echo ""
 echo "D-Bus & Systemd:"
-check_item "Device broker D-Bus policy" "[[ -f '$DBUS_POLICY_DEST' ]]"
-check_item "Device broker service file" "[[ -f '$SERVICE_DEST' ]]"
-check_item "Device broker override" "[[ -f '$OVERRIDE_CONF' ]]"
+check_item_sudo "Device broker D-Bus policy" "[[ -f '$DBUS_POLICY_DEST' ]]"
+check_item_sudo "Device broker service file" "[[ -f '$SERVICE_DEST' ]]"
+check_item_sudo "Device broker override" "[[ -f '$OVERRIDE_CONF' ]]"
 check_item "Device broker running" "systemctl is-active microsoft-identity-device-broker"
 
 echo ""
 echo "pcscd & Smart Card:"
-check_item "pcscd tmpfiles config" "[[ -f '$TMPFILES_CONF' ]]"
-check_item "pcscd socket symlink" "[[ -L '$SYMLINK_TARGET' ]] || [[ -f '$TMPFILES_CONF' ]]"
-check_item "pcscd polkit override" "[[ -f '$PCSCD_OVERRIDE' ]]"
+check_item_sudo "pcscd tmpfiles config" "[[ -f '$TMPFILES_CONF' ]]"
+check_item_sudo "pcscd socket symlink" "[[ -L '$SYMLINK_TARGET' ]] || [[ -f '$TMPFILES_CONF' ]]"
+check_item_sudo "pcscd polkit override" "[[ -f '$PCSCD_OVERRIDE' ]]"
 check_item "pcscd running" "systemctl is-active pcscd.service || systemctl is-active pcscd.socket"
 
 echo ""
 echo "PKCS#11:"
-check_item "System PKCS#11 modules dir" "[[ -d '$PKCS11_DIR' ]]"
-check_item "OpenSC x86 module" "[[ -f '$OPENSC_X86_MODULE' ]]"
+check_item_sudo "System PKCS#11 modules dir" "[[ -d '$PKCS11_DIR' ]]"
+check_item_sudo "OpenSC x86 module" "[[ -f '$OPENSC_X86_MODULE' ]]"
 
 echo ""
 echo "Intune Compliance:"
-check_item "PAM password policy" "[[ -f '$PAM_COMMON_PASSWORD' ]]"
+check_item_sudo "PAM password policy" "[[ -f '$PAM_COMMON_PASSWORD' ]]"
 check_item "Keyring default" "[[ -f '$KEYRING_DEFAULT' ]]"
 
 echo ""
 echo "ccid Driver:"
-if [[ -f "$CCID_PLIST" ]]; then
-    check_item "Parallels Proxy CCID patch" "grep -q '0x203A' '$CCID_PLIST'"
+if [[ -f "$CCID_PLIST" ]] || sudo test -f "$CCID_PLIST"; then
+    check_item_sudo "Parallels Proxy CCID patch" "grep -q '0x203A' '$CCID_PLIST'"
 else
     fail "ccid driver not installed"
 fi
