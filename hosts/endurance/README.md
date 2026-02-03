@@ -209,6 +209,21 @@ systemctl status sshd
 
 After creating the base encrypted Arch Linux VM (see [VM Template Creation](#vm-template-creation) above):
 
+**Quick Start:**
+
+```bash
+# From cloned repo (recommended):
+/mnt/psf/Home/Documents/dotfiles/scripts/prerequisites.sh
+
+# Or via curl:
+curl -fsSL https://raw.githubusercontent.com/andrey-moor/dotfiles/main/scripts/prerequisites.sh | bash
+```
+
+This script handles steps 1-6 below automatically (Nix, Rosetta, x86_64 linker, os-release). Continue with step 7 after the script completes.
+
+<details>
+<summary>Manual Steps (if script fails)</summary>
+
 ### 1. Install Nix (Determinate)
 
 ```bash
@@ -294,6 +309,8 @@ VERSION_CODENAME=jammy
 UBUNTU_CODENAME=jammy
 EOF
 ```
+
+</details>
 
 ### 7. Device Broker D-Bus + Systemd
 
