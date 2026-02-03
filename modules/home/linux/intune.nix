@@ -445,7 +445,8 @@ let
 
     # === D-BUS SERVICES ===
     echo "--- D-Bus Services ---"
-    if ! check "Device broker on system bus" critical busctl --system list \| grep -q devicebroker; then
+    # Use bash -c for piped commands
+    if ! check "Device broker on system bus" critical bash -c "busctl --system list | grep -q devicebroker1"; then
       hint "Run: intune-prerequisites (installs D-Bus policy)"
     fi
 
@@ -453,9 +454,13 @@ let
       hint "Run: home-manager switch --flake .#\$(hostname)"
     fi
 
-    # Test D-Bus activation works
-    if ! check "User broker D-Bus activates" critical busctl --user call com.microsoft.identity.broker1 /com/microsoft/identity/broker1 org.freedesktop.DBus.Peer Ping; then
-      hint "Check: cat ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service"
+    # Test D-Bus activation works (only if in a graphical session)
+    if [[ -n "''${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+      if ! check "User broker D-Bus activates" critical busctl --user call com.microsoft.identity.broker1 /com/microsoft/identity/broker1 org.freedesktop.DBus.Peer Ping; then
+        hint "Check: cat ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service"
+      fi
+    else
+      echo -e "$WARN User broker D-Bus test skipped (no session bus - run in graphical session)"
     fi
     echo ""
 
@@ -498,7 +503,7 @@ let
     if command -v pcsc_scan >/dev/null 2>&1 && pcsc_scan -r 2>/dev/null | grep -qi "yubikey\|piv"; then
       check "YubiKey detected by pcscd" optional true
       if [[ -n "$OPENSC_MODULE" ]] && [[ -f "$OPENSC_MODULE" ]]; then
-        if ! check "PIV certificates accessible" optional pkcs11-tool --module "$OPENSC_MODULE" --list-objects --type cert 2>/dev/null \| grep -q "Certificate"; then
+        if ! check "PIV certificates accessible" optional bash -c "pkcs11-tool --module '$OPENSC_MODULE' --list-objects --type cert 2>/dev/null | grep -q 'Certificate'"; then
           hint "Insert YubiKey and unlock with PIN"
         fi
       fi
