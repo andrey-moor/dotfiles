@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: VM Template Creation** - Encrypted base VM with GRUB bootloader ready for cloning
 - [x] **Phase 2: Rosetta and Nix Infrastructure** - x86_64 emulation and package management working
 - [x] **Phase 3: VM Automation Scripts** - Clone and setup scripts for reproducible VM creation
-- [ ] **Phase 4: Nix Module Refactoring** - Clean, lean intune-rosetta module with proper abstractions
+- [x] **Phase 4: Nix Module Refactoring** - Clean, lean intune-rosetta module with proper abstractions
 - [ ] **Phase 5: Intune Components** - Portal, brokers, and YubiKey integration functional
 - [ ] **Phase 6: Enrollment and Compliance** - Device enrolls and reports compliance status
 - [ ] **Phase 7: Documentation** - E2E guide, troubleshooting, and upgrade procedures
@@ -82,9 +82,9 @@ Plans:
 **Plans**: 3 plans (Wave 1 -> Wave 2 -> Wave 3)
 
 Plans:
-- [ ] 04-01-PLAN.md - Create unified intune.nix with mode detection and library categories
-- [ ] 04-02-PLAN.md - Update host configs to use unified module
-- [ ] 04-03-PLAN.md - Validate builds on both architectures and archive old modules
+- [x] 04-01-PLAN.md - Create unified intune.nix with mode detection and library categories
+- [x] 04-02-PLAN.md - Update host configs to use unified module
+- [x] 04-03-PLAN.md - Validate builds on both architectures and archive old modules
 
 ### Phase 5: Intune Components
 **Goal**: Intune portal launches, brokers activate, and YubiKey is detected for authentication.
@@ -139,12 +139,12 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. VM Template Creation | 4/4 | Complete | 2026-02-02 |
 | 2. Rosetta and Nix Infrastructure | 2/2 | Complete | 2026-02-02 |
 | 3. VM Automation Scripts | 1/1 | Complete | 2026-02-02 |
-| 4. Nix Module Refactoring | 0/3 | Planned | - |
+| 4. Nix Module Refactoring | 3/3 | Complete | 2026-02-03 |
 | 5. Intune Components | 0/? | Not started | - |
 | 6. Enrollment and Compliance | 0/? | Not started | - |
 | 7. Documentation | 0/? | Not started | - |
 
 ---
 *Created: 2026-01-31*
-*Last updated: 2026-02-03 (Phase 4 planned)*
+*Last updated: 2026-02-03 (Phase 4 complete)*
 *Requirements: 26 mapped*
