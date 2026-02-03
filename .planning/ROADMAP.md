@@ -57,17 +57,18 @@ Plans:
 - [x] 02-02-PLAN.md - Validate script on fresh VM clone, test reboot survival
 
 ### Phase 3: VM Automation Scripts
-**Goal**: Create scripts for cloning template and post-clone configuration, enabling reproducible VM creation from macOS.
+**Goal**: Create comprehensive documentation for reproducible VM creation from .pvmp template, with stargazer as the canonical host.
 **Depends on**: Phase 2
 **Requirements**: AUTO-02, AUTO-03
 **Success Criteria** (what must be TRUE):
-  1. prlctl script clones template to new VM with specified name
-  2. Post-clone script configures VM settings (CPU, memory, shared folders)
-  3. Scripts work from macOS without manual VM console access
+  1. hosts/stargazer/README.md is single source of truth for VM setup
+  2. Full workflow documented: .pvmp import → armarchy → GRUB fix → Nix → Intune
+  3. GRUB fix prominently documented with warning
+  4. prl-type.sh examples provided for typing commands into VM
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03-01-PLAN.md - Create clone-encrypted-vm.sh and setup-clone.sh automation scripts
+- [ ] 03-01-PLAN.md - Restructure hosts/stargazer/README.md as comprehensive setup guide
 
 ### Phase 4: Nix Module Refactoring
 **Goal**: Refactor intune-rosetta.nix to be lean, well-designed, with named abstractions for library paths and single architecture detection.
