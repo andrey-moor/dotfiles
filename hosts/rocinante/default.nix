@@ -60,8 +60,8 @@ with lib;
 
       linux = {
         edge.enable = true;
-        intune-nix.enable = true;
-        intune-nix.debug = true;  # Enable verbose logging for debugging
+        intune.enable = true;
+        intune.debug = true;  # Enable verbose logging for debugging
         wayvnc = {
           enable = true;
           password = "rocinante";
