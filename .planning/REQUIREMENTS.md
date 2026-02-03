@@ -96,8 +96,8 @@ Deferred to future. Tracked but not in current roadmap.
 | VM-05 | Phase 2 | Pending |
 | VM-06 | Phase 1 | Pending |
 | AUTO-01 | Phase 1 | Pending |
-| AUTO-02 | Phase 3 | Pending |
-| AUTO-03 | Phase 3 | Pending |
+| AUTO-02 | Phase 3 | Complete |
+| AUTO-03 | Phase 3 | Complete |
 | AUTO-04 | Phase 2 | Pending |
 | NIX-01 | Phase 2 | Pending |
 | NIX-02 | Phase 2 | Pending |
@@ -126,4 +126,4 @@ Deferred to future. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-01-31 after roadmap creation*
+*Last updated: 2026-02-02 (Phase 3 complete)*
