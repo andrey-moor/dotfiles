@@ -5,34 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-01-31)
 
 **Core value:** A developer can create an Intune-compliant Linux workstation on Apple Silicon by following documented steps, with automation for error-prone parts.
-**Current focus:** Phase 2 - Rosetta and Nix Infrastructure
+**Current focus:** Phase 3 - VM Automation Scripts
 
 ## Current Position
 
-Phase: 2 of 7 (Rosetta and Nix Infrastructure)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-02 — Completed 02-01-PLAN.md (Prerequisites Script)
+Phase: 3 of 7 (VM Automation Scripts)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-02-02 — Completed Phase 2 (Rosetta and Nix Infrastructure)
 
-Progress: [███░░░░░░░] ~21%
+Progress: [████░░░░░░] ~29%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: ~25min
-- Total execution time: ~3.5 hours (with debugging)
+- Total plans completed: 6
+- Average duration: ~35min
+- Total execution time: ~5.5 hours (with debugging)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 4 | ~3h | ~45min |
-| 02 | 1 | 2min | 2min |
+| 02 | 2 | ~2h | ~60min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (45m), 01-03 (60m), 01-04 (20m), 02-01 (2m)
-- Trend: Automation scripts execute quickly
+- Last 5 plans: 01-03 (60m), 01-04 (20m), 02-01 (2m), 02-02 (120m)
+- Trend: Validation with debugging takes time, but issues get fixed
 
 *Updated after each plan completion*
 
@@ -53,6 +53,8 @@ Recent decisions affecting current work:
 - [01-03]: Critical fix: copy GRUB efi to fallback boot path (armarchy installs Limine there)
 - [02-01]: systemd path unit for Rosetta binfmt boot survival (watches for binary appearance)
 - [02-01]: Manual steps kept as collapsible fallback in README
+- [02-02]: Retry loop (not ConditionPathExists) for boot race - prltoolsd mounts async
+- [02-02]: glibc.out required for dynamic linker (default -bin output has no libs)
 
 ### Pending Todos
 
@@ -65,6 +67,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 02-01-PLAN.md
+Stopped at: Completed Phase 2 (Rosetta and Nix Infrastructure)
 Resume file: None
-Next: 02-02-PLAN.md (home-manager integration verification)
+Next: Phase 3 - VM Automation Scripts (needs planning)

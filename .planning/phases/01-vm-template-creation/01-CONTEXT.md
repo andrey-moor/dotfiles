@@ -27,9 +27,9 @@ Create an encrypted, generalized Arch Linux ARM VM template with working bootloa
 - Disk size: 128GB
 
 ### Disk/Encryption Setup
-- Partition scheme: EFI + /boot + LUKS (separate unencrypted /boot for bootloader reliability)
+- Partition scheme: EFI + LUKS (2-partition, EFI mounted at /boot per docs/rocinante-encrypted-install.md)
 - LUKS: Version 2 with argon2id key derivation
-- Filesystem: ext4 inside LUKS (simple, fast, good tooling)
+- Filesystem: btrfs inside LUKS (modern, snapshots, used in proven rocinante install)
 
 ### Bootloader
 - **Research needed**: Limine (Omarchy default) vs GRUB for LUKS on ARM64
@@ -60,12 +60,39 @@ Create an encrypted, generalized Arch Linux ARM VM template with working bootloa
 <specifics>
 ## Specific Ideas
 
-- Claude typing assist: Use vm-type.sh and VM-KEYBOARD.md for send-key-event automation
-- LUKS passphrase: User provides at runtime, never stored in scripts
+- Claude typing assist: Use prl-type.sh and VM-KEYBOARD.md for send-key-event automation
+- LUKS passphrase: User provides at runtime, never stored in scripts (can be changed post-clone via `cryptsetup luksChangeKey`)
 - Omarchy ARM64: Must use PR #1897, not mainline
 - Template minimal: SSH must work for prlctl exec commands from macOS host
 
 </specifics>
+
+<lessons_learned>
+## Lessons Learned (2026-02-02)
+
+### prl-type.sh Bug Fix
+The original prl-type.sh had a race condition with shifted characters (uppercase, symbols like `:@#$`). The shift key was pressed but the next key was sent before the VM registered shift, resulting in unshifted characters (e.g., `:` became `;`).
+
+**Fix:** Added `sleep "$SLEEP"` after pressing shift in `send_shifted_key()` function.
+
+**Testing approach:**
+1. Run: `./scripts/prl-type.sh "TEST: @#$ /dev/sda2"`
+2. Verify with screenshot: `prlctl capture <VM> --file /tmp/test.png`
+3. Check that colons, uppercase, and symbols appear correctly
+
+### Input Methods
+Users can choose between:
+1. **Manual typing** in Parallels VM console window — most reliable
+2. **Scripted via prl-type.sh** — convenient for Claude assist, requires working script
+
+When automation fails, fall back to manual typing. The docs should mention both options.
+
+### LUKS Passphrase Management
+- Template uses a known passphrase (e.g., `4815162342`)
+- After cloning, change it: `sudo cryptsetup luksChangeKey /dev/sda2`
+- This allows automation during template creation while maintaining security for real VMs
+
+</lessons_learned>
 
 <deferred>
 ## Deferred Ideas

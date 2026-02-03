@@ -13,7 +13,7 @@ This roadmap delivers a reproducible workflow for creating Intune-compliant Arch
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: VM Template Creation** - Encrypted base VM with GRUB bootloader ready for cloning
-- [ ] **Phase 2: Rosetta and Nix Infrastructure** - x86_64 emulation and package management working
+- [x] **Phase 2: Rosetta and Nix Infrastructure** - x86_64 emulation and package management working
 - [ ] **Phase 3: VM Automation Scripts** - Clone and setup scripts for reproducible VM creation
 - [ ] **Phase 4: Nix Module Refactoring** - Clean, lean intune-rosetta module with proper abstractions
 - [ ] **Phase 5: Intune Components** - Portal, brokers, and YubiKey integration functional
@@ -53,8 +53,8 @@ Plans:
 **Plans**: 2 plans (Wave 1 -> Wave 2)
 
 Plans:
-- [ ] 02-01-PLAN.md - Create idempotent prerequisites.sh script
-- [ ] 02-02-PLAN.md - Validate script on fresh VM clone, test reboot survival
+- [x] 02-01-PLAN.md - Create idempotent prerequisites.sh script
+- [x] 02-02-PLAN.md - Validate script on fresh VM clone, test reboot survival
 
 ### Phase 3: VM Automation Scripts
 **Goal**: Create scripts for cloning template and post-clone configuration, enabling reproducible VM creation from macOS.
@@ -134,7 +134,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. VM Template Creation | 4/4 | Complete | 2026-02-02 |
-| 2. Rosetta and Nix Infrastructure | 0/2 | Planned | - |
+| 2. Rosetta and Nix Infrastructure | 2/2 | Complete | 2026-02-02 |
 | 3. VM Automation Scripts | 0/? | Not started | - |
 | 4. Nix Module Refactoring | 0/? | Not started | - |
 | 5. Intune Components | 0/? | Not started | - |
@@ -143,5 +143,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 ---
 *Created: 2026-01-31*
-*Last updated: 2026-02-02 (Phase 2 planned - 2 plans in 2 waves)*
+*Last updated: 2026-02-02 (Phase 2 complete)*
 *Requirements: 26 mapped*
