@@ -116,11 +116,13 @@ grub-mkconfig -o /boot/grub/grub.cfg
 # Verify initrd is in config
 grep "initrd" /boot/grub/grub.cfg
 
-# Set GRUB as default boot entry
-efibootmgr -v
-# Note the GRUB boot number (e.g., Boot0001)
-# Set it as first boot option:
-efibootmgr -o 0001  # Adjust number as needed
+# CRITICAL: Override Limine's fallback boot with GRUB
+# Armarchy installs Limine to /boot/EFI/BOOT/BOOTAA64.EFI (fallback path)
+# EFI firmware uses this path regardless of efibootmgr order
+cp /boot/EFI/GRUB/grubaa64.efi /boot/EFI/BOOT/BOOTAA64.EFI
+
+# Verify the copy (should be ~160KB, not ~90KB like Limine)
+ls -la /boot/EFI/BOOT/BOOTAA64.EFI
 
 # Now reboot
 reboot
