@@ -64,10 +64,10 @@ Plans:
   1. prlctl script clones template to new VM with specified name
   2. Post-clone script configures VM settings (CPU, memory, shared folders)
   3. Scripts work from macOS without manual VM console access
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: TBD
+- [ ] 03-01-PLAN.md - Create clone-encrypted-vm.sh and setup-clone.sh automation scripts
 
 ### Phase 4: Nix Module Refactoring
 **Goal**: Refactor intune-rosetta.nix to be lean, well-designed, with named abstractions for library paths and single architecture detection.
@@ -135,7 +135,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 |-------|----------------|--------|-----------|
 | 1. VM Template Creation | 4/4 | Complete | 2026-02-02 |
 | 2. Rosetta and Nix Infrastructure | 2/2 | Complete | 2026-02-02 |
-| 3. VM Automation Scripts | 0/? | Not started | - |
+| 3. VM Automation Scripts | 0/1 | Planned | - |
 | 4. Nix Module Refactoring | 0/? | Not started | - |
 | 5. Intune Components | 0/? | Not started | - |
 | 6. Enrollment and Compliance | 0/? | Not started | - |
@@ -143,5 +143,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 ---
 *Created: 2026-01-31*
-*Last updated: 2026-02-02 (Phase 2 complete)*
+*Last updated: 2026-02-02 (Phase 3 planned)*
 *Requirements: 26 mapped*
