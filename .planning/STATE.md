@@ -5,33 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-01-31)
 
 **Core value:** A developer can create an Intune-compliant Linux workstation on Apple Silicon by following documented steps, with automation for error-prone parts.
-**Current focus:** Phase 1 - VM Template Creation
+**Current focus:** Phase 2 - Rosetta and Nix Infrastructure
 
 ## Current Position
 
-Phase: 1 of 7 (VM Template Creation)
-Plan: 4 of 4 in current phase
-Status: COMPLETE
-Last activity: 2026-02-02 — Completed 01-04-PLAN.md (Clone Workflow Documentation)
+Phase: 2 of 7 (Rosetta and Nix Infrastructure)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 02-01-PLAN.md (Prerequisites Script)
 
-Progress: [██░░░░░░░░] ~14%
+Progress: [███░░░░░░░] ~21%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: ~30min (interactive docs testing)
-- Total execution time: ~3 hours (with debugging)
+- Total plans completed: 5
+- Average duration: ~25min
+- Total execution time: ~3.5 hours (with debugging)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 4 | ~3h | ~45min |
+| 02 | 1 | 2min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (3m), 01-02 (45m), 01-03 (60m), 01-04 (20m)
-- Trend: Documentation testing complete
+- Last 5 plans: 01-02 (45m), 01-03 (60m), 01-04 (20m), 02-01 (2m)
+- Trend: Automation scripts execute quickly
 
 *Updated after each plan completion*
 
@@ -50,6 +51,8 @@ Recent decisions affecting current work:
 - [01-02]: prl-type.sh needs delay after shift press for reliable shifted chars
 - [01-03]: Option B chosen - clone from EncryptedBase-GRUB, run armarchy fresh
 - [01-03]: Critical fix: copy GRUB efi to fallback boot path (armarchy installs Limine there)
+- [02-01]: systemd path unit for Rosetta binfmt boot survival (watches for binary appearance)
+- [02-01]: Manual steps kept as collapsible fallback in README
 
 ### Pending Todos
 
@@ -62,6 +65,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed Phase 1 (all 4 plans)
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None
-Next: Phase 2 (Rosetta and Nix Infrastructure)
+Next: 02-02-PLAN.md (home-manager integration verification)
