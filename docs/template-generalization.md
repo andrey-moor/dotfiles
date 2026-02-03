@@ -1,224 +1,243 @@
-# VM Template Generalization and Cloning
+# VM Clone Workflow
 
-Generalize an Omarchy VM into a reusable template and create clones. Generalization removes machine-specific identifiers so each clone gets unique IDs on first boot.
+Create new Arch Linux ARM VMs by cloning from the encrypted base snapshot and running Omarchy installation fresh. This approach is simpler than post-Omarchy generalization because each clone gets unique identifiers during the fresh install.
+
+## Overview
+
+**Clone Strategy (Option B):**
+- Clone point: `EncryptedBase-GRUB` snapshot (LUKS+GRUB, before Omarchy)
+- Each clone: Runs armarchy fresh with real user credentials
+- Rationale: Simpler than username/key generalization; Omarchy install takes ~15 minutes
+
+**Why not generalize after Omarchy?**
+- Omarchy creates user-specific configs (username, SSH keys, dotfiles)
+- Generalizing username requires complex sed/mv operations
+- Fresh install guarantees clean, unique identifiers
 
 ## Prerequisites
 
-- Working Omarchy system with GRUB+LUKS from [omarchy-grub-install.md](omarchy-grub-install.md)
-- VM boots and decrypts successfully
-- Hyprland desktop works
+- Working ArchBase-Template VM with `EncryptedBase-GRUB` snapshot
+- Snapshot created per [arch-arm-encrypted-install.md](arch-arm-encrypted-install.md)
+- LUKS passphrase: 4815162342 (change after clone if desired)
 
-## Step 1: Generalize the System
+## Step 1: Clone from Encrypted Base
 
-Remove machine-specific identifiers before creating the template.
+From macOS host:
 
 ```bash
-# Login to the VM (as root or with sudo)
+# List available snapshots
+prlctl snapshot-list ArchBase-Template
 
-# Set hostname to generic template name
-echo "archbase" > /etc/hostname
+# Clone from the encrypted base snapshot (before Omarchy)
+# Use --id with the EncryptedBase-GRUB snapshot UUID
+prlctl clone ArchBase-Template --name "YourNewVM" --id "{snapshot-uuid}"
 
-# Clear machine-id (will regenerate on first boot of each clone)
-# IMPORTANT: truncate, don't delete - file must exist but be empty
-truncate -s 0 /etc/machine-id
+# Or clone from current state if VM is at EncryptedBase-GRUB
+prlctl clone ArchBase-Template --name "YourNewVM"
 
-# Remove SSH host keys (will regenerate on first boot)
-rm -f /etc/ssh/ssh_host_*
-
-# Clear pacman cache to reduce template size
-pacman -Scc --noconfirm
-
-# Clear shell history
-rm -f /root/.bash_history
-rm -f /home/*/.bash_history
-rm -f /home/*/.zsh_history
-history -c
-
-# Clear temporary files
-rm -rf /tmp/*
-rm -rf /var/tmp/*
-
-# Clear logs (optional, reduces size)
-journalctl --vacuum-time=1s
-
-# Verify encryption is working
-cryptsetup status cryptroot
-
-# Shutdown cleanly
-shutdown -h now
+# Verify clone exists
+prlctl list -a | grep YourNewVM
 ```
 
-## Step 2: Create Template Snapshot
+**Clone Types:**
+- Full clone (default): Independent copy, can delete template
+- Linked clone (`--linked`): Shares base disk, smaller, template must be kept
 
-After shutdown, create the final template snapshot from macOS host.
+## Step 2: Configure VM Settings (Optional)
 
 ```bash
-# Create template snapshot
-prlctl snapshot "YourVMName" -n "Template-Ready-$(date +%Y-%m-%d)" -d "Generalized LUKS+GRUB+Omarchy template"
+# Set CPU and memory (adjust as needed)
+prlctl set "YourNewVM" --cpus 4 --memsize 8192
 
-# Verify snapshot
-prlctl snapshot-list "YourVMName"
+# Ensure shared folders are enabled
+prlctl set "YourNewVM" --shf-host on
 
-# Check template size
-du -sh ~/Parallels/YourVMName.pvm
+# Configure specific shared folder
+prlctl set "YourNewVM" --shf-host-add Home --path /Users/yourusername
+
+# Ensure Rosetta is enabled
+prlctl set "YourNewVM" --rosetta-linux on
 ```
 
-**Naming convention**: Use `Template-Ready-YYYY-MM-DD` for easy identification.
-
-## Step 3: Clone from Template
-
-Create a new VM from the template.
+## Step 3: Start and Install Omarchy
 
 ```bash
-# Clone the VM
-# --name: Name for the new clone
-# Full clone (independent copy):
-prlctl clone "YourVMName" --name "NewVMName"
-
-# Or linked clone (shares base disk, smaller):
-prlctl clone "YourVMName" --name "NewVMName" --linked
-
 # Start the clone
-prlctl start "NewVMName"
+prlctl start "YourNewVM"
 ```
 
-**Full vs Linked Clone**:
-- **Full clone**: Complete independent copy, larger disk usage, can delete template
-- **Linked clone**: Shares base disk with template, smaller, template must be kept
+**In VM console:**
 
-## Step 4: Configure Clone
+1. Enter LUKS passphrase (4815162342)
+2. Login as root
+3. Follow [omarchy-grub-install.md](omarchy-grub-install.md) starting from Step 2 (backup GRUB)
 
-After booting the clone, configure machine-specific settings.
+**Quick reference:**
 
-### Set New Hostname
 ```bash
-# Set unique hostname
-echo "your-new-hostname" | sudo tee /etc/hostname
+# Backup GRUB
+mkdir -p /root/grub-backup
+cp -a /boot/grub /root/grub-backup/
+cp -a /boot/EFI/GRUB /root/grub-backup/EFI-GRUB 2>/dev/null || true
 
-# Update /etc/hosts if needed
-sudo vim /etc/hosts
-# Add: 127.0.1.1 your-new-hostname
+# Install wget and run armarchy
+pacman -S wget --noconfirm
+curl -fsSL hdwy.link/armarchy-3-x | bash
+
+# Enter YOUR username and password when prompted
+# Password must meet: 12+ chars, uppercase, lowercase, digit, symbol
+
+# IMPORTANT: After armarchy, BEFORE rebooting:
+# Restore GRUB
+cp -a /root/grub-backup/grub /boot/
+grub-install --target=arm64-efi --efi-directory=/boot --bootloader-id=GRUB
+grub-mkconfig -o /boot/grub/grub.cfg
+
+# CRITICAL: Override Limine's fallback boot with GRUB
+cp /boot/EFI/GRUB/grubaa64.efi /boot/EFI/BOOT/BOOTAA64.EFI
+
+# Verify (should be ~160KB, not ~90KB)
+ls -la /boot/EFI/BOOT/BOOTAA64.EFI
+
+# Now reboot
+reboot
 ```
 
-### Verify Machine ID Regenerated
+## Step 4: Verify and Finalize
+
+After reboot:
+
+1. **GRUB appears** (not Limine)
+2. **LUKS passphrase prompt** - enter passphrase
+3. **Login** with credentials you created in armarchy
+
 ```bash
-# Machine ID should be regenerated on first boot
-cat /etc/machine-id
-# Should show a new UUID (32 hex characters)
+# Verify Wayland session
+echo $XDG_SESSION_TYPE  # Should show: wayland
+
+# Verify encryption
+sudo cryptsetup status cryptroot  # Should show: LUKS2
+
+# Verify shared folders (for dotfiles access)
+ls /mnt/psf/Home/Documents/dotfiles
+
+# Verify Rosetta
+cat /proc/sys/fs/binfmt_misc/rosetta 2>/dev/null || echo "Rosetta not configured yet"
 ```
 
-### Regenerate SSH Host Keys
-```bash
-# If not auto-generated, create new keys
-sudo ssh-keygen -A
+## Step 5: Change LUKS Passphrase (Recommended)
 
-# Verify keys exist
-ls -la /etc/ssh/ssh_host_*
-```
-
-### Change LUKS Passphrase
-
-For security, change the template passphrase to a unique one.
+For security, change the template passphrase to something unique.
 
 ```bash
-# Change LUKS passphrase
 sudo cryptsetup luksChangeKey /dev/sda2
-
-# Prompts:
-# - Enter current passphrase (template passphrase)
-# - Enter new passphrase
-# - Confirm new passphrase
+# Enter current passphrase: 4815162342
+# Enter new passphrase
+# Confirm new passphrase
 ```
 
-### Configure User Account (if needed)
-```bash
-# If you want to change the username created by armarchy:
-# 1. Create new user
-sudo useradd -m -G wheel -s /bin/bash newuser
-sudo passwd newuser
+## Step 6: Create Omarchy-Ready Snapshot (Optional)
 
-# 2. Copy desktop config (optional)
-sudo cp -r /home/olduser/.config /home/newuser/
-sudo chown -R newuser:newuser /home/newuser/
-
-# 3. Remove old user (after verifying new user works)
-sudo userdel -r olduser
-```
-
-## Verification
-
-Verify the clone is properly individualized.
+If you want a restore point after successful Omarchy setup:
 
 ```bash
-# Verify hostname is unique
-hostname
-
-# Verify machine-id is unique (compare to template if possible)
-cat /etc/machine-id
-
-# Verify SSH host keys exist and are different from template
-ls -la /etc/ssh/ssh_host_*
-
-# Verify LUKS works with new passphrase
-# (reboot and test decryption)
-sudo reboot
+# Shutdown VM
+sudo shutdown -h now
 ```
 
-After reboot, confirm:
-1. LUKS passphrase prompt appears
-2. New passphrase works
-3. Hostname is correct
-4. Desktop loads properly
+From macOS:
+```bash
+prlctl snapshot "YourNewVM" -n "Omarchy-Ready" -d "Working GRUB+LUKS+Omarchy"
+```
+
+## Quick Clone Script
+
+For rapid cloning, create `scripts/clone-arch-vm.sh`:
+
+```bash
+#!/bin/bash
+# Clone Arch Linux VM from encrypted base
+# Usage: ./clone-arch-vm.sh <new-vm-name>
+
+set -euo pipefail
+
+VM_NAME="${1:-}"
+TEMPLATE="ArchBase-Template"
+SNAPSHOT_NAME="EncryptedBase-GRUB"
+
+if [[ -z "$VM_NAME" ]]; then
+    echo "Usage: $0 <new-vm-name>"
+    exit 1
+fi
+
+# Find snapshot ID
+SNAPSHOT_ID=$(prlctl snapshot-list "$TEMPLATE" | grep "$SNAPSHOT_NAME" | grep -oE '\{[^}]+\}' | head -1)
+
+if [[ -z "$SNAPSHOT_ID" ]]; then
+    echo "Error: Snapshot '$SNAPSHOT_NAME' not found in $TEMPLATE"
+    exit 1
+fi
+
+echo "Cloning $TEMPLATE (snapshot: $SNAPSHOT_NAME) -> $VM_NAME"
+prlctl clone "$TEMPLATE" --name "$VM_NAME" --id "$SNAPSHOT_ID"
+
+echo "Configuring VM..."
+prlctl set "$VM_NAME" --cpus 4 --memsize 8192
+prlctl set "$VM_NAME" --shf-host on
+prlctl set "$VM_NAME" --rosetta-linux on
+
+echo ""
+echo "Clone created: $VM_NAME"
+echo ""
+echo "Next steps:"
+echo "  1. prlctl start \"$VM_NAME\""
+echo "  2. Enter LUKS passphrase: 4815162342"
+echo "  3. Run armarchy installer (see omarchy-grub-install.md)"
+echo "  4. Apply GRUB fix before reboot"
+echo ""
+```
 
 ## Troubleshooting
 
-### Clone Fails to Boot
+### Limine Boots Instead of GRUB
+
+If you see "Omarchy Bootloader" after armarchy install:
 
 ```bash
-# Boot from archboot ISO
+# From emergency shell:
 cryptsetup open /dev/sda2 cryptroot
-mount /dev/mapper/cryptroot /mnt
-mount /dev/sda1 /mnt/boot
-arch-chroot /mnt
-
-# Check GRUB config
-grep "cryptdevice" /etc/default/grub
-
-# Regenerate initramfs and GRUB
-mkinitcpio -P
-grub-mkconfig -o /boot/grub/grub.cfg
+mount /dev/mapper/cryptroot /new_root
+mount /dev/sda1 /new_root/boot
+cp /new_root/boot/EFI/GRUB/grubaa64.efi /new_root/boot/EFI/BOOT/BOOTAA64.EFI
+reboot -f
 ```
 
-### Machine ID Not Regenerating
+### Clone Won't Start
 
 ```bash
-# If machine-id is empty but not regenerating:
-sudo systemd-machine-id-setup
+# Check VM status
+prlctl list -a | grep YourNewVM
 
-# Verify
-cat /etc/machine-id
+# Try stopping and starting
+prlctl stop "YourNewVM" --kill
+prlctl start "YourNewVM"
 ```
 
-### SSH Host Keys Not Generated
+### Shared Folders Not Visible
 
 ```bash
-# Generate all key types
-sudo ssh-keygen -A
+# In VM - check mount
+mount | grep psf
 
-# Restart SSH
-sudo systemctl restart sshd
-```
+# If not mounted, check if prtools is installed
+lsmod | grep prl
 
-### Revert Clone to Template State
-
-```bash
-# From macOS host - restore clone to template snapshot
-prlctl snapshot-list "NewVMName"
-prlctl snapshot-switch "NewVMName" -i "{snapshot-uuid}"
+# Remount manually
+sudo mount -t prl_fs Host /mnt/psf
 ```
 
 ## References
 
-- [Parallels CLI Reference - prlctl](https://download.parallels.com/desktop/v18/docs/en_US/Parallels%20Desktop%20Pro%20Edition%20Command-Line%20Reference.pdf)
-- [Arch Wiki - Machine ID](https://wiki.archlinux.org/title/Machine-id)
-- [cryptsetup man page](https://man.archlinux.org/man/cryptsetup.8)
+- [arch-arm-encrypted-install.md](arch-arm-encrypted-install.md) - Base LUKS+GRUB setup
+- [omarchy-grub-install.md](omarchy-grub-install.md) - Omarchy with GRUB preservation
+- [Parallels CLI Reference](https://download.parallels.com/desktop/v18/docs/en_US/Parallels%20Desktop%20Pro%20Edition%20Command-Line%20Reference.pdf)
