@@ -71,18 +71,20 @@ Plans:
 - [x] 03-01-PLAN.md - Restructure hosts/stargazer/README.md as comprehensive setup guide
 
 ### Phase 4: Nix Module Refactoring
-**Goal**: Refactor intune-rosetta.nix to be lean, well-designed, with named abstractions for library paths and single architecture detection.
+**Goal**: Merge intune-rosetta.nix and intune-nix.nix into a unified module with architecture detection, category-based library paths, and clean organization.
 **Depends on**: Phase 3
 **Requirements**: NIX-03, NIX-04, NIX-05
 **Success Criteria** (what must be TRUE):
   1. Single module handles both x86_64 and Rosetta architectures via detection
   2. Library paths use named variables (not inline paths) for maintainability
   3. Module is under 500 lines with clear section organization
-  4. Existing stargazer/endurance configurations still work after refactoring
-**Plans**: TBD
+  4. Existing stargazer/endurance/rocinante configurations still work after refactoring
+**Plans**: 3 plans (Wave 1 -> Wave 2 -> Wave 3)
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md - Create unified intune.nix with mode detection and library categories
+- [ ] 04-02-PLAN.md - Update host configs to use unified module
+- [ ] 04-03-PLAN.md - Validate builds on both architectures and archive old modules
 
 ### Phase 5: Intune Components
 **Goal**: Intune portal launches, brokers activate, and YubiKey is detected for authentication.
@@ -137,12 +139,12 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. VM Template Creation | 4/4 | Complete | 2026-02-02 |
 | 2. Rosetta and Nix Infrastructure | 2/2 | Complete | 2026-02-02 |
 | 3. VM Automation Scripts | 1/1 | Complete | 2026-02-02 |
-| 4. Nix Module Refactoring | 0/? | Not started | - |
+| 4. Nix Module Refactoring | 0/3 | Planned | - |
 | 5. Intune Components | 0/? | Not started | - |
 | 6. Enrollment and Compliance | 0/? | Not started | - |
 | 7. Documentation | 0/? | Not started | - |
 
 ---
 *Created: 2026-01-31*
-*Last updated: 2026-02-02 (Phase 3 complete)*
+*Last updated: 2026-02-03 (Phase 4 planned)*
 *Requirements: 26 mapped*
