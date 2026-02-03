@@ -165,7 +165,8 @@ else
 
     # Build glibc for x86_64 (this may take a while on first run)
     log "Building glibc for x86_64 (this may take a moment)..."
-    GLIBC_PATH=$(nix build --no-link --print-out-paths nixpkgs#pkgsCross.gnu64.glibc)
+    # Use .out to get the lib output (default is -bin which only has binaries)
+    GLIBC_PATH=$(nix build --no-link --print-out-paths 'nixpkgs#pkgsCross.gnu64.glibc.out')
 
     # Create /lib64 directory and symlink
     sudo mkdir -p /lib64
