@@ -24,7 +24,8 @@ The setup workflow:
 5. **GRUB Fix** - Restore GRUB bootloader (critical!)
 6. **Prerequisites** - Run Rosetta/Nix setup script
 7. **Home-Manager** - Apply Nix configuration
-8. **Intune** - Configure Microsoft Intune components
+8. **Intune** - Run `intune-prerequisites` to configure components
+9. **Verify** - Run `intune-health` to confirm everything works
 
 ---
 
@@ -239,6 +240,38 @@ The first run may take several minutes to download and build packages.
 
 Configure the Microsoft Intune components for device compliance.
 
+### Automated Setup (Recommended)
+
+Run the automated prerequisites script to configure all Intune components:
+
+```bash
+intune-prerequisites
+```
+
+This configures:
+- Device broker D-Bus policy and systemd service
+- User broker D-Bus activation
+- pcscd for YubiKey/smart card support
+- PKCS#11 modules for certificate access
+- Keyring default
+- PAM password policy for Intune compliance
+- Intune agent timer
+
+The script is idempotent - safe to run multiple times. Each section shows either `[+]` (applied) or `[=]` (already configured).
+
+**Parallels Setting:** After running, enable **Hardware > USB & Bluetooth > Share smart card readers with Linux** in Parallels VM settings for YubiKey support.
+
+### Apply Chezmoi Configuration
+
+Home-manager installs packages and declarative configs. Chezmoi manages mutable user configs (neovim, nushell, etc.):
+
+```bash
+chezmoi apply
+```
+
+<details>
+<summary>Manual setup (for reference/debugging)</summary>
+
 ### 8.1 Device Broker D-Bus + Systemd
 
 The device broker handles Microsoft authentication:
@@ -367,35 +400,37 @@ To trigger an immediate compliance report:
 intune-agent-rosetta
 ```
 
-### 8.6 Apply Chezmoi Configuration
-
-Home-manager installs packages and declarative configs. Chezmoi manages mutable user configs (neovim, nushell, etc.):
-
-```bash
-chezmoi apply
-```
+</details>
 
 ---
 
 ## 9. Verify
 
-Verify all components are working:
+Run the health check to verify all components are working:
 
 ```bash
-# Check all Intune components
-intune-status
-
-# Verify intune-agent timer is active
-systemctl --user list-timers
-
-# Check YubiKey reader (insert YubiKey first)
-pcsc_scan -r
-
-# Launch Intune portal
-intune-portal-rosetta
+intune-health
 ```
 
-To check compliance reporting:
+Expected output:
+- All critical checks show `[PASS]`
+- YubiKey check may show `[WARN]` if not inserted (that's OK)
+- Exit code 0 means all critical components are healthy
+
+### Additional Verification
+
+```bash
+# Check intune-agent timer is active
+systemctl --user list-timers | grep intune
+
+# Launch Intune portal (should show Microsoft login)
+intune-portal-rosetta
+
+# Insert YubiKey and check reader detection
+pcsc_scan -r
+```
+
+### Check Compliance Reporting
 
 ```bash
 # Trigger manual compliance report
