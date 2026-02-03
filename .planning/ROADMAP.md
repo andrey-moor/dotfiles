@@ -12,7 +12,7 @@ This roadmap delivers a reproducible workflow for creating Intune-compliant Arch
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: VM Template Creation** - Encrypted base VM with GRUB bootloader ready for cloning
+- [x] **Phase 1: VM Template Creation** - Encrypted base VM with GRUB bootloader ready for cloning
 - [ ] **Phase 2: Rosetta and Nix Infrastructure** - x86_64 emulation and package management working
 - [ ] **Phase 3: VM Automation Scripts** - Clone and setup scripts for reproducible VM creation
 - [ ] **Phase 4: Nix Module Refactoring** - Clean, lean intune-rosetta module with proper abstractions
@@ -132,7 +132,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. VM Template Creation | 0/4 | Ready | - |
+| 1. VM Template Creation | 4/4 | Complete | 2026-02-02 |
 | 2. Rosetta and Nix Infrastructure | 0/? | Not started | - |
 | 3. VM Automation Scripts | 0/? | Not started | - |
 | 4. Nix Module Refactoring | 0/? | Not started | - |
@@ -142,5 +142,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 ---
 *Created: 2026-01-31*
-*Last updated: 2026-02-02 (Phase 1 replanned: docs-first approach with 4 sequential plans)*
+*Last updated: 2026-02-02 (Phase 1 complete - VM template with LUKS+GRUB+Omarchy working)*
 *Requirements: 26 mapped*
