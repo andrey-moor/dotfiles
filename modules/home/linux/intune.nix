@@ -380,6 +380,162 @@ let
     echo ""
     echo "D-BUS: $([ -f ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service ] && echo 'Nix-managed' || echo 'system')"
     echo "VERSIONS: intune-portal ${intunePkg.version}, broker ${brokerPkg.version}"
+    echo ""
+    echo "For detailed diagnostics: intune-health"
+  '';
+
+  healthHelper = pkgs.writeShellScriptBin "intune-health" ''
+    #!/usr/bin/env bash
+    # intune-health: Comprehensive validation of Intune components
+    # Exit 0 if all critical components pass
+    # Exit 1 if any critical component fails
+
+    set -uo pipefail
+
+    # Colors for output
+    PASS="\033[32m[PASS]\033[0m"
+    FAIL="\033[31m[FAIL]\033[0m"
+    WARN="\033[33m[WARN]\033[0m"
+    INFO="\033[34m[INFO]\033[0m"
+
+    CRITICAL_FAILURES=0
+
+    check() {
+      local name="$1"
+      local critical="$2"
+      shift 2
+      if "$@" >/dev/null 2>&1; then
+        echo -e "$PASS $name"
+        return 0
+      else
+        if [[ "$critical" == "critical" ]]; then
+          echo -e "$FAIL $name"
+          ((CRITICAL_FAILURES++))
+        else
+          echo -e "$WARN $name (optional)"
+        fi
+        return 1
+      fi
+    }
+
+    hint() {
+      echo -e "      $INFO Hint: $1"
+    }
+
+    echo "=== INTUNE HEALTH CHECK (mode: ${if mode != null then mode else "unsupported"}) ==="
+    echo ""
+
+    # === SYSTEMD SERVICES ===
+    echo "--- Systemd Services ---"
+    if ! check "Device broker service running" critical systemctl is-active microsoft-identity-device-broker; then
+      hint "Run: intune-prerequisites && sudo systemctl start microsoft-identity-device-broker"
+    fi
+
+    if ! check "Device broker enabled at boot" optional systemctl is-enabled microsoft-identity-device-broker; then
+      hint "Run: sudo systemctl enable microsoft-identity-device-broker"
+    fi
+
+    if ! check "Intune agent timer enabled" optional systemctl --user is-enabled intune-agent.timer; then
+      hint "Run: systemctl --user enable --now intune-agent.timer"
+    fi
+    echo ""
+
+    # === D-BUS SERVICES ===
+    echo "--- D-Bus Services ---"
+    if ! check "Device broker on system bus" critical busctl --system list \| grep -q devicebroker; then
+      hint "Run: intune-prerequisites (installs D-Bus policy)"
+    fi
+
+    if ! check "User broker service file exists" critical test -f ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service; then
+      hint "Run: home-manager switch --flake .#\$(hostname)"
+    fi
+
+    # Test D-Bus activation works
+    if ! check "User broker D-Bus activates" critical busctl --user call com.microsoft.identity.broker1 /com/microsoft/identity/broker1 org.freedesktop.DBus.Peer Ping; then
+      hint "Check: cat ~/.local/share/dbus-1/services/com.microsoft.identity.broker1.service"
+    fi
+    echo ""
+
+    # === PCSCD / SMART CARD ===
+    echo "--- Smart Card (pcscd) ---"
+    if ! check "pcscd service running" critical systemctl is-active pcscd.service; then
+      if ! systemctl is-active pcscd.socket >/dev/null 2>&1; then
+        hint "Run: sudo systemctl start pcscd.socket"
+      fi
+    fi
+
+    if ! check "pcscd socket symlink exists" critical test -L /run/pcscd/pcscd; then
+      hint "Run: intune-prerequisites (creates tmpfiles symlink)"
+    fi
+    echo ""
+
+    # === PKCS#11 MODULE ===
+    echo "--- PKCS#11 Module ---"
+    OPENSC_MODULE=""
+    # Try user config first
+    if [[ -f ~/.config/pkcs11/modules/opensc.module ]]; then
+      OPENSC_MODULE=$(grep "^module:" ~/.config/pkcs11/modules/opensc.module 2>/dev/null | cut -d: -f2 | tr -d ' ')
+    fi
+    # Fall back to system config
+    if [[ -z "$OPENSC_MODULE" ]] && [[ -d /etc/pkcs11/modules ]]; then
+      OPENSC_MODULE=$(grep -h "^module:" /etc/pkcs11/modules/*.module 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' ')
+    fi
+
+    if ! check "OpenSC module configured" critical test -n "$OPENSC_MODULE"; then
+      hint "Run: intune-prerequisites (installs PKCS#11 modules)"
+    else
+      if ! check "OpenSC module file exists" critical test -f "$OPENSC_MODULE"; then
+        hint "Module path in config does not exist: $OPENSC_MODULE"
+      fi
+    fi
+    echo ""
+
+    # === YUBIKEY (optional) ===
+    echo "--- YubiKey (optional) ---"
+    if command -v pcsc_scan >/dev/null 2>&1 && pcsc_scan -r 2>/dev/null | grep -qi "yubikey\|piv"; then
+      check "YubiKey detected by pcscd" optional true
+      if [[ -n "$OPENSC_MODULE" ]] && [[ -f "$OPENSC_MODULE" ]]; then
+        if ! check "PIV certificates accessible" optional pkcs11-tool --module "$OPENSC_MODULE" --list-objects --type cert 2>/dev/null \| grep -q "Certificate"; then
+          hint "Insert YubiKey and unlock with PIN"
+        fi
+      fi
+    else
+      echo -e "$WARN YubiKey not inserted - skipping certificate checks"
+      hint "Insert YubiKey for authentication"
+    fi
+    echo ""
+
+    # === SUMMARY ===
+    echo "--- Summary ---"
+    if [[ $CRITICAL_FAILURES -eq 0 ]]; then
+      echo -e "$PASS All critical components healthy"
+      echo ""
+      echo "Ready to launch: intune-portal${wrapperSuffix}"
+      exit 0
+    else
+      echo -e "$FAIL $CRITICAL_FAILURES critical failure(s)"
+      echo ""
+      echo "Run 'intune-prerequisites' to fix common issues"
+      exit 1
+    fi
+  '';
+
+  prereqHelper = pkgs.writeShellScriptBin "intune-prerequisites" ''
+    #!/usr/bin/env bash
+    # Wrapper to run intune-prerequisites.sh from dotfiles
+    DOTFILES="''${DOTFILES:-$HOME/.dotfiles}"
+    # Also check common mount path for Parallels
+    if [[ ! -d "$DOTFILES" ]] && [[ -d "/mnt/psf/Home/Documents/dotfiles" ]]; then
+      DOTFILES="/mnt/psf/Home/Documents/dotfiles"
+    fi
+    SCRIPT="$DOTFILES/scripts/intune-prerequisites.sh"
+    if [[ -f "$SCRIPT" ]]; then
+      exec "$SCRIPT" "$@"
+    else
+      echo "Error: intune-prerequisites.sh not found at $SCRIPT"
+      echo "Set DOTFILES env var to your dotfiles location"
+      exit 1
+    fi
   '';
 
 in {
@@ -401,7 +557,7 @@ in {
       # Tools: keyring, YubiKey, helpers, wrappers
       pkgs.gnome-keyring pkgs.seahorse pkgs.libsecret
       pkgs.yubikey-manager pkgs.pcsc-tools pkgs.nss.tools
-      logsHelper statusHelper
+      logsHelper statusHelper healthHelper prereqHelper
       intuneWrapper intuneAgentWrapper userBrokerWrapper deviceBrokerWrapper userBrokerDbusService
       # Libraries (pkgSource resolves based on mode)
       libglvnd wayland mesa glib-networking gnutls nettle libtasn1 libidn2
@@ -477,6 +633,9 @@ trust-policy: no
         ${optionalString isRosetta ''
         noteEcho "Intune: Rosetta mode - verify binfmt with: cat /proc/sys/fs/binfmt_misc/rosetta"
         ''}
+        if ! systemctl is-active microsoft-identity-device-broker >/dev/null 2>&1; then
+          noteEcho "Intune: Device broker not running - run: intune-prerequisites"
+        fi
         if ! systemctl --user is-enabled intune-agent.timer >/dev/null 2>&1; then
           noteEcho "Intune: Enable agent timer with: systemctl --user enable --now intune-agent.timer"
         fi
