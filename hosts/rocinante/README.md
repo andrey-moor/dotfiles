@@ -21,7 +21,8 @@ chezmoi apply
 
 ## Intune Enrollment
 
-The `intune-nix` module provides full Nix library chain to avoid ABI issues with Arch system libs.
+The `intune` module provides full Nix library chain to avoid ABI issues with Arch system libs.
+It auto-detects x86_64-linux and uses native packages (no Rosetta emulation needed).
 
 ### 1. Install AUR Packages
 
