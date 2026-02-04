@@ -22,8 +22,7 @@ with lib;
 
     # Enable modules
     modules = {
-      # Mounted from macOS via Parallels shared folders
-      dotfilesDir = "/mnt/psf/Home/Documents/dotfiles";
+      dotfilesDir = "~/dotfiles";
 
       profiles.user = "andreym";
 
