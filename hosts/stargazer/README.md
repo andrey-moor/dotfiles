@@ -14,7 +14,7 @@ Encrypted Arch Linux ARM VM in Parallels with LUKS for Microsoft Intune complian
 ```
 1. Import    → Import template, configure VM
 2. Boot      → Enter LUKS passphrase, log in as root
-3. Security  → Change LUKS passphrase
+3. Security  → Change LUKS passphrase, root password, hostname
 4. Omarchy   → Install desktop (armarchy)
 5. GRUB Fix  → Restore GRUB bootloader (critical!)
 6. Prereqs   → Run prerequisites.sh (Rosetta + Nix)
@@ -63,15 +63,33 @@ prlctl start stargazer
 
 ---
 
-## 3. Change LUKS Passphrase
+## 3. Security Setup
 
-**Do this immediately** - the template uses a known passphrase.
+**Do this immediately** - the template uses known credentials.
+
+### Change LUKS Passphrase
 
 ```bash
 cryptsetup luksChangeKey /dev/vda2
 ```
 
 Enter current passphrase (`4815162342`), then your new passphrase twice.
+
+### Change Root Password
+
+```bash
+passwd
+```
+
+Enter a new root password (this is separate from your user password created later).
+
+### Set Hostname
+
+```bash
+hostnamectl set-hostname stargazer
+```
+
+Replace `stargazer` with your desired hostname. This is what appears in Intune.
 
 ---
 
