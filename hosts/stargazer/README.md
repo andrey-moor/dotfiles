@@ -66,6 +66,22 @@ prlctl set stargazer --rosetta-linux on
 prlctl set stargazer --shf-host on
 ```
 
+### Verification
+
+```bash
+prlctl list -a | grep stargazer
+# Expected: stargazer listed as "stopped"
+
+prlctl list -i stargazer | grep -E "(cpu|memory|rosetta|shf)"
+# Expected: cpus=4, memsize=8192, rosetta=on, shf-host=on
+```
+
+- [ ] VM listed with correct name
+- [ ] 4 CPUs and 8GB RAM configured
+- [ ] Rosetta and shared folders enabled
+
+**If verification fails:** See [Troubleshooting: Clone Won't Start](../../docs/TROUBLESHOOTING.md#clone-wont-start)
+
 ---
 
 ## 2. First Boot
@@ -79,6 +95,14 @@ prlctl start stargazer
 **At LUKS prompt:** Enter passphrase `4815162342`
 
 **At login:** Username `root`, password `481516`
+
+### Verification
+
+- [ ] GRUB menu appeared (not Limine)
+- [ ] LUKS passphrase prompt accepted `4815162342`
+- [ ] Logged in as root successfully
+
+**If verification fails:** See [Troubleshooting: No LUKS Passphrase Prompt](../../docs/TROUBLESHOOTING.md#no-luks-passphrase-prompt)
 
 ---
 
@@ -110,6 +134,22 @@ hostnamectl set-hostname stargazer
 
 Replace `stargazer` with your desired hostname.
 
+### Verification
+
+```bash
+hostnamectl
+# Expected: hostname shows new name
+
+cat /etc/hostname
+# Expected: new hostname only
+```
+
+- [ ] LUKS passphrase changed (test with `cryptsetup luksDump /dev/vda2`)
+- [ ] Root password changed
+- [ ] Hostname updated
+
+**Note:** LUKS change verified on next reboot. Don't forget your new passphrase!
+
 ---
 
 ## 4. Install Omarchy
@@ -125,6 +165,22 @@ Follow prompts to create your user account.
 - At least 1 uppercase, 1 lowercase, 1 digit, 1 symbol
 
 **DO NOT REBOOT when prompted!** You must fix GRUB first.
+
+### Verification
+
+```bash
+id yourusername
+# Expected: uid and gid shown
+
+ls -la /home/yourusername
+# Expected: home directory exists
+```
+
+- [ ] User created with username you specified
+- [ ] Password meets Intune requirements (12+ chars, mixed case, digit, symbol)
+- [ ] **Did NOT reboot yet** (GRUB fix required first)
+
+**If armarchy fails:** Re-run the curl command. Script is idempotent.
 
 ---
 
@@ -149,6 +205,24 @@ sudo reboot
 ```
 
 After reboot, log in as your new user (not root).
+
+### Verification
+
+```bash
+ls -la /boot/EFI/BOOT/BOOTAA64.EFI
+# Expected: ~160KB (158720 bytes), not ~90KB
+
+file /boot/EFI/BOOT/BOOTAA64.EFI
+# Expected: "PE32+ executable (EFI application)"
+```
+
+- [ ] File size is ~160KB (GRUB), not ~90KB (Limine)
+- [ ] File is valid EFI executable
+- [ ] Reboot completed successfully
+- [ ] LUKS prompt appeared with your new passphrase
+- [ ] Logged in as your user (not root)
+
+**If verification fails:** See [Troubleshooting: Limine Boots Instead of GRUB](../../docs/TROUBLESHOOTING.md#limine-boots-instead-of-grub)
 
 ---
 
