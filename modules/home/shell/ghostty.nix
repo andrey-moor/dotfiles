@@ -6,8 +6,8 @@ with lib;
 let
   cfg = config.modules.shell.ghostty;
 
-  # On aarch64-linux VMs with virtio_gpu/virgl, Nix-built ghostty can't find
-  # system DRI drivers. We wrap it with paths pointing to system mesa/EGL.
+  # On aarch64-linux VMs with virtio_gpu/virgl, OpenGL is limited to 4.0 but
+  # Ghostty requires 4.3. Force software rendering (llvmpipe) which supports 4.6.
   # On x86_64-linux, wrap with nixGL for GPU support.
   # On macOS, use Homebrew.
   wrappedGhostty = pkgs.symlinkJoin {
@@ -16,8 +16,7 @@ let
     buildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
       wrapProgram $out/bin/ghostty \
-        --set LIBGL_DRIVERS_PATH /usr/lib/dri \
-        --set __EGL_VENDOR_LIBRARY_DIRS /usr/share/glvnd/egl_vendor.d
+        --set LIBGL_ALWAYS_SOFTWARE 1
     '';
   };
 
