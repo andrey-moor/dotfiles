@@ -1,5 +1,9 @@
 # Stargazer Setup
 
+> **Last updated:** 2026-02-03
+> **Intune Portal:** 1.2511.7 | **Broker:** 2.10.90 | **OpenSSL:** 3.3.2
+> **Template:** ArchBase-LUKS-GRUB.pvmp v1.0
+
 Encrypted Arch Linux ARM VM in Parallels with LUKS for Microsoft Intune compliance.
 
 ## Prerequisites
@@ -22,6 +26,21 @@ Encrypted Arch Linux ARM VM in Parallels with LUKS for Microsoft Intune complian
 8. Intune    → Run intune-prerequisites + create keyring
 9. Enroll    → Launch intune-portal and enroll device
 ```
+
+---
+
+## Pre-Flight Checklist
+
+Before starting, verify these requirements:
+
+- [ ] macOS on Apple Silicon (M1/M2/M3)
+- [ ] Parallels Desktop Pro or Business installed
+- [ ] Dotfiles cloned to `~/Documents/dotfiles`
+- [ ] Template file available (`ArchBase-LUKS-GRUB.pvmp` or existing ArchBase-Template VM)
+- [ ] 30+ minutes for full setup (mostly waiting for downloads)
+- [ ] YubiKey available for enrollment step (optional - can enroll later)
+
+**Tip:** Create VM snapshots before major changes. If something breaks, restore and retry.
 
 ---
 
