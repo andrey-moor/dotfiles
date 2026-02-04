@@ -7,7 +7,7 @@ let
   cfg = config.modules.shell.ghostty;
 
   # On aarch64-linux VMs with virtio_gpu/virgl, Nix-built ghostty can't find
-  # system DRI drivers. We wrap it with LIBGL_DRIVERS_PATH pointing to system mesa.
+  # system DRI drivers. We wrap it with paths pointing to system mesa/EGL.
   # On x86_64-linux, wrap with nixGL for GPU support.
   # On macOS, use Homebrew.
   wrappedGhostty = pkgs.symlinkJoin {
@@ -16,7 +16,8 @@ let
     buildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
       wrapProgram $out/bin/ghostty \
-        --set LIBGL_DRIVERS_PATH /usr/lib/dri
+        --set LIBGL_DRIVERS_PATH /usr/lib/dri \
+        --set __EGL_VENDOR_LIBRARY_DIRS /usr/share/glvnd/egl_vendor.d
     '';
   };
 
