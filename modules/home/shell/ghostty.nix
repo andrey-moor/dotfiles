@@ -10,13 +10,20 @@ let
   # system DRI drivers. We wrap it with LIBGL_DRIVERS_PATH pointing to system mesa.
   # On x86_64-linux, wrap with nixGL for GPU support.
   # On macOS, use Homebrew.
+  wrappedGhostty = pkgs.symlinkJoin {
+    name = "ghostty-wrapped";
+    paths = [ pkgs.ghostty ];
+    buildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram $out/bin/ghostty \
+        --set LIBGL_DRIVERS_PATH /usr/lib/dri
+    '';
+  };
+
   ghosttyPkg = if pkgs.stdenv.isDarwin
     then null  # macOS uses Homebrew
     else if pkgs.stdenv.isAarch64
-    then lib.hiPrio (pkgs.writeShellScriptBin "ghostty" ''
-      export LIBGL_DRIVERS_PATH=/usr/lib/dri
-      exec ${pkgs.ghostty}/bin/ghostty "$@"
-    '')
+    then lib.hiPrio wrappedGhostty
     else lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);  # x86_64: needs nixGL
 in {
   options.modules.shell.ghostty = {
