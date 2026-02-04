@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: VM Automation Scripts** - Clone and setup scripts for reproducible VM creation
 - [x] **Phase 4: Nix Module Refactoring** - Clean, lean intune-rosetta module with proper abstractions
 - [x] **Phase 5: Intune Components** - Portal, brokers, and YubiKey integration functional
-- [ ] **Phase 6: Enrollment and Compliance** - Device enrolls and reports compliance status
+- [x] **Phase 6: Enrollment and Compliance** - Device enrolls and reports compliance status
 - [ ] **Phase 7: Documentation** - E2E guide, troubleshooting, and upgrade procedures
 
 ## Phase Details
@@ -112,10 +112,12 @@ Plans:
   2. intune-agent systemd timer runs and reports compliance status
   3. Edge browser recognizes YubiKey for web authentication
   4. Compliance check passes (LUKS encryption detected, password policy met)
-**Plans**: TBD
+**Plans**: 3 plans (Wave 1 -> Wave 2 -> Wave 3)
 
 Plans:
-- [ ] 06-01: TBD
+- [x] 06-01-PLAN.md — Create fresh VM from template, apply Nix and prerequisites
+- [x] 06-02-PLAN.md — Enroll device with YubiKey and verify compliance
+- [~] 06-03-PLAN.md — Edge browser YubiKey setup (skipped - optional)
 
 ### Phase 7: Documentation
 **Goal**: Document the complete setup process, troubleshooting guides, and upgrade procedures.
@@ -143,10 +145,10 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. VM Automation Scripts | 1/1 | Complete | 2026-02-02 |
 | 4. Nix Module Refactoring | 3/3 | Complete | 2026-02-03 |
 | 5. Intune Components | 3/3 | Complete | 2026-02-03 |
-| 6. Enrollment and Compliance | 0/? | Not started | - |
+| 6. Enrollment and Compliance | 2/3 | Complete | 2026-02-03 |
 | 7. Documentation | 0/? | Not started | - |
 
 ---
 *Created: 2026-01-31*
-*Last updated: 2026-02-03 (Phase 5 complete)*
+*Last updated: 2026-02-03 (Phase 6 complete)*
 *Requirements: 26 mapped*

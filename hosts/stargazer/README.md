@@ -81,7 +81,7 @@ Enter current passphrase (`4815162342`), then your new passphrase twice.
 passwd
 ```
 
-Enter a new root password (this is separate from your user password created later).
+Enter a new root password (you'll rarely need this after creating your user).
 
 ### Set Hostname
 
@@ -89,7 +89,7 @@ Enter a new root password (this is separate from your user password created late
 hostnamectl set-hostname stargazer
 ```
 
-Replace `stargazer` with your desired hostname. This is what appears in Intune.
+Replace `stargazer` with your desired hostname.
 
 ---
 
