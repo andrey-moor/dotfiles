@@ -128,10 +128,12 @@ Plans:
   2. Troubleshooting guide maps common symptoms to solutions
   3. Upgrade procedures document Omarchy and Intune package updates
   4. Verification checklists exist for each setup phase
-**Plans**: TBD
+**Plans**: 3 plans (Wave 1)
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md — Enhanced E2E guide with verification checklists
+- [ ] 07-02-PLAN.md — Consolidated troubleshooting guide (symptom-based)
+- [ ] 07-03-PLAN.md — Upgrade procedures for Intune packages and pinned dependencies
 
 ## Progress
 
@@ -146,9 +148,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 4. Nix Module Refactoring | 3/3 | Complete | 2026-02-03 |
 | 5. Intune Components | 3/3 | Complete | 2026-02-03 |
 | 6. Enrollment and Compliance | 2/3 | Complete | 2026-02-03 |
-| 7. Documentation | 0/? | Not started | - |
+| 7. Documentation | 0/3 | Not started | - |
 
 ---
 *Created: 2026-01-31*
-*Last updated: 2026-02-03 (Phase 6 complete)*
+*Last updated: 2026-02-03 (Phase 7 planned)*
 *Requirements: 26 mapped*
