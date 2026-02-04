@@ -45,7 +45,7 @@ This checks all critical components and provides hints for failures. Exit code 0
 For more detail:
 
 ```bash
-intune-health --verbose
+intune-health
 intune-logs --all | tail -50
 ```
 

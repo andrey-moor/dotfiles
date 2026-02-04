@@ -80,7 +80,7 @@ fi
 log "Checking device broker D-Bus policy..."
 
 DBUS_POLICY_DEST="/usr/share/dbus-1/system.d/com.microsoft.identity.devicebroker1.conf"
-BROKER_PKG=$(find /nix/store -maxdepth 1 -name '*microsoft-identity-broker-2.0.4' -type d 2>/dev/null | head -1)
+BROKER_PKG=$(find /nix/store -maxdepth 1 -name '*microsoft-identity-broker-*' -type d 2>/dev/null | head -1)
 
 if [[ -z "$BROKER_PKG" ]]; then
     warn "Broker package not found in Nix store - home-manager switch may not have run"
