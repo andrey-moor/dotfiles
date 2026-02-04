@@ -241,6 +241,33 @@ ls /mnt/psf/
 
 The script configures: Rosetta binfmt, Nix installation, extra-platforms, dynamic linker, os-release spoof.
 
+### Verification
+
+```bash
+# Check Rosetta
+cat /proc/sys/fs/binfmt_misc/rosetta
+# Expected: "enabled" in output
+
+# Check Nix
+nix --version
+# Expected: nix (Nix) 2.x.x
+
+# Check dynamic linker
+ls -la /lib64/ld-linux-x86-64.so.2
+# Expected: symlink to glibc loader
+
+# Check os-release spoof
+cat /etc/os-release | head -2
+# Expected: NAME="Ubuntu", VERSION_ID="22.04"
+```
+
+- [ ] Rosetta binfmt registered and enabled
+- [ ] Nix installed and in PATH
+- [ ] Dynamic linker symlink exists
+- [ ] os-release shows Ubuntu 22.04
+
+**If verification fails:** See [Troubleshooting: Rosetta/Nix Issues](../../docs/TROUBLESHOOTING.md#rosetta-binfmt-not-registered)
+
 ---
 
 ## 7. Apply Home-Manager
@@ -251,6 +278,28 @@ nix run home-manager -- switch --flake .#stargazer -b backup
 ```
 
 First run takes several minutes. This installs all Intune packages and tools.
+
+### Verification
+
+```bash
+# Check home-manager generation
+home-manager generations | head -1
+# Expected: recent timestamp with generation number
+
+# Check intune commands available
+which intune-health
+# Expected: path in ~/.nix-profile/bin/
+
+# Check packages
+nix profile list | grep intune
+# Expected: intune-portal and related packages listed
+```
+
+- [ ] Home-manager generation created
+- [ ] `intune-health`, `intune-status`, `intune-portal-rosetta` commands exist
+- [ ] No error messages during switch
+
+**If verification fails:** Re-run the `nix run home-manager` command. Check `nix.conf` has extra-platforms.
 
 ---
 
@@ -305,6 +354,25 @@ intune-health
 
 All critical checks should show `[PASS]`. YubiKey warnings are OK if not inserted.
 
+### Verification
+
+After running `intune-prerequisites` and creating keyring:
+
+```bash
+intune-health
+# Expected: All [PASS] for critical checks, YubiKey warnings OK
+```
+
+- [ ] intune-health exits with code 0
+- [ ] D-Bus service: PASS
+- [ ] Device broker: PASS
+- [ ] pcscd: PASS
+- [ ] Keyring: PASS
+- [ ] Login keyring created in seahorse as "login"
+- [ ] Login keyring set as default
+
+**If verification fails:** See [Troubleshooting: Intune Prerequisites](../../docs/TROUBLESHOOTING.md#device-broker-fails)
+
 ---
 
 ## 9. Enroll Device
@@ -342,6 +410,27 @@ intune-agent-rosetta
 # Check logs
 journalctl --user -u intune-agent --since "5 minutes ago"
 ```
+
+### Verification (Post-Enrollment)
+
+```bash
+# Check enrollment status
+intune-status
+# Expected: Shows enrolled state
+
+# Trigger compliance check
+intune-agent-rosetta
+
+# Check compliance report
+journalctl --user -u intune-agent --since "5 minutes ago" | tail -20
+# Expected: compliance check completed, no critical errors
+```
+
+- [ ] Device shows as enrolled in portal
+- [ ] intune-agent runs without errors
+- [ ] Compliance check completes (may show warnings for optional items)
+
+**If enrollment fails:** See [Troubleshooting: Enrollment Issues](../../docs/TROUBLESHOOTING.md#enrollment-fails)
 
 ---
 
