@@ -126,3 +126,215 @@ If verification fails:
 | 2026-02-04 | armarchy-3-x | Current working version |
 
 ---
+
+## Intune Portal
+
+**Current version:** 1.2511.7-noble
+**Package source:** Microsoft .deb repackaged via Nix
+**Location:** `packages/intune-portal/default.nix`
+**Update frequency:** When Microsoft releases new version
+**Risk level:** MEDIUM - May break enrollment flow
+
+### When to Upgrade
+
+- Microsoft announces security fix
+- Current version has bugs you're experiencing
+- Microsoft deprecates current version
+
+### Finding New Versions
+
+Microsoft publishes Linux packages at: https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/i/intune-portal/
+
+Check for new versions:
+```bash
+curl -s https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/i/intune-portal/ | grep -oP 'intune-portal_[0-9.]+[^_]*_amd64\.deb' | sort -V | tail -5
+```
+
+### Pre-Upgrade Checklist
+
+- [ ] VM snapshot created
+- [ ] Noted new version number and download URL
+- [ ] Device currently enrolled and compliant
+
+### Procedure
+
+1. **Create snapshot:**
+   ```bash
+   prlctl snapshot stargazer -n "Pre-Portal-Upgrade" -d "Before intune-portal upgrade"
+   ```
+
+2. **Get new package hash:**
+   ```bash
+   nix-prefetch-url https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/i/intune-portal/intune-portal_NEW_VERSION_amd64.deb
+   ```
+
+3. **Update package definition:**
+   Edit `packages/intune-portal/default.nix`:
+   - Update `version = "NEW_VERSION";`
+   - Update `sha256 = "NEW_HASH";`
+
+4. **Rebuild:**
+   ```bash
+   cd /mnt/psf/Home/Documents/dotfiles  # or your dotfiles path
+   nix run home-manager -- switch --flake .#stargazer -b backup
+   ```
+
+5. **Test launch:**
+   ```bash
+   intune-portal-rosetta
+   ```
+
+### Post-Upgrade Verification
+
+```bash
+# Check version
+intune-portal-rosetta --version 2>/dev/null || echo "Check UI for version"
+
+# Verify can sign in
+# Launch portal and verify sign-in still works
+```
+
+- [ ] Portal launches without errors
+- [ ] Can see device status
+- [ ] Sign-in flow works (if you sign out and back in)
+
+### Rollback
+
+```bash
+# Restore old version in default.nix
+git checkout packages/intune-portal/default.nix
+
+# Rebuild
+nix run home-manager -- switch --flake .#stargazer -b backup
+```
+
+Or restore VM snapshot if Nix rebuild fails.
+
+### Version History
+
+| Date | Version | Notes |
+|------|---------|-------|
+| 2026-02-04 | 1.2511.7-noble | Current working version |
+
+---
+
+## Microsoft Identity Broker
+
+**Current version:** 2.0.4
+**Package source:** Microsoft .deb repackaged via Nix
+**Location:** `packages/microsoft-identity-broker/default.nix`
+**Update frequency:** When Microsoft releases new version
+**Risk level:** HIGH - Handles authentication tokens
+
+### When to Upgrade
+
+- Security advisory from Microsoft
+- Authentication failures with current version
+- Compatibility issues with new Intune portal version
+
+### Pre-Upgrade Checklist
+
+- [ ] VM snapshot created
+- [ ] Current enrollment verified working
+- [ ] Noted new version from Microsoft packages site
+
+### Finding New Versions
+
+```bash
+curl -s https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/m/microsoft-identity-broker/ | grep -oP 'microsoft-identity-broker_[0-9.]+_amd64\.deb' | sort -V | tail -5
+```
+
+### Procedure
+
+Same as Intune Portal:
+1. Create snapshot
+2. Get new package hash with nix-prefetch-url
+3. Update `packages/microsoft-identity-broker/default.nix`
+4. Rebuild with home-manager
+5. Test authentication
+
+### Post-Upgrade Verification
+
+```bash
+# Check D-Bus activation
+dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames | grep microsoft
+
+# Test sign-in flow
+intune-portal-rosetta
+```
+
+- [ ] Broker activates on D-Bus
+- [ ] Portal authentication works
+
+### Rollback
+
+```bash
+git checkout packages/microsoft-identity-broker/default.nix
+nix run home-manager -- switch --flake .#stargazer -b backup
+```
+
+### Version History
+
+| Date | Version | Notes |
+|------|---------|-------|
+| 2026-02-04 | 2.0.4 | Current working version |
+
+---
+
+## Microsoft Identity Device Broker
+
+**Current version:** 2.0.4 (bundled with microsoft-identity-broker)
+**Package source:** Same package as user broker
+**Location:** `packages/microsoft-identity-broker/default.nix`
+**Update frequency:** When Microsoft releases new version
+**Risk level:** HIGH - System service, handles device identity
+
+### When to Upgrade
+
+- Security advisory
+- Compliance reporting issues
+- Microsoft deprecates current version
+
+### Pre-Upgrade Checklist
+
+- [ ] VM snapshot created
+- [ ] Device broker currently running: `systemctl status microsoft-identity-device-broker`
+- [ ] Compliance currently working
+
+### Procedure
+
+Same pattern as Microsoft Identity Broker (same package contains both binaries).
+
+After rebuild, restart the service:
+```bash
+sudo systemctl restart microsoft-identity-device-broker
+```
+
+### Post-Upgrade Verification
+
+```bash
+# Check service status
+systemctl status microsoft-identity-device-broker
+
+# Check D-Bus registration
+dbus-send --system --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames | grep microsoft
+
+# Run health check
+intune-health
+```
+
+- [ ] Service running (active)
+- [ ] D-Bus name registered
+- [ ] intune-health passes
+
+### Rollback
+
+Same as Microsoft Identity Broker - git checkout and rebuild.
+
+### Version History
+
+| Date | Version | Notes |
+|------|---------|-------|
+| 2026-02-04 | 2.0.4 | Current working version |
+
+---
