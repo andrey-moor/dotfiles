@@ -369,13 +369,33 @@ sudo sed -i.bak '
 
 **Parallels Setting:** Enable **Hardware > USB & Bluetooth > Share smart card readers with Linux**
 
-### 8.3 Keyring Default
+### 8.3 Login Keyring Setup
 
-Set login keyring as default (auto-unlocked at login):
+**CRITICAL:** The login keyring must exist AND have a password for Intune enrollment to succeed.
 
-```bash
-echo -n login > ~/.local/share/keyrings/default
-```
+1. **Create login keyring** (via GUI - required):
+   ```bash
+   seahorse &
+   ```
+   - In Seahorse: File → New → Password Keyring
+   - Name it exactly: `login`
+   - Set a password (can match your user password for auto-unlock)
+   - Right-click the new keyring → Set as Default
+
+2. **Set default pointer** (automated by intune-prerequisites):
+   ```bash
+   mkdir -p ~/.local/share/keyrings
+   echo -n login > ~/.local/share/keyrings/default
+   ```
+
+3. **Verify keyring works**:
+   ```bash
+   # Check keyring service is running
+   busctl --user tree org.freedesktop.secrets
+   # Should show: /org/freedesktop/secrets/collection/login
+   ```
+
+**Note:** If you see "Object does not exist at path /org/freedesktop/secrets/collection/login" during enrollment, the login keyring wasn't created properly. Use `seahorse` to create it.
 
 ### 8.4 Intune Compliance (PAM Password Policy)
 
