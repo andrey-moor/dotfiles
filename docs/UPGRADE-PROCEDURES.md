@@ -338,3 +338,222 @@ Same as Microsoft Identity Broker - git checkout and rebuild.
 | 2026-02-04 | 2.0.4 | Current working version |
 
 ---
+
+## OpenSSL (Pinned)
+
+**Current version:** 3.3.2
+**Pinned because:** Code:1200 broker authentication bug with OpenSSL 3.4+
+**Location:** `modules/home/linux/intune.nix` (opensslArch derivation)
+**Update frequency:** ONLY when bug is fixed or security-critical
+**Risk level:** CRITICAL - Can completely break authentication
+
+### Background
+
+OpenSSL 3.4+ introduced changes that break the Microsoft broker's TLS authentication, resulting in "Code:1200" errors during sign-in. Version 3.3.2 is the last known working version.
+
+The pinned version is sourced from Arch Linux archives:
+```
+https://archive.archlinux.org/packages/o/openssl/openssl-3.3.2-1-x86_64.pkg.tar.zst
+```
+
+### When to Upgrade
+
+- Microsoft confirms broker works with newer OpenSSL
+- Critical security vulnerability in OpenSSL 3.3.2 with no workaround
+- You've tested newer version in a disposable VM
+
+### Testing New OpenSSL Version
+
+**Always test in a clone first, never on enrolled production VM:**
+
+1. Clone the enrolled VM:
+   ```bash
+   prlctl clone stargazer --name "OpenSSL-Test"
+   ```
+
+2. Modify intune.nix to use newer OpenSSL:
+   - Update the `opensslArch` derivation URL and hash for new version
+   - Or comment it out and use nixpkgs openssl instead
+
+3. Rebuild in test VM:
+   ```bash
+   nix run home-manager -- switch --flake .#stargazer -b backup
+   ```
+
+4. Test full authentication flow:
+   - Launch portal: `intune-portal-rosetta`
+   - Sign out if signed in
+   - Sign in fresh with YubiKey
+   - Check compliance status
+
+5. If fails, discard test VM. If succeeds, document and consider production upgrade.
+
+### Procedure (If Testing Succeeds)
+
+1. **Create production snapshot:**
+   ```bash
+   prlctl snapshot stargazer -n "Pre-OpenSSL-Upgrade" -d "Before OpenSSL upgrade"
+   ```
+
+2. **Update intune.nix:**
+   - Modify `opensslArch` derivation with new version URL and hash
+   - Ensure it's still first in `fullLibraryPath`
+
+3. **Rebuild:**
+   ```bash
+   nix run home-manager -- switch --flake .#stargazer -b backup
+   ```
+
+4. **Test authentication immediately**
+
+### Rollback
+
+```bash
+git checkout modules/home/linux/intune.nix
+nix run home-manager -- switch --flake .#stargazer -b backup
+```
+
+### Version History
+
+| Date | Version | Notes | Nixpkgs OpenSSL |
+|------|---------|-------|-----------------|
+| 2026-02-04 | 3.3.2 | Pinned - last working | 3.4.x broken |
+
+---
+
+## OpenSC (Pinned)
+
+**Current version:** 0.25.1
+**Pinned because:** Compatibility with YubiKey PIV and broker PKCS#11
+**Location:** `modules/home/linux/intune.nix` (openscArch derivation)
+**Update frequency:** When YubiKey support improves or bugs found
+**Risk level:** MEDIUM - Can break YubiKey certificate access
+
+### Background
+
+OpenSC provides PKCS#11 support for YubiKey PIV certificates. Version 0.25.1 is pinned from Arch archives because newer Nix versions may require OpenSSL symbols not available in our pinned OpenSSL 3.3.2.
+
+The pinned version is sourced from:
+```
+https://archive.archlinux.org/packages/o/opensc/opensc-0.25.1-1-x86_64.pkg.tar.zst
+```
+
+### When to Upgrade
+
+- Newer version explicitly adds YubiKey improvements
+- Current version has bugs affecting PIV
+- Testing shows newer version works with pinned OpenSSL
+
+### Testing New OpenSC Version
+
+1. Clone enrolled VM:
+   ```bash
+   prlctl clone stargazer --name "OpenSC-Test"
+   ```
+
+2. Update the openscArch derivation in intune.nix with new version
+
+3. Rebuild and test certificate listing:
+   ```bash
+   nix run home-manager -- switch --flake .#stargazer -b backup
+   pkcs11-tool --module ~/.nix-profile/lib/pkcs11/opensc-pkcs11.so --list-objects
+   ```
+
+4. Test full authentication with YubiKey in Intune portal
+
+### Rollback
+
+```bash
+git checkout modules/home/linux/intune.nix
+nix run home-manager -- switch --flake .#stargazer -b backup
+```
+
+### Version History
+
+| Date | Version | Notes |
+|------|---------|-------|
+| 2026-02-04 | 0.25.1 | From Arch archive, working |
+
+---
+
+## Full System Upgrade
+
+For upgrading the entire system (Arch packages, Nix, etc.):
+
+### Risk Assessment
+
+Full system upgrades are the highest risk because:
+- Arch is rolling release (all packages update at once)
+- Kernel updates may affect Rosetta
+- System library updates may break x86_64 compatibility layer
+
+### Recommended Approach
+
+1. **Never upgrade enrolled production VM directly**
+
+2. **Create test clone:**
+   ```bash
+   prlctl clone stargazer --name "FullUpgrade-Test-$(date +%Y%m%d)"
+   ```
+
+3. **Upgrade test clone:**
+   ```bash
+   sudo pacman -Syu
+   ```
+
+4. **Reboot and verify:**
+   - LUKS decryption works
+   - Rosetta still works: `cat /proc/sys/fs/binfmt_misc/rosetta`
+   - Nix still works: `nix --version`
+   - Intune still works: `intune-health`
+   - Can authenticate: test portal sign-in
+
+5. **If test passes:** Upgrade production with same steps
+
+6. **If test fails:** Discard test VM, investigate specific failing package
+
+### Nix/Home-Manager Upgrades
+
+To upgrade Nix flake inputs (nixpkgs, home-manager):
+
+```bash
+cd /mnt/psf/Home/Documents/dotfiles
+nix flake update
+
+# Test rebuild (dry-run first)
+nix run home-manager -- switch --flake .#stargazer --dry-run
+
+# If dry-run looks good
+nix run home-manager -- switch --flake .#stargazer -b backup
+```
+
+### Version Tracking
+
+Document working version combinations in your notes:
+
+```
+Working combo 2026-02-04:
+- Omarchy: armarchy-3-x
+- Kernel: 6.x.y
+- Nix: 2.x.x
+- nixpkgs: rev abc123
+- intune-portal: 1.2511.7-noble
+- microsoft-identity-broker: 2.0.4
+- OpenSSL: 3.3.2 (pinned)
+- OpenSC: 0.25.1 (pinned)
+```
+
+---
+
+## Quick Reference
+
+| Component | Version | Update Frequency | Risk |
+|-----------|---------|------------------|------|
+| Omarchy | armarchy-3-x | Major releases | MEDIUM |
+| intune-portal | 1.2511.7-noble | Microsoft releases | MEDIUM |
+| microsoft-identity-broker | 2.0.4 | Microsoft releases | HIGH |
+| microsoft-identity-device-broker | 2.0.4 | Microsoft releases | HIGH |
+| OpenSSL | 3.3.2 (pinned) | Rarely | CRITICAL |
+| OpenSC | 0.25.1 (pinned) | Rarely | MEDIUM |
+
+**Remember:** Snapshot -> Upgrade -> Verify -> Rollback if needed
