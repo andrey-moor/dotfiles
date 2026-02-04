@@ -9,15 +9,22 @@ with lib;
   username = "andreym";
   homeDirectory = "/home/andreym";
 
-  config = { config, pkgs, ... }: {
+  config = { config, pkgs, inputs, ... }: {
     # Home-manager state version
     home.stateVersion = "24.05";
     home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
 
+    # nixGL for GPU acceleration with Nix apps on non-NixOS
+    # Required for ghostty and other OpenGL apps to work with virtio_gpu
+    targets.genericLinux.nixGL = {
+      packages = inputs.nixgl.packages;
+      defaultWrapper = "mesa";  # virtio_gpu in Parallels
+    };
+
     # Additional packages
     home.packages = [
       pkgs.azure-cli
-      pkgs.mesa-demos  # provides glxinfo, glxgears, etc.
+      (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
     # Enable modules
