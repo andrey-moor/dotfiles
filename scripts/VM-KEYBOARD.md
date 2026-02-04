@@ -2,6 +2,20 @@
 
 Documentation for sending keyboard input to Parallels VMs using `prlctl send-key-event`.
 
+## Quick Start
+
+Use `prl-type.sh` to type text into a running VM:
+
+```bash
+./scripts/prl-type.sh "echo hello world"
+prlctl send-key-event ArchBase-Template --scancode 28 --delay 100  # Enter
+
+# Verify with screenshot
+prlctl capture ArchBase-Template --file /tmp/test.png
+```
+
+The script uses JSON batch mode for speed (~3x faster than per-character calls).
+
 ## Command Syntax
 
 ```bash

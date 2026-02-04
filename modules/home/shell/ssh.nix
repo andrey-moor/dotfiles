@@ -48,6 +48,14 @@ in {
           identitiesOnly = true;
         };
 
+        # LinkedIn/Work GitHub - uses FIDO2 resident key on YubiKey
+        "github.com-linkedin" = {
+          hostname = "github.com";
+          user = "git";
+          identityFile = "~/.ssh/id_ed25519_sk_rk_linkedin";
+          identitiesOnly = true;
+        };
+
         # Rocinante - Linux VM (Tailscale MagicDNS)
         "rocinante" = {
           user = "andreym";

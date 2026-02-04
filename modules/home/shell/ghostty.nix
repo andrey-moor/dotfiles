@@ -8,9 +8,12 @@ let
 
   # Wrap with nixGL on Linux for GPU support
   # Use hiPrio to avoid conflicts with unwrapped version
+  # Skip nixGL on aarch64-linux (VMs with virtio_gpu/virgl work with system mesa)
   ghosttyPkg = if pkgs.stdenv.isDarwin
     then null  # macOS uses Homebrew
-    else lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);
+    else if pkgs.stdenv.isAarch64
+    then lib.hiPrio pkgs.ghostty  # aarch64: system mesa works, nixGL Intel wrapper breaks it
+    else lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);  # x86_64: needs nixGL
 in {
   options.modules.shell.ghostty = {
     enable = mkEnableOption "Ghostty terminal emulator";

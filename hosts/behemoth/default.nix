@@ -102,6 +102,7 @@ with lib;
         "imaging-edge"
         # Utilities
         "balenaetcher"
+        "tigervnc-viewer"
       ];
       brews = [
         # CLI tools better via Homebrew

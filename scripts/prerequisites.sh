@@ -214,6 +214,19 @@ EOF
 fi
 
 # ============================================================================
+# 7. Video group for GPU access
+# ============================================================================
+log "Checking video group membership..."
+
+if id -nG "$USER" | grep -qw video; then
+    skip "User in video group"
+else
+    log "Adding $USER to video group for GPU/OpenGL access..."
+    sudo usermod -aG video "$USER"
+    log "Added to video group (logout/login required to take effect)"
+fi
+
+# ============================================================================
 # Complete
 # ============================================================================
 echo ""
