@@ -192,16 +192,26 @@ After reboot:
 
 After logging in as your new user (not root), run the prerequisites script to configure Rosetta and Nix.
 
+**Note on shared folder paths:** The path depends on how Parallels shared folders are configured:
+- If shared as "dotfiles" folder: `/mnt/psf/dotfiles`
+- If sharing full Home folder: `/mnt/psf/Home/Documents/dotfiles`
+
+Check which exists: `ls /mnt/psf/`
+
 **From inside the VM:**
 
 ```bash
+# If dotfiles is shared directly:
+/mnt/psf/dotfiles/scripts/prerequisites.sh
+
+# Or if Home folder is shared:
 /mnt/psf/Home/Documents/dotfiles/scripts/prerequisites.sh
 ```
 
 **Or type from macOS:**
 
 ```bash
-./scripts/prl-type.sh stargazer "/mnt/psf/Home/Documents/dotfiles/scripts/prerequisites.sh"
+./scripts/prl-type.sh stargazer "/mnt/psf/dotfiles/scripts/prerequisites.sh"
 ```
 
 ### What prerequisites.sh configures:
@@ -222,7 +232,8 @@ The script is idempotent - safe to run multiple times.
 Apply the Nix-based home configuration.
 
 ```bash
-cd /mnt/psf/Home/Documents/dotfiles
+# Use the path that exists for your setup:
+cd /mnt/psf/dotfiles  # or /mnt/psf/Home/Documents/dotfiles
 nix run home-manager -- switch --flake .#stargazer -b backup
 ```
 
@@ -487,10 +498,12 @@ The `rosetta-binfmt.path` unit should handle this automatically by watching for 
 ### Device broker fails to start with D-Bus error
 
 ```bash
-# Reload D-Bus config without restarting
-sudo pkill -HUP dbus-daemon
+# Reload D-Bus config (required after installing new policy)
+sudo systemctl reload dbus
 sudo systemctl restart microsoft-identity-device-broker
 ```
+
+If "Name Error (Request to own name refused by policy)" persists after reload, reboot the VM.
 
 ### Device broker not running (intune-portal crashes)
 
@@ -551,8 +564,8 @@ VM=endurance ./scripts/prl-type.sh "echo hello"
 # Type the armarchy installer command
 ./scripts/prl-type.sh stargazer "curl -fsSL hdwy.link/armarchy-3-x | bash"
 
-# Type the prerequisites script path
-./scripts/prl-type.sh stargazer "/mnt/psf/Home/Documents/dotfiles/scripts/prerequisites.sh"
+# Type the prerequisites script path (adjust based on your mount)
+./scripts/prl-type.sh stargazer "/mnt/psf/dotfiles/scripts/prerequisites.sh"
 
 # Type LUKS passphrase change command
 ./scripts/prl-type.sh stargazer "cryptsetup luksChangeKey /dev/vda2"

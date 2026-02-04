@@ -532,8 +532,10 @@ let
     #!/usr/bin/env bash
     # Wrapper to run intune-prerequisites.sh from dotfiles
     DOTFILES="''${DOTFILES:-$HOME/.dotfiles}"
-    # Also check common mount path for Parallels
-    if [[ ! -d "$DOTFILES" ]] && [[ -d "/mnt/psf/Home/Documents/dotfiles" ]]; then
+    # Check common mount paths for Parallels shared folders
+    if [[ ! -d "$DOTFILES" ]] && [[ -d "/mnt/psf/dotfiles" ]]; then
+      DOTFILES="/mnt/psf/dotfiles"
+    elif [[ ! -d "$DOTFILES" ]] && [[ -d "/mnt/psf/Home/Documents/dotfiles" ]]; then
       DOTFILES="/mnt/psf/Home/Documents/dotfiles"
     fi
     SCRIPT="$DOTFILES/scripts/intune-prerequisites.sh"
@@ -542,6 +544,7 @@ let
     else
       echo "Error: intune-prerequisites.sh not found at $SCRIPT"
       echo "Set DOTFILES env var to your dotfiles location"
+      echo "Checked: ~/.dotfiles, /mnt/psf/dotfiles, /mnt/psf/Home/Documents/dotfiles"
       exit 1
     fi
   '';

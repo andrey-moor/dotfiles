@@ -47,6 +47,34 @@ if [[ ! -d "$HOME/.nix-profile" ]]; then
 fi
 
 # ============================================================================
+# 0. System packages (ccid, opensc, pcsclite)
+# ============================================================================
+log "Checking system packages..."
+
+PACKAGES_NEEDED=()
+if ! command -v pcscd &>/dev/null; then
+    PACKAGES_NEEDED+=(pcsclite)
+fi
+if [[ ! -f "/usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Info.plist" ]]; then
+    PACKAGES_NEEDED+=(ccid)
+fi
+if [[ ! -f "/usr/lib/pkcs11/opensc-pkcs11.so" ]]; then
+    PACKAGES_NEEDED+=(opensc)
+fi
+
+if [[ ${#PACKAGES_NEEDED[@]} -gt 0 ]]; then
+    if [[ "$CHECK_ONLY" == "true" ]]; then
+        fail "Missing system packages: ${PACKAGES_NEEDED[*]}"
+    else
+        log "Installing system packages: ${PACKAGES_NEEDED[*]}"
+        sudo pacman -S --noconfirm "${PACKAGES_NEEDED[@]}"
+        log "System packages installed"
+    fi
+else
+    skip "System packages (pcsclite, ccid, opensc)"
+fi
+
+# ============================================================================
 # 1. Device broker D-Bus policy
 # ============================================================================
 log "Checking device broker D-Bus policy..."
@@ -71,8 +99,9 @@ else
             log "Installing device broker D-Bus policy..."
             sudo cp "$BROKER_PKG/share/dbus-1/system.d/com.microsoft.identity.devicebroker1.conf" "$DBUS_POLICY_DEST"
             sudo chmod 644 "$DBUS_POLICY_DEST"
-            sudo pkill -HUP dbus-daemon || true
-            log "D-Bus policy installed and dbus-daemon signaled"
+            # Reload D-Bus daemon to pick up new policy (required before broker can start)
+            sudo systemctl reload dbus 2>/dev/null || sudo pkill -HUP dbus-daemon || true
+            log "D-Bus policy installed and dbus reloaded"
         fi
     fi
 fi
@@ -157,6 +186,22 @@ else
     fi
 fi
 
+# Ensure pcscd is enabled and started
+log "Checking pcscd service..."
+if systemctl is-active pcscd.socket >/dev/null 2>&1 || systemctl is-active pcscd.service >/dev/null 2>&1; then
+    skip "pcscd service"
+else
+    if [[ "$CHECK_ONLY" == "true" ]]; then
+        fail "pcscd not running"
+    else
+        log "Enabling and starting pcscd..."
+        sudo systemctl enable --now pcscd.socket pcscd.service 2>/dev/null || \
+            sudo systemctl enable --now pcscd.socket 2>/dev/null || \
+            warn "pcscd enable failed (check if pcsclite is installed)"
+        log "pcscd service enabled"
+    fi
+fi
+
 # ============================================================================
 # 4. pcscd polkit disable
 # ============================================================================
@@ -179,9 +224,7 @@ ExecStart=
 ExecStart=/usr/bin/pcscd --foreground --auto-exit --disable-polkit
 EOF
         sudo systemctl daemon-reload
-        sudo systemctl restart pcscd.socket pcscd.service 2>/dev/null || \
-            sudo systemctl enable pcscd.socket 2>/dev/null || \
-            warn "pcscd restart failed (install pcscd package: sudo pacman -S pcsclite ccid)"
+        # Don't restart pcscd here - we handle it in the pcscd service section above
         log "pcscd polkit override installed"
     fi
 fi
