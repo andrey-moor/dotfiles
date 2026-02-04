@@ -6,13 +6,17 @@ with lib;
 let
   cfg = config.modules.shell.ghostty;
 
-  # Wrap with nixGL on Linux for GPU support
-  # Use hiPrio to avoid conflicts with unwrapped version
-  # Skip nixGL on aarch64-linux (VMs with virtio_gpu/virgl work with system mesa)
+  # On aarch64-linux VMs with virtio_gpu/virgl, Nix-built ghostty can't find
+  # system DRI drivers. We wrap it with LIBGL_DRIVERS_PATH pointing to system mesa.
+  # On x86_64-linux, wrap with nixGL for GPU support.
+  # On macOS, use Homebrew.
   ghosttyPkg = if pkgs.stdenv.isDarwin
     then null  # macOS uses Homebrew
     else if pkgs.stdenv.isAarch64
-    then lib.hiPrio pkgs.ghostty  # aarch64: system mesa works, nixGL Intel wrapper breaks it
+    then lib.hiPrio (pkgs.writeShellScriptBin "ghostty" ''
+      export LIBGL_DRIVERS_PATH=/usr/lib/dri
+      exec ${pkgs.ghostty}/bin/ghostty "$@"
+    '')
     else lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);  # x86_64: needs nixGL
 in {
   options.modules.shell.ghostty = {
