@@ -7,29 +7,24 @@ let
   cfg = config.modules.shell.ghostty;
 
   # On aarch64-linux VMs with virtio_gpu/virgl, OpenGL 4.3+ is required but
-  # virtio only provides OpenGL 4.0. Use Mesa's LLVMpipe software renderer
-  # which provides OpenGL 4.5.
-  # LIBGL_ALWAYS_SOFTWARE=1 forces software rendering.
-  # GDK_DEBUG=gl-disable-gles forces GTK to use GLX instead of EGL.
+  # virtio only provides OpenGL 4.0. The Nix-built ghostty has EGL issues with
+  # software rendering, so we use the system ghostty (/bin/ghostty) which works
+  # with Mesa's LLVMpipe (LIBGL_ALWAYS_SOFTWARE=1).
   # See: https://github.com/ghostty-org/ghostty/issues/2025
   # On x86_64-linux, wrap with nixGL for GPU support.
   # On macOS, use Homebrew.
-  wrappedGhostty = pkgs.symlinkJoin {
-    name = "ghostty-wrapped";
-    paths = [ pkgs.ghostty ];
-    buildInputs = [ pkgs.makeWrapper ];
-    meta.mainProgram = "ghostty";
-    postBuild = ''
-      wrapProgram $out/bin/ghostty \
-        --set LIBGL_ALWAYS_SOFTWARE 1 \
-        --set GDK_DEBUG gl-disable-gles
-    '';
-  };
+  #
+  # Creates a wrapper that calls /bin/ghostty (system package) with software rendering.
+  # Requires ghostty to be installed via system package manager (e.g., pacman on Arch).
+  systemGhosttyWrapper = pkgs.writeShellScriptBin "ghostty" ''
+    export LIBGL_ALWAYS_SOFTWARE=1
+    exec /bin/ghostty "$@"
+  '';
 
   ghosttyPkg = if pkgs.stdenv.isDarwin
     then null  # macOS uses Homebrew
     else if pkgs.stdenv.isAarch64
-    then lib.hiPrio wrappedGhostty
+    then lib.hiPrio systemGhosttyWrapper  # Use system ghostty with software rendering
     else lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);  # x86_64: needs nixGL
 in {
   options.modules.shell.ghostty = {
