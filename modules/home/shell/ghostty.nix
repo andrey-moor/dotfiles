@@ -50,20 +50,27 @@ in {
   config = mkIf cfg.enable {
     # On aarch64-linux, override the desktop file to use our wrapper with software rendering
     # This fixes the Omarchy wrapper bug (escaped $is_apple_silicon variable)
-    xdg.desktopEntries = mkIf (pkgs.stdenv.isLinux && pkgs.stdenv.isAarch64) {
-      "com.mitchellh.ghostty" = {
-        name = "Ghostty";
-        genericName = "Terminal";
-        comment = "A terminal emulator";
-        exec = "${systemGhosttyWrapper}/bin/ghostty %U";
-        icon = "com.mitchellh.ghostty";
-        terminal = false;
-        categories = [ "System" "TerminalEmulator" ];
-        startupNotify = true;
-        settings = {
-          StartupWMClass = "com.mitchellh.ghostty";
-          TryExec = "${systemGhosttyWrapper}/bin/ghostty";
-        };
+    # Uses home.file to place in ~/.local/share/applications/ which has higher XDG priority
+    home.file = mkIf (pkgs.stdenv.isLinux && pkgs.stdenv.isAarch64) {
+      ".local/share/applications/com.mitchellh.ghostty.desktop" = {
+        force = true;  # Override existing file
+        text = ''
+          [Desktop Entry]
+          Version=1.0
+          Name=Ghostty
+          Type=Application
+          Comment=A terminal emulator
+          TryExec=${systemGhosttyWrapper}/bin/ghostty
+          Exec=${systemGhosttyWrapper}/bin/ghostty %U
+          Icon=com.mitchellh.ghostty
+          Categories=System;TerminalEmulator;
+          Keywords=terminal;tty;pty;
+          StartupNotify=true
+          StartupWMClass=com.mitchellh.ghostty
+          Terminal=false
+          X-TerminalArgExec=-e
+          X-TerminalArgDir=--working-directory=
+        '';
       };
     };
 
