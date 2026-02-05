@@ -15,11 +15,24 @@ let
   # On macOS, use Homebrew.
   #
   # Creates a wrapper that calls /bin/ghostty (system package) with software rendering.
+  # Includes share/ from nix ghostty for bat syntax, dbus services, etc.
   # Requires ghostty to be installed via system package manager (e.g., pacman on Arch).
-  systemGhosttyWrapper = pkgs.writeShellScriptBin "ghostty" ''
-    export LIBGL_ALWAYS_SOFTWARE=1
-    exec /bin/ghostty "$@"
-  '';
+  systemGhosttyWrapper = pkgs.symlinkJoin {
+    name = "ghostty-system-wrapper";
+    paths = [
+      (pkgs.writeShellScriptBin "ghostty" ''
+        export LIBGL_ALWAYS_SOFTWARE=1
+        exec /bin/ghostty "$@"
+      '')
+      # Include share/ from nix ghostty for bat syntax, terminfo, etc.
+      pkgs.ghostty
+    ];
+    meta.mainProgram = "ghostty";
+    # Remove the nix ghostty binary, keep only our wrapper
+    postBuild = ''
+      rm -f $out/bin/.ghostty-wrapped
+    '';
+  };
 
   ghosttyPkg = if pkgs.stdenv.isDarwin
     then null  # macOS uses Homebrew
