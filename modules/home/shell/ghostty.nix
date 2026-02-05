@@ -18,6 +18,7 @@ let
     name = "ghostty-wrapped";
     paths = [ pkgs.ghostty ];
     buildInputs = [ pkgs.makeWrapper ];
+    meta.mainProgram = "ghostty";
     postBuild = ''
       wrapProgram $out/bin/ghostty \
         --set LIBGL_ALWAYS_SOFTWARE 1 \
