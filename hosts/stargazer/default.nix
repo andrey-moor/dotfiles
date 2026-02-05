@@ -58,6 +58,7 @@ with lib;
         rust.enable = true;
         kubernetes.enable = true;
         claude.enable = true;
+        bazel.enable = true;
       };
 
       linux = {
