@@ -28,9 +28,12 @@ let
       pkgs.ghostty
     ];
     meta.mainProgram = "ghostty";
-    # Remove the nix ghostty binary, keep only our wrapper
     postBuild = ''
+      # Remove the nix ghostty binary, keep only our wrapper
       rm -f $out/bin/.ghostty-wrapped
+      # Remove desktop files - we provide our own via xdg.desktopEntries
+      rm -rf $out/share/applications
+      rm -rf $out/share/dbus-1
     '';
   };
 
