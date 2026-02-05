@@ -45,6 +45,25 @@ in {
   };
 
   config = mkIf cfg.enable {
+    # On aarch64-linux, override the desktop file to use our wrapper with software rendering
+    # This fixes the Omarchy wrapper bug (escaped $is_apple_silicon variable)
+    xdg.desktopEntries = mkIf (pkgs.stdenv.isLinux && pkgs.stdenv.isAarch64) {
+      "com.mitchellh.ghostty" = {
+        name = "Ghostty";
+        genericName = "Terminal";
+        comment = "A terminal emulator";
+        exec = "${systemGhosttyWrapper}/bin/ghostty %U";
+        icon = "com.mitchellh.ghostty";
+        terminal = false;
+        categories = [ "System" "TerminalEmulator" ];
+        startupNotify = true;
+        settings = {
+          StartupWMClass = "com.mitchellh.ghostty";
+          TryExec = "${systemGhosttyWrapper}/bin/ghostty";
+        };
+      };
+    };
+
     # On macOS, ghostty is installed via Homebrew cask
     # On Linux, wrap with nixGL for GPU acceleration
     programs.ghostty = {
