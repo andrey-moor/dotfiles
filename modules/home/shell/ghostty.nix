@@ -6,7 +6,10 @@ with lib;
 let
   cfg = config.modules.shell.ghostty;
 
-  # On aarch64-linux VMs with virtio_gpu/virgl, EGL initialization fails.
+  # On aarch64-linux VMs with virtio_gpu/virgl, OpenGL 4.3+ is required but
+  # virtio only provides OpenGL 4.0. Use Mesa's LLVMpipe software renderer
+  # which provides OpenGL 4.5.
+  # LIBGL_ALWAYS_SOFTWARE=1 forces software rendering.
   # GDK_DEBUG=gl-disable-gles forces GTK to use GLX instead of EGL.
   # See: https://github.com/ghostty-org/ghostty/issues/2025
   # On x86_64-linux, wrap with nixGL for GPU support.
@@ -17,6 +20,7 @@ let
     buildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
       wrapProgram $out/bin/ghostty \
+        --set LIBGL_ALWAYS_SOFTWARE 1 \
         --set GDK_DEBUG gl-disable-gles
     '';
   };
