@@ -94,6 +94,22 @@ in {
         confirm-close-surface = false;
         window-padding-x = 4;
         window-padding-y = 4;
+        keybind = [
+          "global:ctrl+grave_accent=toggle_quick_terminal"
+          "super+c=copy_to_clipboard"
+          "super+v=paste_from_clipboard"
+          "super+shift+c=copy_to_clipboard"
+          "super+shift+v=paste_from_clipboard"
+          "super+k=clear_screen"
+          "super+t=new_tab"
+          "super+shift+left_bracket=previous_tab"
+          "super+shift+right_bracket=next_tab"
+          "super+d=new_split:right"
+          "super+shift+d=new_split:down"
+          "super+right_bracket=goto_split:next"
+          "super+left_bracket=goto_split:previous"
+          "shift+enter=text:\\n"
+        ];
       };
       themes = {
         catppuccin-mocha = {
