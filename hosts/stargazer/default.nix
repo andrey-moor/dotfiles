@@ -74,6 +74,19 @@ with lib;
         wayvnc.monitor = "Virtual-1";
         wayvnc.gpu = false;
         wayvnc.renderCursor = true;
+
+        containers = {
+          enable = true;
+          containers.litellm = {
+            image = "ghcr.io/berriai/litellm:main-latest";
+            ports = [ "4000:4000" ];
+            pull = true;
+            volumes = [
+              "${config.modules.dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
+            ];
+            cmd = [ "--config" "/app/config.yaml" "--num_workers" "4" ];
+          };
+        };
       };
     };
   };
