@@ -57,6 +57,16 @@ alias tneww = tmux new-window
 alias ta = tmux attach-session -t
 alias tkill = tmux kill-session -t
 
+# External completer (carapace handles 800+ commands)
+let carapace_completer = {|spans: list<string>|
+    carapace $spans.0 nushell ...$spans | from json
+}
+
+$env.config.completions.external = {
+    enable: true
+    completer: $carapace_completer
+}
+
 # direnv
 $env.config = {
   hooks: {

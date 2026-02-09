@@ -23,7 +23,7 @@ in {
   };
 
   config = mkIf cfg.enable {
-    home.packages = [ pkgs.nushell ];
+    home.packages = [ pkgs.nushell pkgs.carapace ];
 
     # Symlink nu_scripts to ~/.local/share/nushell/nu_scripts
     home.file.".local/share/nushell/nu_scripts".source = nu_scripts;
