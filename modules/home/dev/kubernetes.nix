@@ -23,6 +23,7 @@ in {
       stern            # Multi-pod log tailing
       kubelogin        # Azure AKS authentication
       kubefwd          # Bulk port forwarding services for local dev
+      argocd           # GitOps continuous deployment CLI
     ];
 
     # kubectl completion and aliases
