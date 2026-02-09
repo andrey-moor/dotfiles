@@ -145,6 +145,7 @@ with lib;
           git.enable = true;
           ssh.enable = true;
           direnv.enable = true;
+          atuin.enable = true;
           starship.enable = true;
           tmux.enable = true;
           bat.enable = true;
