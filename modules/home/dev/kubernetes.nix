@@ -19,6 +19,7 @@ in {
       k9s              # Terminal UI for K8s
       stern            # Multi-pod log tailing
       kubelogin        # Azure AKS authentication
+      kubefwd          # Bulk port forwarding services for local dev
     ];
 
     # kubectl completion and aliases

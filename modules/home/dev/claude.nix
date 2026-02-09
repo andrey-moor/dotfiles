@@ -1,7 +1,7 @@
 # modules/home/dev/claude.nix -- Claude Code CLI
 # MCP server config lives in .mcp.json (project-scope, version controlled)
 
-{ lib, config, pkgs, ... }:
+{ lib, config, pkgs, inputs, ... }:
 
 with lib;
 let cfg = config.modules.dev.claude;
@@ -12,7 +12,7 @@ in {
 
   config = mkIf cfg.enable {
     home.packages = [
-      pkgs.main.claude-code
+      inputs.claude-code-nix.packages.${pkgs.system}.default
     ];
   };
 }

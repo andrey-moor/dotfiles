@@ -36,7 +36,7 @@ $env.NIX_SSL_CERT_FILE = '/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.
 
 # GPG agent for SSH authentication (Yubikey)
 $env.GPG_TTY = (do -i { tty } | default "")
-$env.SSH_AUTH_SOCK = $"($env.HOME)/.gnupg/S.gpg-agent.ssh"
+$env.SSH_AUTH_SOCK = (gpgconf --list-dirs agent-ssh-socket | str trim)
 
 $env.PATH = ($env.PATH | split row (char esep)
     | prepend '/nix/var/nix/profiles/default/bin'

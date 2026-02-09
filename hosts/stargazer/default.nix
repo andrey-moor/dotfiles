@@ -24,6 +24,7 @@ with lib;
     # Additional packages
     home.packages = [
       pkgs.azure-cli
+      pkgs.terraform
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
@@ -65,6 +66,10 @@ with lib;
         intune.enable = true;
         intune.debug = true;  # Enable verbose logging for debugging
         edge-rosetta.enable = true;
+        firefox.enable = true;
+        wayvnc.enable = true;
+        wayvnc.password = "stargazer";
+        wayvnc.monitor = "Virtual-1";
       };
     };
   };

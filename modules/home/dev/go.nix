@@ -14,8 +14,8 @@ in {
       enable = true;
       # GOPATH and GOBIN via env attribute
       env = {
-        GOPATH = "$HOME/go";
-        GOBIN = "$HOME/go/bin";
+        GOPATH = "${config.home.homeDirectory}/go";
+        GOBIN = "${config.home.homeDirectory}/go/bin";
       };
     };
 

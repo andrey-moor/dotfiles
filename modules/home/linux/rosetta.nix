@@ -15,10 +15,9 @@ in {
   };
 
   config = mkIf (cfg.enable && pkgs.stdenv.isLinux && pkgs.stdenv.hostPlatform.isAarch64) {
-    # Configure Nix to support x86_64-linux packages
-    xdg.configFile."nix/nix.conf".text = ''
-      extra-platforms = x86_64-linux
-    '';
+    # Note: extra-platforms must be set system-wide in /etc/nix/nix.custom.conf
+    # (done by prerequisites script or Determinate Nix installer)
+    # Setting it in user config causes warnings since it's a restricted setting
 
     # Activation script to check binfmt registration
     home.activation.checkRosetta = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

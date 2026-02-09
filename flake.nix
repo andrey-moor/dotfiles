@@ -51,6 +51,13 @@
       url = "github:nix-community/nixGL";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    claude-code-nix = {
+      url = "github:sadjow/claude-code-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Nix User Repository for Firefox addons
+    nur.url = "github:nix-community/NUR";
   };
 
   outputs = inputs @ { self, nixpkgs, ... }:

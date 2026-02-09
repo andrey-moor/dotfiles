@@ -46,10 +46,10 @@ in {
     services.gpg-agent = {
       enable = true;
       enableSshSupport = true;
-      # macOS: GUI pinentry, Linux: curses
+      # macOS: GUI pinentry, Linux: tty (curses has terminal size issues)
       pinentry.package = if pkgs.stdenv.isDarwin
         then pkgs.pinentry_mac
-        else pkgs.pinentry-curses;
+        else pkgs.pinentry-tty;
       # Cache passphrases for 1 hour
       defaultCacheTtl = 3600;
       maxCacheTtl = 7200;

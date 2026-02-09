@@ -63,7 +63,7 @@ let
           config.allowUnfree = true;
         };
       } else {})
-    ];
+    ] ++ (if inputs ? nur then [ inputs.nur.overlays.default ] else []);
   };
 
   # Normalize host configuration
@@ -84,8 +84,11 @@ let
       system = mergedHost.system or "aarch64-darwin";
       pkgs = mkPkgs system;
       # Home-manager modules to be loaded for each user
-      # Include the root default.nix + all recursive modules
-      homeModules = [ (import homeModulesPath) ] ++ moduleLib.mapModulesRec' homeModulesPath import;
+      # Include the root default.nix + all recursive modules + catppuccin
+      homeModules = [
+        (import homeModulesPath)
+      ] ++ (if inputs ? catppuccin then [ inputs.catppuccin.homeModules.catppuccin ] else [])
+        ++ moduleLib.mapModulesRec' homeModulesPath import;
     in
     inputs.darwin.lib.darwinSystem {
       inherit system;
@@ -128,8 +131,11 @@ let
       pkgs = mkPkgs system;
       username = mergedHost.username or name;
       homeDirectory = mergedHost.homeDirectory or "/home/${username}";
-      # Home-manager modules - include root default.nix + all recursive modules
-      homeModules = [ (import homeModulesPath) ] ++ moduleLib.mapModulesRec' homeModulesPath import;
+      # Home-manager modules - include root default.nix + all recursive modules + catppuccin
+      homeModules = [
+        (import homeModulesPath)
+      ] ++ (if inputs ? catppuccin then [ inputs.catppuccin.homeModules.catppuccin ] else [])
+        ++ moduleLib.mapModulesRec' homeModulesPath import;
     in
     inputs.home-manager.lib.homeManagerConfiguration {
       inherit pkgs;
@@ -162,8 +168,11 @@ let
       mergedHost = normalizeHost name host;
       system = mergedHost.system or "x86_64-linux";
       pkgs = mkPkgs system;
-      # Home-manager modules - include root default.nix + all recursive modules
-      homeModules = [ (import homeModulesPath) ] ++ moduleLib.mapModulesRec' homeModulesPath import;
+      # Home-manager modules - include root default.nix + all recursive modules + catppuccin
+      homeModules = [
+        (import homeModulesPath)
+      ] ++ (if inputs ? catppuccin then [ inputs.catppuccin.homeModules.catppuccin ] else [])
+        ++ moduleLib.mapModulesRec' homeModulesPath import;
       # NixOS system modules - include root default.nix + all recursive modules
       nixosModules = [ (import nixosModulesPath) ] ++ moduleLib.mapModulesRec' nixosModulesPath import;
     in
