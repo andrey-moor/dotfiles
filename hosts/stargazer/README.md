@@ -422,6 +422,35 @@ journalctl --user -u intune-agent --since "5 minutes ago"
 
 ---
 
+## WayVNC (Remote Access)
+
+WayVNC is configured as a user systemd service for remote desktop access.
+
+- **Port:** 5900
+- **Username:** `andreym`
+- **Password:** `stargazer`
+- **Config:** `~/.config/wayvnc/config`
+
+### Firewall
+
+UFW is enabled on this host. Port 5900 must be allowed for VNC connections:
+
+```bash
+sudo ufw allow 5900/tcp
+```
+
+### Connecting from another Parallels VM
+
+Use any VNC client (e.g. RealVNC Viewer) and connect to the local network IP:
+
+```
+10.0.0.161:5900
+```
+
+To find the current IP: `ip addr show enp0s5`
+
+---
+
 ## Troubleshooting
 
 See [docs/TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md) for comprehensive troubleshooting.

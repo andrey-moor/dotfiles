@@ -70,6 +70,8 @@ with lib;
         wayvnc.enable = true;
         wayvnc.password = "stargazer";
         wayvnc.monitor = "Virtual-1";
+        wayvnc.gpu = false;
+        wayvnc.renderCursor = true;
       };
     };
   };

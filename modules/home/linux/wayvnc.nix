@@ -108,7 +108,13 @@ in {
     gpu = mkOption {
       type = types.bool;
       default = true;
-      description = "Enable GPU features (H.264 hardware encoding)";
+      description = "Enable GPU features (H.264 hardware encoding). Disable for VMs without DRM/DMA-BUF support.";
+    };
+
+    renderCursor = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Enable overlay cursor rendering";
     };
 
     maxFps = mkOption {
@@ -152,6 +158,7 @@ in {
       Service = {
         ExecStart = "${wayvncPkg}/bin/wayvnc"
           + optionalString cfg.gpu " --gpu"
+          + optionalString cfg.renderCursor " --render-cursor"
           + " --max-fps=${toString cfg.maxFps}";
         Restart = "on-failure";
         RestartSec = 5;
