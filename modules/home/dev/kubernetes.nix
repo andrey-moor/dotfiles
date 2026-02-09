@@ -10,6 +10,9 @@ in {
   };
 
   config = mkIf cfg.enable {
+    # Explicit KUBECONFIG so sudo env_keep can pass it through
+    home.sessionVariables.KUBECONFIG = "${config.home.homeDirectory}/.kube/config";
+
     home.packages = with pkgs; [
       kubectl          # Kubernetes CLI
       kubernetes-helm  # Helm package manager

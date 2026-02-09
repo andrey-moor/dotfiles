@@ -214,7 +214,33 @@ EOF
 fi
 
 # ============================================================================
-# 7. Video group for GPU access
+# 9. sudo secure_path for Nix binaries
+# ============================================================================
+# sudo resets PATH and won't find binaries in ~/.nix-profile/bin or
+# /nix/var/nix/profiles/default/bin. Add them to secure_path.
+log "Checking sudo secure_path for Nix..."
+
+SUDOERS_NIX="/etc/sudoers.d/nix-path"
+if [[ -f "$SUDOERS_NIX" ]]; then
+    skip "sudo secure_path for Nix"
+else
+    log "Adding Nix paths to sudo secure_path..."
+    cat << 'EOF' | sudo tee "$SUDOERS_NIX" > /dev/null
+Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/nix/var/nix/profiles/default/bin:/home/andreym/.nix-profile/bin"
+Defaults env_keep += "KUBECONFIG HOME"
+EOF
+    sudo chmod 440 "$SUDOERS_NIX"
+    # Validate sudoers syntax
+    if sudo visudo -cf "$SUDOERS_NIX" &>/dev/null; then
+        log "sudo secure_path configured for Nix"
+    else
+        warn "sudoers syntax error - removing file"
+        sudo rm -f "$SUDOERS_NIX"
+    fi
+fi
+
+# ============================================================================
+# 10. Video group for GPU access
 # ============================================================================
 log "Checking video group membership..."
 
