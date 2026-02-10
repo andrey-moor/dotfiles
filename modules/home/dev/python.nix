@@ -11,6 +11,10 @@ in {
 
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
+      (python3.withPackages (ps: with ps; [
+        pip
+        pytest
+      ]))
       uv  # Python package manager and runner (uvx)
     ];
   };

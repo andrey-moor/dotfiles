@@ -15,7 +15,6 @@ source catppuccin_mocha.nu
 const NU_SCRIPTS = $"($nu.home-dir)/.local/share/nushell/nu_scripts"
 
 # completions
-source $"($NU_SCRIPTS)/custom-completions/docker/docker-completions.nu"
 source $"($NU_SCRIPTS)/custom-completions/curl/curl-completions.nu"
 source $"($NU_SCRIPTS)/custom-completions/ssh/ssh-completions.nu"
 source $"($NU_SCRIPTS)/custom-completions/jj/jj-completions.nu"
@@ -27,7 +26,6 @@ source $"($NU_SCRIPTS)/custom-completions/git/git-completions.nu"
 # modules
 use $"($NU_SCRIPTS)/modules/argx/"
 use $"($NU_SCRIPTS)/modules/lg/"
-use $"($NU_SCRIPTS)/modules/docker/"
 use $"($NU_SCRIPTS)/modules/kubernetes/"
 
 # Shell Aliases
@@ -42,7 +40,7 @@ def nix-update [] { cd $env.DOTFILES; just update; just switch }
 
 alias vim = nvim
 alias v = nvim
-def --wrapped docker [...args: string] { podman ...$args }
+alias docker = podman
 
 alias k = kubectl
 alias kgp = kubectl get pods -A
