@@ -28,7 +28,11 @@ in {
 
           # Languages
           ms-python.python
+          ms-vscode.cpptools
           hashicorp.terraform
+
+          # Kubernetes
+          ms-kubernetes-tools.vscode-kubernetes-tools
         ];
 
         # Settings managed by Nix
