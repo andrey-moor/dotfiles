@@ -22,11 +22,13 @@ in {
           catppuccin.catppuccin-vsc
           catppuccin.catppuccin-vsc-icons
 
-          # Language support examples (uncomment as needed)
-          # golang.go
-          # rust-lang.rust-analyzer
-          # ms-python.python
-          # jnoortheen.nix-ide
+          # Containers
+          ms-vscode-remote.remote-containers
+          ms-azuretools.vscode-docker
+
+          # Languages
+          ms-python.python
+          hashicorp.terraform
         ];
 
         # Settings managed by Nix

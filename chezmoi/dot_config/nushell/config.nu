@@ -33,7 +33,6 @@ use $"($NU_SCRIPTS)/modules/kubernetes/"
 # Shell Aliases
 use $"($NU_SCRIPTS)/aliases/bat/bat-aliases.nu" *
 use $"($NU_SCRIPTS)/aliases/chezmoi/chezmoi-aliases.nu" *
-use $"($NU_SCRIPTS)/aliases/docker/docker-aliases.nu" *
 use $"($NU_SCRIPTS)/aliases/git/git-aliases.nu" *
 
 alias ll = ls -l 
@@ -41,8 +40,9 @@ alias ll = ls -l
 def nix-switch [] { cd $env.DOTFILES; just switch }
 def nix-update [] { cd $env.DOTFILES; just update; just switch }
 
-alias vim = nvim 
-alias v = nvim 
+alias vim = nvim
+alias v = nvim
+def --wrapped docker [...args: string] { podman ...$args }
 
 alias k = kubectl
 alias kgp = kubectl get pods -A

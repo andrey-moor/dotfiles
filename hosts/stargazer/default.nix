@@ -30,7 +30,7 @@ with lib;
 
     # Enable modules
     modules = {
-      dotfilesDir = "~/dotfiles";
+      dotfilesDir = "${config.home.homeDirectory}/dotfiles";
 
       profiles.user = "andreym";
 

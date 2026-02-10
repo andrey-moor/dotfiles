@@ -160,9 +160,13 @@ in {
   };
 
   config = mkIf cfg.enable (mkMerge [
-    # Install podman
+    # Install podman and configure rootless containers
     {
       home.packages = [ pkgs.podman ];
+
+      xdg.configFile."containers/policy.json".text = builtins.toJSON {
+        default = [{ type = "insecureAcceptAnything"; }];
+      };
     }
 
     # Create systemd user services for each container
