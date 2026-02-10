@@ -50,11 +50,14 @@ alias kgs = kubectl get svc -A
 alias kctx = kubectx
 alias kns = kubens
 
+# tmux: smart create-or-attach session named after current directory
+def t [name?: string] {
+  let session = if $name != null { $name } else { $env.PWD | path basename }
+  tmux new-session -A -s $session
+}
+
 alias tl = tmux list-sessions
-alias t = tmux
-alias tnew = tmux new-session -s
-alias tneww = tmux new-window
-alias ta = tmux attach-session -t
+alias ta = tmux attach-session
 alias tkill = tmux kill-session -t
 
 # External completer (carapace handles 800+ commands)

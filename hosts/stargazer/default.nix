@@ -61,6 +61,7 @@ with lib;
         kubernetes.enable = true;
         claude.enable = true;
         bazel.enable = true;
+        python.enable = true;
       };
 
       linux = {

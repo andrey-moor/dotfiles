@@ -92,6 +92,7 @@ with lib;
         "claude"
         "lm-studio"
         # System
+        "karabiner-elements"
         "parallels"
         "little-snitch"
         "tailscale"
