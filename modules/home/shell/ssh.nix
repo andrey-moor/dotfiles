@@ -14,6 +14,8 @@ in {
       sshpass  # Non-interactive SSH password auth
     ];
 
+    home.file.".ssh/sockets/.keep".text = "";
+
     programs.ssh = {
       enable = true;
 
@@ -30,6 +32,9 @@ in {
             AddKeysToAgent = "yes";
             ServerAliveInterval = "60";
             ServerAliveCountMax = "3";
+            ControlMaster = "auto";
+            ControlPath = "~/.ssh/sockets/%r@%h-%p";
+            ControlPersist = "600";
           };
         };
 

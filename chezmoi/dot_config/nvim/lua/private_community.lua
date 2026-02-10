@@ -11,6 +11,7 @@ return {
   { import = "astrocommunity.pack.bash" },
   { import = "astrocommunity.pack.docker" },
   { import = "astrocommunity.pack.go" },
+  { import = "astrocommunity.pack.cpp" },
   { import = "astrocommunity.pack.jj" },
   { import = "astrocommunity.pack.markdown" },
   { import = "astrocommunity.completion.copilot-vim-cmp" },
