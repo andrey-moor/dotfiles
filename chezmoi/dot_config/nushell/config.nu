@@ -40,7 +40,7 @@ def nix-update [] { cd $env.DOTFILES; just update; just switch }
 
 alias vim = nvim
 alias v = nvim
-alias docker = podman
+
 
 alias k = kubectl
 alias kgp = kubectl get pods -A
