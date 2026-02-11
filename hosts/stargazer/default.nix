@@ -83,6 +83,7 @@ with lib;
             pull = true;
             volumes = [
               "${config.modules.dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
+              "${config.home.homeDirectory}/.local/share/litellm:/root/.config/litellm"  # Persist auth tokens
             ];
             cmd = [ "--config" "/app/config.yaml" "--num_workers" "4" ];
           };
