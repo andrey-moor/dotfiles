@@ -14,6 +14,7 @@ in {
       (python3.withPackages (ps: with ps; [
         pip
         pytest
+        pyyaml
       ]))
       uv  # Python package manager and runner (uvx)
     ];

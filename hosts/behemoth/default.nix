@@ -97,6 +97,7 @@ with lib;
         "little-snitch"
         "tailscale"
         # Design
+        "figma"
         "monodraw"
         # Media
         "obs"
