@@ -23,8 +23,12 @@ with lib;
 
     # Additional packages
     home.packages = [
-      pkgs.azure-cli
+      (pkgs.azure-cli.withExtensions [
+        pkgs.azure-cli-extensions.bastion
+        pkgs.azure-cli-extensions.ssh
+      ])
       pkgs.terraform
+      pkgs.dnsutils
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
