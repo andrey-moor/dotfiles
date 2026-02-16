@@ -27,7 +27,6 @@ with lib;
         pkgs.azure-cli-extensions.bastion
         pkgs.azure-cli-extensions.ssh
       ])
-      pkgs.terraform
       pkgs.dnsutils
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
@@ -66,6 +65,7 @@ with lib;
         claude.enable = true;
         bazel.enable = true;
         python.enable = true;
+        terraform.enable = true;
       };
 
       linux = {

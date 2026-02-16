@@ -21,13 +21,17 @@ with lib;
 
     # Additional packages
     home.packages = [
-      pkgs.azure-cli
+      (pkgs.azure-cli.withExtensions [
+        pkgs.azure-cli-extensions.bastion
+        pkgs.azure-cli-extensions.ssh
+      ])
+      pkgs.dnsutils
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
     # Enable modules
     modules = {
-      dotfilesDir = "/home/andreym/dotfiles";
+      dotfilesDir = "${config.home.homeDirectory}/dotfiles";
 
       profiles.user = "andreym";
 
@@ -57,10 +61,15 @@ with lib;
         rust.enable = true;
         kubernetes.enable = true;
         claude.enable = true;
+        python.enable = true;
+        bazel.enable = true;
+        terraform.enable = true;
       };
 
       linux = {
         edge.enable = true;
+        firefox.enable = true;
+        lan-mouse.enable = true;
         intune.enable = true;
         intune.debug = true;  # Enable verbose logging for debugging
         wayvnc = {

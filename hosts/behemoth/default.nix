@@ -34,6 +34,19 @@ with lib;
       };
     };
 
+    # LAN Mouse -- keyboard/mouse sharing with Linux machines
+    # Requires: Accessibility permission (System Settings > Privacy & Security > Accessibility)
+    # Little Snitch: allow UDP 4242
+    launchd.user.agents.lan-mouse = {
+      command = "${pkgs.lan-mouse}/bin/lan-mouse --daemon";
+      serviceConfig = {
+        KeepAlive = true;
+        RunAtLoad = true;
+        StandardOutPath = "/tmp/lan-mouse.log";
+        StandardErrorPath = "/tmp/lan-mouse.log";
+      };
+    };
+
     # User configuration
     user.name = "andreym";
 
@@ -130,6 +143,7 @@ with lib;
         nodejs          # Node.js runtime (npx)
         goose-cli       # AI coding agent
         main.ollama     # Local LLM inference
+        lan-mouse       # Keyboard/mouse sharing with Linux machines
         (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
         yubikey-manager # ykman CLI for Yubikey management
       ];
