@@ -28,6 +28,7 @@ with lib;
         pkgs.azure-cli-extensions.ssh
       ])
       pkgs.dnsutils
+      pkgs.tailscale
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
