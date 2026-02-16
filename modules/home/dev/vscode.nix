@@ -28,9 +28,10 @@ in {
 
           # Languages
           ms-python.python
-          ms-vscode.cpptools
           hashicorp.terraform
-
+        ] ++ optionals pkgs.stdenv.isLinux [
+          ms-vscode.cpptools  # gdb dependency broken on macOS
+        ] ++ [
           # Kubernetes
           ms-kubernetes-tools.vscode-kubernetes-tools
         ];
