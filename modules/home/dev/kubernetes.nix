@@ -23,7 +23,7 @@ in {
       stern            # Multi-pod log tailing
       kubelogin        # Azure AKS authentication
       kubefwd          # Bulk port forwarding services for local dev
-      argocd           # GitOps continuous deployment CLI
+      # argocd         # GitOps continuous deployment CLI (disabled: upstream yarn hash broken in nixpkgs)
     ];
 
     # kubectl completion and aliases
