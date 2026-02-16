@@ -54,6 +54,9 @@ def t [name?: string] {
   tmux new-session -A -s $session
 }
 
+# bonfire: context monitor for Claude sessions
+alias bonfire = ./bazel-bin/tools/cli/bonfire/bonfire/bonfire
+
 alias tl = tmux list-sessions
 alias ta = tmux attach-session
 alias tkill = tmux kill-session -t

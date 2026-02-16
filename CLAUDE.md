@@ -74,13 +74,20 @@ To edit neovim config: edit `chezmoi/dot_config/nvim/...`, then `chezmoi apply`.
 
 - **behemoth**: macOS workstation (aarch64-darwin)
 - **rocinante**: x86_64 Arch Linux (Omarchy) workstation, accessed via Tailscale
-- **endurance**: aarch64-linux VM running under Parallels on behemoth with LUKS encryption (Intune compliance)
+- **stargazer**: aarch64-linux Parallels VM on behemoth with LUKS encryption (Intune compliance)
+
+### Behemoth (macOS)
+
+Primary macOS workstation. Dotfiles at `/Users/andreym/Documents/dotfiles`.
+
+**Build/switch:** `just switch` (runs `darwin-rebuild switch`)
 
 ### Rocinante (Tailscale)
 
-Rocinante is an x86_64 Arch Linux (Omarchy) workstation with dotfiles cloned via git.
+x86_64 Arch Linux (Omarchy) workstation, accessed via Tailscale SSH.
 
 **Access:** `ssh rocinante` (via Tailscale SSH)
+**Dotfiles:** `/home/andreym/dotfiles` (git clone)
 
 **Build/switch:**
 ```bash
@@ -89,27 +96,26 @@ nix run home-manager -- switch --flake .#rocinante -b backup
 ```
 
 **Notes:**
-- Dotfiles live at `/home/andreym/dotfiles` (git clone, not a mount)
 - Native x86_64 — no Rosetta needed
 - See `hosts/rocinante/README.md` for full setup instructions
 
-### Endurance (Parallels VM - Encrypted)
+### Stargazer (Parallels VM - Encrypted)
 
-Endurance is an aarch64-linux VM with LUKS full-disk encryption for Microsoft Intune compliance.
+aarch64-linux Parallels VM on behemoth with LUKS full-disk encryption for Microsoft Intune compliance. Runs Omarchy (Hyprland).
 
-**Directory paths:**
-- macOS: `/Users/andreym/Documents/dotfiles`
-- Endurance: `/mnt/psf/Home/Documents/dotfiles` (mounted via Parallels shared folders)
+**Dotfiles:** `/home/andreym/dotfiles` (git clone, same path as rocinante)
 
-**Build/switch from macOS:**
+**Build/switch (from within stargazer):**
 ```bash
-prlctl exec Endurance "su andreym -s /bin/bash -c '. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && cd /mnt/psf/Home/Documents/dotfiles && nix run home-manager -- switch --flake .#endurance -b backup'"
+cd ~/dotfiles
+nix run home-manager -- switch --flake .#stargazer -b backup
 ```
 
 **Notes:**
-- Uses `/mnt/psf/` mount path (vs Rocinante's `/media/psf/`)
-- Requires manual prerequisites for Rosetta and Intune - see `hosts/endurance/README.md`
-- LUKS passphrase required at boot
+- aarch64-linux with Rosetta for x86_64 emulation
+- Same `/home/andreym/dotfiles` path as rocinante — distinguish by `hostname` or `uname -m` (aarch64 vs x86_64)
+- Uses nixGL with mesa (virtio_gpu in Parallels)
+- See `hosts/stargazer/README.md` for full setup instructions
 
 ## Notes
 
