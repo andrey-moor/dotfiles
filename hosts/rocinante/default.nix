@@ -26,7 +26,7 @@ with lib;
         pkgs.azure-cli-extensions.ssh
       ])
       pkgs.dnsutils
-      pkgs.tailscale
+      # tailscale: installed via pacman (needs root systemd service)
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
