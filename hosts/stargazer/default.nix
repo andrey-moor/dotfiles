@@ -64,6 +64,7 @@ with lib;
         rust.enable = true;
         kubernetes.enable = true;
         claude.enable = true;
+        codex.enable = true;
         bazel.enable = true;
         python.enable = true;
         terraform.enable = true;
