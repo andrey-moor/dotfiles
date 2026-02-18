@@ -65,6 +65,7 @@ with lib;
         kubernetes.enable = true;
         claude.enable = true;
         codex.enable = true;
+        opencode.enable = true;
         bazel.enable = true;
         python.enable = true;
         terraform.enable = true;
