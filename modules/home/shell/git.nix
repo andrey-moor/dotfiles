@@ -1,14 +1,27 @@
 # modules/home/shell/git.nix -- Git configuration (home-manager)
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
-let cfg = config.modules.shell.git;
-in {
+let
+  cfg = config.modules.shell.git;
+in
+{
   options.modules.shell.git = {
     enable = mkEnableOption "Git configuration";
-    userName = mkOption { type = types.str; default = "Andrey M"; };
-    userEmail = mkOption { type = types.str; default = ""; };
+    userName = mkOption {
+      type = types.str;
+      default = "Andrey M";
+    };
+    userEmail = mkOption {
+      type = types.str;
+      default = "";
+    };
     signingKey = mkOption {
       type = types.str;
       default = "";
@@ -49,8 +62,9 @@ in {
     };
 
     home.packages = with pkgs; [
-      gh          # GitHub CLI
-      git-crypt   # Transparent file encryption
+      gh # GitHub CLI
+      github-copilot-cli # GitHub Copilot extension for gh
+      git-crypt # Transparent file encryption
     ];
   };
 }

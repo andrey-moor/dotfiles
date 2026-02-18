@@ -11,7 +11,7 @@ in {
 
   config = mkIf cfg.enable {
     home.packages = [
-      pkgs.opencode
+      pkgs.main.opencode
     ];
   };
 }
