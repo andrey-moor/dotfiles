@@ -16,95 +16,42 @@ in {
       enableBashIntegration = true;
       enableZshIntegration = true;
 
-      # Nerd Font symbols configuration
       settings = {
-        aws.symbol = "  ";
-        buf.symbol = " ";
-        c.symbol = " ";
-        conda.symbol = " ";
-        crystal.symbol = " ";
-        dart.symbol = " ";
-        directory.read_only = " 󰌾";
-        docker_context.symbol = " ";
-        elixir.symbol = " ";
-        elm.symbol = " ";
-        fennel.symbol = " ";
-        fossil_branch.symbol = " ";
-        git_branch.symbol = " ";
-        git_commit.tag_symbol = "  ";
-        golang.symbol = " ";
-        guix_shell.symbol = " ";
-        haskell.symbol = " ";
-        haxe.symbol = " ";
-        hg_branch.symbol = " ";
-        hostname.ssh_symbol = " ";
-        java.symbol = " ";
-        julia.symbol = " ";
-        kotlin.symbol = " ";
-        lua.symbol = " ";
-        memory_usage.symbol = "󰍛 ";
-        meson.symbol = "󰔷 ";
-        nim.symbol = "󰆥 ";
-        nix_shell.symbol = " ";
-        nodejs.symbol = " ";
-        ocaml.symbol = " ";
-        package.symbol = "󰏗 ";
-        perl.symbol = " ";
-        php.symbol = " ";
-        pijul_channel.symbol = " ";
-        python.symbol = " ";
-        rlang.symbol = "󰟔 ";
-        ruby.symbol = " ";
-        rust.symbol = "󱘗 ";
-        scala.symbol = " ";
-        swift.symbol = " ";
-        zig.symbol = " ";
-        gradle.symbol = " ";
+        add_newline = true;
+        command_timeout = 1000;
+        format = "[$directory$git_branch$git_status]($style)$character";
 
-        os.symbols = {
-          Alpaquita = " ";
-          Alpine = " ";
-          AlmaLinux = " ";
-          Amazon = " ";
-          Android = " ";
-          Arch = " ";
-          Artix = " ";
-          CentOS = " ";
-          Debian = " ";
-          DragonFly = " ";
-          Emscripten = " ";
-          EndeavourOS = " ";
-          Fedora = " ";
-          FreeBSD = " ";
-          Garuda = "󰛓 ";
-          Gentoo = " ";
-          HardenedBSD = "󰞌 ";
-          Illumos = "󰈸 ";
-          Kali = " ";
-          Linux = " ";
-          Mabox = " ";
-          Macos = " ";
-          Manjaro = " ";
-          Mariner = " ";
-          MidnightBSD = " ";
-          Mint = " ";
-          NetBSD = " ";
-          NixOS = " ";
-          OpenBSD = "󰈺 ";
-          openSUSE = " ";
-          OracleLinux = "󰌷 ";
-          Pop = " ";
-          Raspbian = " ";
-          Redhat = " ";
-          RedHatEnterprise = " ";
-          RockyLinux = " ";
-          Redox = "󰀘 ";
-          Solus = "󰠳 ";
-          SUSE = " ";
-          Ubuntu = " ";
-          Unknown = " ";
-          Void = " ";
-          Windows = "󰍲 ";
+        character = {
+          error_symbol = "[✗](bold cyan)";
+          success_symbol = "[❯](bold cyan)";
+        };
+
+        directory = {
+          truncation_length = 2;
+          truncation_symbol = "…/";
+          repo_root_style = "bold cyan";
+          repo_root_format = "[$repo_root]($repo_root_style)[$path]($style)[$read_only]($read_only_style) ";
+        };
+
+        git_branch = {
+          format = "[$branch]($style) ";
+          style = "italic cyan";
+        };
+
+        git_status = {
+          format = "[$all_status]($style)";
+          style = "cyan";
+          ahead = "⇡\${count} ";
+          diverged = "⇕⇡\${ahead_count}⇣\${behind_count} ";
+          behind = "⇣\${count} ";
+          conflicted = " ";
+          up_to_date = " ";
+          untracked = "? ";
+          modified = " ";
+          stashed = "";
+          staged = "";
+          renamed = "";
+          deleted = "";
         };
       };
     };
