@@ -48,6 +48,9 @@ in {
   };
 
   config = mkIf cfg.enable {
+    # Ensure ghostty terminfo is found by tmux/ncurses (e.g. when SSH-ing in)
+    home.sessionVariables.TERMINFO_DIRS = "$HOME/.nix-profile/share/terminfo:/usr/share/terminfo";
+
     # On aarch64-linux, override the desktop file to use our wrapper with software rendering
     # This fixes the Omarchy wrapper bug (escaped $is_apple_silicon variable)
     # Uses home.file to place in ~/.local/share/applications/ which has higher XDG priority
