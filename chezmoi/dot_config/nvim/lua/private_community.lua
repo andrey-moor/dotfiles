@@ -20,4 +20,5 @@ return {
   { import = "astrocommunity.game.leetcode-nvim" },
   { import = "astrocommunity.terminal-integration.flatten-nvim" },
   { import = "astrocommunity.terminal-integration.vim-tmux-navigator" },
+  { import = "astrocommunity.code-runner.vim-slime" },
 }

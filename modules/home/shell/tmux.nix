@@ -24,6 +24,7 @@ in {
 
       plugins = with pkgs.tmuxPlugins; [
         sensible
+        vim-tmux-navigator
       ];
 
       extraConfig = ''
