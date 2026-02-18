@@ -40,6 +40,8 @@ def nix-update [] { cd $env.DOTFILES; just update; just switch }
 
 alias vim = nvim
 alias v = nvim
+alias cc = claude
+alias oc = opencode
 
 
 alias k = kubectl

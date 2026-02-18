@@ -50,12 +50,13 @@ in {
       pinentry.package = if pkgs.stdenv.isDarwin
         then pkgs.pinentry_mac
         else pkgs.pinentry-tty;
-      # Cache passphrases for 1 hour
-      defaultCacheTtl = 3600;
-      maxCacheTtl = 7200;
-      # SSH key cache
-      defaultCacheTtlSsh = 3600;
-      maxCacheTtlSsh = 7200;
+      # Cache passphrases for 24 hours (long sessions with AI tools need
+      # persistent cache since non-interactive shells can't re-prompt via pinentry)
+      defaultCacheTtl = 86400;
+      maxCacheTtl = 86400;
+      # SSH key cache — matches GPG cache
+      defaultCacheTtlSsh = 86400;
+      maxCacheTtlSsh = 86400;
       # Don't grab keyboard (can cause issues on macOS)
       grabKeyboardAndMouse = false;
     };
