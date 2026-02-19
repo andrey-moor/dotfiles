@@ -63,6 +63,27 @@ alias tl = tmux list-sessions
 alias ta = tmux attach-session
 alias tkill = tmux kill-session -t
 
+# tmux dev layout: editor + AI + terminal
+def tml [ai?: string] {
+  let current_dir = $env.PWD
+  let editor_pane = (tmux display-message -p '#{pane_id}' | str trim)
+  tmux split-window -v -p 15 -c $current_dir
+  tmux select-pane -t $editor_pane
+  tmux split-window -h -p 30 -c $current_dir
+  let ai_pane = (tmux display-message -p '#{pane_id}' | str trim)
+  if $ai != null {
+    tmux send-keys -t $ai_pane $ai C-m
+  }
+  tmux send-keys -t $editor_pane $"($env.EDITOR) ." C-m
+  tmux select-pane -t $editor_pane
+}
+
+# dev layout with claude
+def nic [] { tml claude }
+
+# dev layout with opencode
+def nioc [] { tml opencode }
+
 # External completer (carapace handles 800+ commands)
 let carapace_completer = {|spans: list<string>|
     carapace $spans.0 nushell ...$spans | from json
