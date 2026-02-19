@@ -13,6 +13,7 @@ in {
       enableBashIntegration = true;
       enableZshIntegration = true;
       enableNushellIntegration = false;  # nushell managed by chezmoi
+      daemon.enable = true;
       settings = {
         sync.records = false;
       };

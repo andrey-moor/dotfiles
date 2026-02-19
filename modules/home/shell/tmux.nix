@@ -25,6 +25,14 @@ in {
       plugins = with pkgs.tmuxPlugins; [
         sensible
         vim-tmux-navigator
+        resurrect
+        {
+          plugin = continuum;
+          extraConfig = ''
+            set -g @continuum-restore 'on'
+            set -g @continuum-save-interval '10'
+          '';
+        }
       ];
 
       extraConfig = ''
