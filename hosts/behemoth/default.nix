@@ -143,7 +143,6 @@ with lib;
         nodejs          # Node.js runtime (npx)
         goose-cli       # AI coding agent
         main.ollama     # Local LLM inference
-        lan-mouse       # Keyboard/mouse sharing with Linux machines
         (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
         yubikey-manager # ykman CLI for Yubikey management
       ];
@@ -170,6 +169,15 @@ with lib;
           gpg.enable = true;
           chezmoi.enable = true;
           openvpn.enable = true;
+          lan-mouse = {
+            enable = true;
+            gpu = false;
+            clients = [{
+              position = "left";
+              hostname = "rocinante";
+              ips = [ "10.0.0.6" ];
+            }];
+          };
         };
 
         dev = {

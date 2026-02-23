@@ -51,6 +51,14 @@ with lib;
         gpg.enable = true;
         chezmoi.enable = true;
         openvpn.enable = true;
+        lan-mouse = {
+          enable = true;
+          clients = [{
+            position = "right";
+            hostname = "behemoth";
+            ips = [ "10.0.0.239" ];
+          }];
+        };
       };
 
       dev = {
@@ -72,7 +80,6 @@ with lib;
       linux = {
         edge.enable = true;
         firefox.enable = true;
-        lan-mouse.enable = true;
         intune.enable = true;
         intune.debug = true;  # Enable verbose logging for debugging
         wayvnc = {
