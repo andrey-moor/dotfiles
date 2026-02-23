@@ -12,7 +12,14 @@ in {
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
       sshpass  # Non-interactive SSH password auth
+    ] ++ optionals stdenv.isLinux [
+      lxqt.lxqt-openssh-askpass
     ];
+
+    home.sessionVariables = mkIf pkgs.stdenv.isLinux {
+      SSH_ASKPASS = "${pkgs.lxqt.lxqt-openssh-askpass}/bin/lxqt-openssh-askpass";
+      SSH_ASKPASS_REQUIRE = "prefer";
+    };
 
     home.file.".ssh/sockets/.keep".text = "";
 

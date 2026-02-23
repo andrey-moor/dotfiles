@@ -21,7 +21,14 @@ let
     config.allowUnfree = true;
   };
 
-  edgePackage = pkgsX86.microsoft-edge;
+  # Override Edge version when upstream removes the nixpkgs-pinned deb
+  edgePackage = pkgsX86.microsoft-edge.overrideAttrs (old: rec {
+    version = "145.0.3800.70";
+    src = builtins.fetchurl {
+      url = "https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/microsoft-edge-stable_${version}-1_amd64.deb";
+      sha256 = "sha256-gUyh9AD1ntnZb2iLRwKLxy0PxY0Dist73oT9AC2pFQI=";
+    };
+  });
 
   # Preload library to ignore SIGTRAP - works around crashpad Rosetta incompatibility
   # Crashpad's ARM signal handler doesn't understand x86_64 INT3 breakpoints under Rosetta
