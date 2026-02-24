@@ -34,10 +34,6 @@ if $hm_vars_path != null {
 # Nix environment (Determinate Systems installer)
 $env.NIX_SSL_CERT_FILE = '/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt'
 
-# GPG agent for SSH authentication (Yubikey)
-$env.GPG_TTY = (do -i { tty } | default "")
-$env.SSH_AUTH_SOCK = (gpgconf --list-dirs agent-ssh-socket | str trim)
-
 $env.PATH = ($env.PATH | split row (char esep)
     | prepend '/nix/var/nix/profiles/default/bin'
     | prepend '/run/current-system/sw/bin'
@@ -49,4 +45,8 @@ $env.PATH = ($env.PATH | split row (char esep)
     | prepend $"($env.HOME)/.cargo/bin"
     | prepend $"($env.HOME)/.local/bin"
 )
+
+# GPG agent for SSH authentication (Yubikey)
+$env.GPG_TTY = (do -i { tty } | default "")
+$env.SSH_AUTH_SOCK = (do -i { gpgconf --list-dirs agent-ssh-socket | str trim } | default "")
 
