@@ -176,6 +176,7 @@ with lib;
               position = "left";
               hostname = "rocinante";
               ips = [ "10.0.0.6" ];
+              activateOnStartup = true;
             }];
           };
         };
