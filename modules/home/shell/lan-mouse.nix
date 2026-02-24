@@ -110,7 +110,7 @@ in {
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
-        ExecStart = "${pkgs.lan-mouse}/bin/lan-mouse daemon --port ${toString cfg.port}";
+        ExecStart = "${pkgs.lan-mouse}/bin/lan-mouse daemon";
         Restart = "on-failure";
         RestartSec = 5;
       };
