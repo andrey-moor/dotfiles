@@ -6,6 +6,8 @@ final: prev: {
   nushell = prev.nushell.overrideAttrs (oldAttrs: {
     doCheck = false;
   });
+  lan-mouse-app = final.callPackage ../packages/lan-mouse-app { };
+
   ghidra-extensions = prev.ghidra-extensions // {
     ghydramcp = final.callPackage ./ghidra-extensions/ghydramcp.nix { };
   };

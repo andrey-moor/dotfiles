@@ -38,7 +38,7 @@ with lib;
     # Requires: Accessibility permission (System Settings > Privacy & Security > Accessibility)
     # Little Snitch: allow UDP 4242
     launchd.user.agents.lan-mouse = {
-      command = "${pkgs.lan-mouse}/bin/lan-mouse --daemon";
+      command = "${pkgs.lan-mouse-app}/bin/lan-mouse --daemon";
       serviceConfig = {
         KeepAlive = true;
         RunAtLoad = true;

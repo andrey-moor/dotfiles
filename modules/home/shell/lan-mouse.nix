@@ -11,7 +11,9 @@ let
   cfg = config.modules.shell.lan-mouse;
   tomlFormat = pkgs.formats.toml { };
 
-  lanMousePkg = if (cfg.gpu && pkgs.stdenv.isLinux)
+  lanMousePkg = if pkgs.stdenv.isDarwin
+    then pkgs.lan-mouse-app
+    else if cfg.gpu
     then config.lib.nixGL.wrap pkgs.lan-mouse
     else pkgs.lan-mouse;
 
