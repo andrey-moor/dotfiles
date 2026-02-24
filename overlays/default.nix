@@ -8,6 +8,25 @@ final: prev: {
   });
   lan-mouse-app = final.callPackage ../packages/lan-mouse-app { };
 
+  # Pin lan-mouse to match the pre-built .app bundle (latest pre-release)
+  # to avoid protocol version mismatch between macOS and Linux hosts.
+  lan-mouse = prev.lan-mouse.overrideAttrs (oldAttrs: rec {
+    version = "unstable-2026-02-22";
+    src = final.fetchFromGitHub {
+      owner = "feschber";
+      repo = "lan-mouse";
+      rev = "27225ed56435681b18cfbb0499320fc626359730";
+      hash = "sha256-5pyZQbceDRBh2xYYcMf39WeyMp7z7z7X1ydFpyt+kGU=";
+    };
+    prePatch = ""; # Don't remove build.rs — new version uses shadow-rs
+    env = (oldAttrs.env or { }) // { GIT_DESCRIBE = version; };
+    cargoDeps = final.rustPlatform.fetchCargoVendor {
+      inherit src;
+      name = "${oldAttrs.pname}-${version}-vendor";
+      hash = "sha256-9ndm/rRSLiaCHlsTiy1Lxz0Z7n4umXjohqd98bHiWx0=";
+    };
+  });
+
   ghidra-extensions = prev.ghidra-extensions // {
     ghydramcp = final.callPackage ./ghidra-extensions/ghydramcp.nix { };
   };
