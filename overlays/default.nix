@@ -27,6 +27,14 @@ final: prev: {
     };
   });
 
+  # FIXME: azure-cli ssh extension requires oras==0.1.30 but nixpkgs has 0.2.39
+  # Skip the runtime dependency check until upstream fixes the version constraint
+  azure-cli-extensions = prev.azure-cli-extensions // {
+    ssh = prev.azure-cli-extensions.ssh.overridePythonAttrs (oldAttrs: {
+      pythonRuntimeDepsCheck = "disabled";
+    });
+  };
+
   ghidra-extensions = prev.ghidra-extensions // {
     ghydramcp = final.callPackage ./ghidra-extensions/ghydramcp.nix { };
   };
