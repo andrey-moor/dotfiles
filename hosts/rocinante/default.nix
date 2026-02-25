@@ -53,9 +53,9 @@ with lib;
         openvpn.enable = true;
         lan-mouse = {
           enable = true;
-          authorizedFingerprints = [
-            "BB:6A:03:A1:F0:BF:2C:95:8D:BF:92:D4:E6:EA:13:0F:6F:2E:08:F7:F3:BC:D3:B6:94:90:9C:D3:3A:EB:4D:2C"
-          ];
+          authorizedFingerprints = {
+            "BB:6A:03:A1:F0:BF:2C:95:8D:BF:92:D4:E6:EA:13:0F:6F:2E:08:F7:F3:BC:D3:B6:94:90:9C:D3:3A:EB:4D:2C" = "behemoth";
+          };
           clients = [{
             position = "right";
             hostname = "behemoth";

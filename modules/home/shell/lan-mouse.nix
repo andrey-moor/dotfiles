@@ -21,7 +21,7 @@ let
   configToml = {
     port = cfg.port;
     release_bind = cfg.releaseBind;
-  } // optionalAttrs (cfg.authorizedFingerprints != [ ]) {
+  } // optionalAttrs (cfg.authorizedFingerprints != { }) {
     authorized_fingerprints = cfg.authorizedFingerprints;
   } // optionalAttrs (cfg.clients != [ ]) {
     clients = map (c: {
@@ -58,9 +58,10 @@ in {
     };
 
     authorizedFingerprints = mkOption {
-      type = types.listOf types.str;
-      default = [ ];
-      description = "Pre-authorized client fingerprints (optional, usually exchanged via GUI)";
+      type = types.attrsOf types.str;
+      default = { };
+      example = { "AB:CD:..." = "my-other-machine"; };
+      description = "Pre-authorized client fingerprints mapped to descriptions";
     };
 
     clients = mkOption {
