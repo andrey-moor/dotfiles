@@ -172,6 +172,9 @@ with lib;
           lan-mouse = {
             enable = true;
             gpu = false;
+            authorizedFingerprints = [
+              "AD:C3:46:20:70:BB:79:2F:57:76:00:BA:0D:62:8E:D1:19:47:C4:58:76:0F:1F:D3:60:8D:2B:97:F5:1B:A5:83"
+            ];
             clients = [{
               position = "left";
               hostname = "rocinante";
