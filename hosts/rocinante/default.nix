@@ -58,7 +58,6 @@ with lib;
           };
           clients = [{
             position = "right";
-            hostname = "behemoth";
             ips = [ "10.0.0.239" ];
             activateOnStartup = true;
           }];

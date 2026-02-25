@@ -25,9 +25,10 @@ let
     authorized_fingerprints = cfg.authorizedFingerprints;
   } // optionalAttrs (cfg.clients != [ ]) {
     clients = map (c: {
-      hostname = c.hostname;
       ips = c.ips;
       position = c.position;
+    } // optionalAttrs (c.hostname != null) {
+      hostname = c.hostname;
     } // optionalAttrs (c.port != null) {
       port = c.port;
     } // optionalAttrs c.activateOnStartup {
@@ -74,8 +75,9 @@ in {
             description = "Position of this client relative to the current machine";
           };
           hostname = mkOption {
-            type = types.str;
-            description = "Hostname of the client machine";
+            type = types.nullOr types.str;
+            default = null;
+            description = "Hostname of the client machine (omit to use IPs only)";
           };
           ips = mkOption {
             type = types.listOf types.str;
