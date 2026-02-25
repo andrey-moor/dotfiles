@@ -53,6 +53,9 @@ with lib;
         openvpn.enable = true;
         lan-mouse = {
           enable = true;
+          authorizedFingerprints = {
+            "a6:0e:8b:92:c5:00:07:0c:c8:56:42:36:65:81:a4:be:ab:a4:91:47:c5:5b:10:22:de:08:5b:5e:57:27:44:ea" = "behemoth";
+          };
           clients = [{
             position = "right";
             ips = [ "10.0.0.239" ];
