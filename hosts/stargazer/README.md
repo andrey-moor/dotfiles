@@ -1,12 +1,12 @@
 # Stargazer Setup
 
-> **Last updated:** 2026-02-04
+> **Last updated:** 2026-02-27
 > **Intune Portal:** 1.2511.7 | **Broker:** 2.10.90 | **OpenSSL:** 3.3.2
 > **Template:** arch-base-template.pvmp v1.0
 
 Encrypted Arch Linux ARM VM in Parallels with LUKS for Microsoft Intune compliance.
 
-**ARM64 Omarchy:** Based on [PR #1897](https://github.com/basecamp/omarchy/pull/1897)
+**ARM64 Omarchy:** Uses [jondkinney/armarchy](https://github.com/jondkinney/armarchy) (`amarchy-3-x` branch)
 
 ## Prerequisites
 
@@ -218,6 +218,21 @@ ls -la /boot/EFI/BOOT/BOOTAA64.EFI
 # Expected: ~158720 bytes (GRUB), not ~90KB (Limine)
 ```
 
+### Fix mkinitcpio Hooks
+
+Omarchy creates `/etc/mkinitcpio.conf.d/omarchy_hooks.conf` which overrides the HOOKS array.
+It may include `btrfs-overlayfs` which **does not exist** on this VM, causing boot errors
+("device not found" messages during LUKS unlock).
+
+Check and fix:
+
+```bash
+cat /etc/mkinitcpio.conf.d/omarchy_hooks.conf
+# If it contains btrfs-overlayfs, remove it:
+sudo sed -i 's/ btrfs-overlayfs//' /etc/mkinitcpio.conf.d/omarchy_hooks.conf
+sudo mkinitcpio -P
+```
+
 ### Reboot
 
 ```bash
@@ -231,6 +246,7 @@ After reboot:
 ### Verification
 
 - [ ] File size is ~160KB (GRUB), not ~90KB (Limine)
+- [ ] mkinitcpio hooks do NOT include `btrfs-overlayfs`
 - [ ] Reboot completed successfully
 - [ ] LUKS prompt appeared with your passphrase
 - [ ] Logged in as your user (not root)
@@ -276,8 +292,12 @@ The script configures:
 - Rosetta binfmt for x86_64 emulation
 - Nix package manager
 - extra-platforms for cross-architecture builds
-- Dynamic linker for x86_64 binaries
+- Dynamic linker (`/lib64/ld-linux-x86-64.so.2`) for x86_64 binaries
 - os-release spoof for Intune compatibility
+
+**Note:** The `/lib64/ld-linux-x86-64.so.2` symlink is also auto-maintained by the
+`rosetta.nix` module on every `home-manager switch`. It creates a GC root to prevent
+`nix-collect-garbage` from breaking the symlink.
 
 ### Verification
 
@@ -422,6 +442,66 @@ journalctl --user -u intune-agent --since "5 minutes ago"
 
 ---
 
+## Omarchy Updates
+
+Run `omarchy-update` to update the system. This pulls the armarchy repo, updates
+system packages (pacman), AUR packages (yay), and runs migrations.
+
+### Before Updating
+
+Omarchy stores its files in `~/.local/share/omarchy/`. Local modifications (e.g.
+Hyprland env tweaks) will block `git pull`. Stash or commit them first:
+
+```bash
+cd ~/.local/share/omarchy
+git stash   # or: git checkout -- <file>
+```
+
+If untracked files conflict with upstream (e.g. `bin/ghostty`), remove them:
+
+```bash
+rm ~/.local/share/omarchy/bin/ghostty  # upstream now provides this
+```
+
+### After Updating
+
+**1. Verify GRUB bootloader** (omarchy may reinstall Limine):
+
+```bash
+ls -la /boot/EFI/BOOT/BOOTAA64.EFI
+# Must be ~160KB (GRUB). If ~90KB, restore GRUB:
+sudo cp /boot/EFI/GRUB/grubaa64.efi /boot/EFI/BOOT/BOOTAA64.EFI
+```
+
+**2. Verify mkinitcpio hooks** (omarchy may regenerate with missing hooks):
+
+```bash
+cat /etc/mkinitcpio.conf.d/omarchy_hooks.conf
+# Remove btrfs-overlayfs if present (does not exist on this VM):
+sudo sed -i 's/ btrfs-overlayfs//' /etc/mkinitcpio.conf.d/omarchy_hooks.conf
+sudo mkinitcpio -P
+```
+
+**3. Verify kernel image** — `linux-aarch64` installs to `/boot/Image` but GRUB
+boots `/boot/vmlinuz-linux`. If they differ, the initramfs modules won't match the
+kernel and LUKS decrypt fails at boot. The `rosetta.nix` module auto-syncs this on
+`home-manager switch`, but after an omarchy update (which may update the kernel),
+verify manually:
+
+```bash
+cmp -s /boot/Image /boot/vmlinuz-linux || sudo cp /boot/Image /boot/vmlinuz-linux
+```
+
+**4. Ghostty terminfo conflicts** — `ghostty-git` (AUR) can conflict with existing
+terminfo files during upgrades:
+
+```bash
+# If yay fails with "conflicting files" for terminfo:
+sudo rm -f /usr/share/terminfo/g/ghostty && omarchy-update -y
+```
+
+---
+
 ## WayVNC (Remote Access)
 
 WayVNC is configured as a user systemd service for remote desktop access.
@@ -471,6 +551,20 @@ sudo systemctl restart microsoft-identity-device-broker
 ```bash
 sudo systemctl restart systemd-binfmt
 ```
+
+**Rosetta "failed to open elf at /lib64/ld-linux-x86-64.so.2":**
+The x86_64 glibc was garbage collected. Re-run home-manager switch (which auto-fixes it),
+or manually:
+```bash
+GLIBC=$(nix build --no-link --print-out-paths 'nixpkgs#legacyPackages.x86_64-linux.glibc')
+sudo ln -sf $GLIBC/lib/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
+```
+
+**Boot errors "device not found" or "crypt disk not available" after omarchy update:**
+Two possible causes:
+1. `/etc/mkinitcpio.conf.d/omarchy_hooks.conf` contains `btrfs-overlayfs` (non-existent hook)
+2. `/boot/vmlinuz-linux` is stale (kernel/initramfs version mismatch)
+See [Omarchy Updates](#omarchy-updates) section.
 
 ---
 
