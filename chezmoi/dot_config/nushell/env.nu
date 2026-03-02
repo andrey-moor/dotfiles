@@ -48,9 +48,23 @@ $env.PATH = ($env.PATH | split row (char esep)
 
 # GPG/SSH agent setup
 $env.GPG_TTY = (do -i { tty } | default "")
-let op_sock = $"($nu.home-dir)/.1password/agent.sock"
-if not ($op_sock | path exists) {
-    # No 1Password agent — use gpg-agent for SSH (YubiKey)
-    $env.SSH_AUTH_SOCK = (do -i { gpgconf --list-dirs agent-ssh-socket | str trim } | default "")
+
+# SSH agent priority:
+# 1. Forwarded agent (SSH session) — don't override SSH_AUTH_SOCK
+# 2. 1Password agent socket (macOS or Linux)
+# 3. gpg-agent (YubiKey fallback)
+let is_ssh = ($env | get -i SSH_CLIENT | default "" | is-not-empty)
+let has_agent = ($env | get -i SSH_AUTH_SOCK | default "" | is-not-empty)
+
+if not ($is_ssh and $has_agent) {
+    let op_mac = $"($nu.home-dir)/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+    let op_linux = $"($nu.home-dir)/.1password/agent.sock"
+    if ($op_mac | path exists) {
+        $env.SSH_AUTH_SOCK = $op_mac
+    } else if ($op_linux | path exists) {
+        $env.SSH_AUTH_SOCK = $op_linux
+    } else {
+        $env.SSH_AUTH_SOCK = (do -i { gpgconf --list-dirs agent-ssh-socket | str trim } | default "")
+    }
 }
 

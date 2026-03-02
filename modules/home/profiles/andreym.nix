@@ -18,7 +18,7 @@ with lib;
       # SSH signing via 1Password (Linux hosts without YubiKey)
       signingFormat = "ssh";
       signingKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICdtwwW6A7j8vesJzYxp06VugC0Go+q1rBCbTXbCzSfs";
-      signer = "/opt/1Password/op-ssh-sign";
+      signer = config.modules.shell.onepassword.signer;
     } else {
       # GPG signing via YubiKey (macOS)
       signingKey = "622041A533BA5D69";

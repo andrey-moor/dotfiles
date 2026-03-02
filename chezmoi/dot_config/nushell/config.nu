@@ -69,18 +69,23 @@ def tml [ai?: string] {
   let in_tmux = ($env | get -o TMUX | is-not-empty)
 
   if not $in_tmux {
-    tmux new-session -d -s main -c $current_dir
-    let editor_pane = (tmux display-message -t main -p '#{pane_id}' | str trim)
-    tmux split-window -t main -v -p 15 -c $current_dir
-    tmux select-pane -t $editor_pane
-    tmux split-window -t $editor_pane -h -p 30 -c $current_dir
-    let ai_pane = (tmux display-message -t main -p '#{pane_id}' | str trim)
-    if $ai != null {
-      tmux send-keys -t $ai_pane $ai C-m
+    let has_session = (do -i { tmux has-session -t main } | complete | get exit_code) == 0
+    if $has_session {
+      tmux attach-session -t main
+    } else {
+      tmux new-session -d -s main -c $current_dir
+      let editor_pane = (tmux display-message -t main -p '#{pane_id}' | str trim)
+      tmux split-window -t main -v -p 15 -c $current_dir
+      tmux select-pane -t $editor_pane
+      tmux split-window -t $editor_pane -h -p 30 -c $current_dir
+      let ai_pane = (tmux display-message -t main -p '#{pane_id}' | str trim)
+      if $ai != null {
+        tmux send-keys -t $ai_pane $ai C-m
+      }
+      tmux send-keys -t $editor_pane $"($env.EDITOR) ." C-m
+      tmux select-pane -t $editor_pane
+      tmux attach-session -t main
     }
-    tmux send-keys -t $editor_pane $"($env.EDITOR) ." C-m
-    tmux select-pane -t $editor_pane
-    tmux attach-session -t main
   } else {
     let editor_pane = (tmux display-message -p '#{pane_id}' | str trim)
     tmux split-window -v -p 15 -c $current_dir

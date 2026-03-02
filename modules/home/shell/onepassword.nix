@@ -8,6 +8,13 @@ let cfg = config.modules.shell.onepassword;
 in {
   options.modules.shell.onepassword = {
     enable = mkEnableOption "1Password SSH agent integration";
+    signer = mkOption {
+      type = types.str;
+      default = if pkgs.stdenv.isDarwin
+        then "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+        else "/opt/1Password/op-ssh-sign";
+      description = "Path to op-ssh-sign binary for git commit signing";
+    };
   };
 
   config = mkIf cfg.enable {

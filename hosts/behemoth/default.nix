@@ -167,6 +167,7 @@ with lib;
           lazygit.enable = true;
           ghostty.enable = true;
           gpg.enable = true;
+          onepassword.enable = true;
           chezmoi.enable = true;
           openvpn.enable = true;
           lan-mouse = {

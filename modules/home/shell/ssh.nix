@@ -44,8 +44,6 @@ in {
             ControlMaster = "auto";
             ControlPath = "~/.ssh/sockets/%r@%n-%p";
             ControlPersist = "600";
-          } // optionalAttrs op {
-            IdentityAgent = "~/.1password/agent.sock";
           };
         };
 
@@ -78,9 +76,18 @@ in {
             else "~/.ssh/id_ed25519_sk_rk_linkedin";
         };
 
-        # Rocinante - Linux VM (Tailscale MagicDNS)
+        # Rocinante - Linux workstation (Tailscale MagicDNS)
         "rocinante" = {
           user = "andreym";
+        } // optionalAttrs op {
+          forwardAgent = true;
+        };
+
+        # Stargazer - Linux VM (Parallels)
+        "stargazer" = {
+          user = "andreym";
+        } // optionalAttrs op {
+          forwardAgent = true;
         };
       };
     };
