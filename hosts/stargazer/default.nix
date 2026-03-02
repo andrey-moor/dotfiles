@@ -25,7 +25,14 @@ with lib;
     home.packages = [
       (pkgs.azure-cli.withExtensions [
         pkgs.azure-cli-extensions.bastion
-        pkgs.azure-cli-extensions.ssh
+        (pkgs.azure-cli-extensions.ssh.overridePythonAttrs (old: {
+          # nixpkgs has oras 0.2.x but extension pins 0.1.30 — works fine with newer
+          # https://github.com/NixOS/nixpkgs/issues/495901
+          pythonRelaxDeps = [ "oras" ];
+          nativeBuildInputs = (old.nativeBuildInputs or []) ++ [
+            pkgs.python3Packages.pythonRelaxDepsHook
+          ];
+        }))
       ])
       pkgs.dnsutils
       # tailscale: installed via pacman (needs root systemd service)
@@ -51,6 +58,7 @@ with lib;
         lazygit.enable = true;
         ghostty.enable = true;
         gpg.enable = true;
+        onepassword.enable = true;
         chezmoi.enable = true;
         openvpn.enable = true;
       };

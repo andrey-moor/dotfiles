@@ -46,7 +46,11 @@ $env.PATH = ($env.PATH | split row (char esep)
     | prepend $"($env.HOME)/.local/bin"
 )
 
-# GPG agent for SSH authentication (Yubikey)
+# GPG/SSH agent setup
 $env.GPG_TTY = (do -i { tty } | default "")
-$env.SSH_AUTH_SOCK = (do -i { gpgconf --list-dirs agent-ssh-socket | str trim } | default "")
+let op_sock = $"($nu.home-dir)/.1password/agent.sock"
+if not ($op_sock | path exists) {
+    # No 1Password agent — use gpg-agent for SSH (YubiKey)
+    $env.SSH_AUTH_SOCK = (do -i { gpgconf --list-dirs agent-ssh-socket | str trim } | default "")
+}
 

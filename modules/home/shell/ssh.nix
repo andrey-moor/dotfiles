@@ -3,7 +3,9 @@
 { lib, config, pkgs, ... }:
 
 with lib;
-let cfg = config.modules.shell.ssh;
+let
+  cfg = config.modules.shell.ssh;
+  op = config.modules.shell.onepassword.enable;
 in {
   options.modules.shell.ssh = {
     enable = mkEnableOption "SSH client configuration";
@@ -42,30 +44,38 @@ in {
             ControlMaster = "auto";
             ControlPath = "~/.ssh/sockets/%r@%n-%p";
             ControlPersist = "600";
+          } // optionalAttrs op {
+            IdentityAgent = "~/.1password/agent.sock";
           };
         };
 
-        # Personal GitHub - uses GPG auth key via gpg-agent
+        # Personal GitHub
         "github.com" = {
           hostname = "github.com";
           user = "git";
-          # No IdentitiesOnly - allow agent to offer keys
+        } // optionalAttrs op {
+          identityFile = "~/.ssh/1p_personal.pub";
+          identitiesOnly = true;
         };
 
-        # Microsoft/Work GitHub - uses FIDO2 resident key on YubiKey Nano
+        # Microsoft/Work GitHub
         "github.com-microsoft" = {
           hostname = "github.com";
           user = "git";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_microsoft_nano";
           identitiesOnly = true;
+          identityFile = if op
+            then "~/.ssh/1p_microsoft.pub"
+            else "~/.ssh/id_ed25519_sk_rk_microsoft_nano";
         };
 
-        # LinkedIn/Work GitHub - uses FIDO2 resident key on YubiKey
+        # LinkedIn/Work GitHub
         "github.com-linkedin" = {
           hostname = "github.com";
           user = "git";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_linkedin";
           identitiesOnly = true;
+          identityFile = if op
+            then "~/.ssh/1p_linkedin.pub"
+            else "~/.ssh/id_ed25519_sk_rk_linkedin";
         };
 
         # Rocinante - Linux VM (Tailscale MagicDNS)

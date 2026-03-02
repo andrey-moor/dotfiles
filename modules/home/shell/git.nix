@@ -25,7 +25,17 @@ in
     signingKey = mkOption {
       type = types.str;
       default = "";
-      description = "GPG key ID for signing commits and tags";
+      description = "GPG key ID or SSH public key for signing commits and tags";
+    };
+    signingFormat = mkOption {
+      type = types.nullOr (types.enum [ "openpgp" "ssh" "x509" ]);
+      default = null;
+      description = "Signing format (openpgp for GPG, ssh for 1Password/SSH keys)";
+    };
+    signer = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Path to signing program (e.g. /opt/1Password/op-ssh-sign)";
     };
   };
 
@@ -34,10 +44,14 @@ in
       enable = true;
       lfs.enable = true;
 
-      signing = mkIf (cfg.signingKey != "") {
+      signing = mkIf (cfg.signingKey != "") ({
         key = cfg.signingKey;
         signByDefault = true;
-      };
+      } // optionalAttrs (cfg.signingFormat != null) {
+        format = cfg.signingFormat;
+      } // optionalAttrs (cfg.signer != null) {
+        signer = cfg.signer;
+      });
 
       settings = {
         user = {
