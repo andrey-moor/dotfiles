@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Intune prerequisites script - system-level configuration for Intune on Arch Linux
+# Intune & Azure VPN prerequisites - system-level configuration on Arch Linux
 #
-# Configures: D-Bus policy, device broker service, pcscd, PKCS#11, ccid driver, PAM policy
+# Configures: D-Bus policy, device broker service, pcscd, PKCS#11, ccid driver,
+#             PAM policy, Azure VPN polkit rules
 # Prerequisites: Home-manager applied with modules.linux.intune.enable = true
 #
 # Idempotent: safe to re-run - each section checks if already configured
@@ -115,7 +116,8 @@ SERVICE_DEST="/etc/systemd/system/microsoft-identity-device-broker.service"
 OVERRIDE_DIR="/etc/systemd/system/microsoft-identity-device-broker.service.d"
 OVERRIDE_CONF="$OVERRIDE_DIR/rosetta.conf"
 
-if [[ -f "$OVERRIDE_CONF" ]] && grep -q "ExecStart=" "$OVERRIDE_CONF" 2>/dev/null; then
+OVERRIDE_EXEC=$(grep '^ExecStart=/' "$OVERRIDE_CONF" 2>/dev/null | head -1 | cut -d= -f2)
+if [[ -f "$OVERRIDE_CONF" ]] && [[ -n "$OVERRIDE_EXEC" ]] && [[ -e "$OVERRIDE_EXEC" ]]; then
     skip "Device broker systemd service"
 else
     if [[ "$CHECK_ONLY" == "true" ]]; then
@@ -132,10 +134,14 @@ else
             # Create override directory
             sudo mkdir -p "$OVERRIDE_DIR"
 
-            # Find the wrapper from Nix profile
-            WRAPPER=$(readlink -f "$HOME/.nix-profile/bin/microsoft-identity-device-broker-rosetta" 2>/dev/null || \
-                      readlink -f "$HOME/.nix-profile/bin/microsoft-identity-device-broker" 2>/dev/null || \
-                      echo "")
+            # Use stable symlink path (not readlink -f) so it survives home-manager switch
+            if [[ -L "$HOME/.nix-profile/bin/microsoft-identity-device-broker-rosetta" ]]; then
+                WRAPPER="$HOME/.nix-profile/bin/microsoft-identity-device-broker-rosetta"
+            elif [[ -L "$HOME/.nix-profile/bin/microsoft-identity-device-broker" ]]; then
+                WRAPPER="$HOME/.nix-profile/bin/microsoft-identity-device-broker"
+            else
+                WRAPPER=""
+            fi
 
             if [[ -z "$WRAPPER" ]]; then
                 fail "Device broker wrapper not found in Nix profile"
@@ -358,6 +364,117 @@ else
 fi
 
 # ============================================================================
+# 9. Azure VPN Client prerequisites
+# ============================================================================
+log "Checking Azure VPN Client prerequisites..."
+
+# 9a. Polkit rule for systemd-resolve DNS modifications
+AZUREVPN_POLKIT="/usr/share/polkit-1/rules.d/microsoft-azurevpnclient.rules"
+
+if [[ -f "$AZUREVPN_POLKIT" ]]; then
+    skip "Azure VPN polkit rule"
+else
+    if [[ "$CHECK_ONLY" == "true" ]]; then
+        fail "Azure VPN polkit rule not installed"
+    else
+        log "Installing Azure VPN polkit rule..."
+        cat << 'EOF' | sudo tee "$AZUREVPN_POLKIT" > /dev/null
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.resolve1.set-dns-servers" ||
+         action.id == "org.freedesktop.resolve1.set-domains") &&
+        subject.isInGroup("network")) {
+        return polkit.Result.YES;
+    }
+});
+EOF
+        sudo chmod 644 "$AZUREVPN_POLKIT"
+        log "Azure VPN polkit rule installed"
+    fi
+fi
+
+# 9b. Add user to network group
+if id -nG "$USER" 2>/dev/null | grep -qw network; then
+    skip "User in network group"
+else
+    if [[ "$CHECK_ONLY" == "true" ]]; then
+        fail "User not in network group"
+    else
+        log "Adding $USER to network group..."
+        sudo usermod -aG network "$USER"
+        log "Added $USER to network group (re-login required)"
+    fi
+fi
+
+# 9c. Patch libLinuxCore.so client ID (required for Entra ID auth)
+AZUREVPN_LIBCORE="/opt/microsoft/microsoft-azurevpnclient/lib/libLinuxCore.so"
+OLD_CLIENT_ID="c632b3df-fb67-4d84-bdcf-b95ad541b5c8"
+NEW_CLIENT_ID="41b23e61-6c1e-4545-b367-cd054e0ed4b4"
+
+if [[ -f "$AZUREVPN_LIBCORE" ]] && strings "$AZUREVPN_LIBCORE" | grep -q "$NEW_CLIENT_ID"; then
+    skip "Azure VPN libLinuxCore.so client ID patch"
+elif [[ ! -f "$AZUREVPN_LIBCORE" ]]; then
+    skip "Azure VPN client not installed (libLinuxCore.so not found)"
+else
+    if [[ "$CHECK_ONLY" == "true" ]]; then
+        fail "Azure VPN libLinuxCore.so not patched (wrong client ID)"
+    else
+        log "Patching Azure VPN libLinuxCore.so client ID..."
+        sudo cp "$AZUREVPN_LIBCORE" "${AZUREVPN_LIBCORE}.bak"
+        sudo sed -i "s/$OLD_CLIENT_ID/$NEW_CLIENT_ID/g" "$AZUREVPN_LIBCORE"
+        if strings "$AZUREVPN_LIBCORE" | grep -q "$NEW_CLIENT_ID"; then
+            log "Azure VPN libLinuxCore.so patched (backup at ${AZUREVPN_LIBCORE}.bak)"
+        else
+            fail "Patch did not apply - client ID not found in binary"
+        fi
+    fi
+fi
+
+# 9d. VERSION in os-release (Entra ID browser auth workaround)
+if grep -q '^VERSION=' /etc/os-release 2>/dev/null; then
+    skip "VERSION in os-release"
+else
+    if [[ "$CHECK_ONLY" == "true" ]]; then
+        fail "VERSION not set in /etc/os-release"
+    else
+        log "Adding VERSION to /etc/os-release..."
+        echo 'VERSION="0"' | sudo tee -a /etc/os-release > /dev/null
+        log "VERSION added to /etc/os-release (Entra ID workaround)"
+    fi
+fi
+
+# ============================================================================
+# 10. NSS module for Edge/Chrome (YubiKey certificate auth)
+# ============================================================================
+log "Checking NSS OpenSC module for browser smart card support..."
+
+NSSDB="$HOME/.pki/nssdb"
+
+if [[ ! -d "$NSSDB" ]]; then
+    if [[ "$CHECK_ONLY" == "true" ]]; then
+        fail "NSS database not found at $NSSDB"
+    else
+        log "Creating NSS database..."
+        mkdir -p "$NSSDB"
+        /usr/bin/certutil -d "sql:$NSSDB" -N --empty-password
+        log "NSS database created"
+    fi
+fi
+
+# Must use /usr/bin/modutil (system NSS) — Nix modutil can't load system .so files
+if /usr/bin/modutil -dbdir "sql:$NSSDB" -list 2>/dev/null | grep -q "OpenSC"; then
+    skip "NSS OpenSC module"
+else
+    if [[ "$CHECK_ONLY" == "true" ]]; then
+        fail "NSS OpenSC module not registered (Edge can't see YubiKey)"
+    else
+        log "Registering OpenSC module in NSS database..."
+        /usr/bin/modutil -dbdir "sql:$NSSDB" -add "OpenSC" \
+            -libfile /usr/lib/pkcs11/opensc-pkcs11.so -force
+        log "NSS OpenSC module registered"
+    fi
+fi
+
+# ============================================================================
 # VERIFICATION SUMMARY
 # ============================================================================
 
@@ -424,6 +541,20 @@ else
 fi
 
 echo ""
+echo "Azure VPN:"
+check_item_sudo "Azure VPN polkit rule" "[[ -f '$AZUREVPN_POLKIT' ]]"
+check_item "User in network group" "id -nG '$USER' | grep -qw network"
+if [[ -f "$AZUREVPN_LIBCORE" ]]; then
+    check_item "Azure VPN client ID patch" "strings '$AZUREVPN_LIBCORE' | grep -q '$NEW_CLIENT_ID'"
+fi
+check_item_sudo "VERSION in os-release" "grep -q '^VERSION=' /etc/os-release"
+
+echo ""
+echo "Browser Smart Card:"
+check_item "NSS database exists" "[[ -d '$NSSDB' ]]"
+check_item "NSS OpenSC module" "/usr/bin/modutil -dbdir 'sql:$NSSDB' -list 2>/dev/null | grep -q OpenSC"
+
+echo ""
 echo "============================================"
 
 if [[ "$FAILED" == "true" ]]; then
@@ -435,7 +566,7 @@ if [[ "$FAILED" == "true" ]]; then
         exit 1
     fi
 else
-    echo "All Intune prerequisites configured successfully!"
+    echo "All prerequisites configured successfully!"
     echo ""
     echo "Next steps:"
     echo "  1. Enable intune-agent timer: systemctl --user enable --now intune-agent.timer"

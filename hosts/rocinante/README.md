@@ -30,40 +30,53 @@ It auto-detects x86_64-linux and uses native packages (no Rosetta emulation need
 yay -S microsoft-identity-broker-bin intune-portal-bin microsoft-edge-stable-bin
 ```
 
-### 2. Run Setup Script
+### 2. Run Prerequisites
 
 ```bash
-intune-setup
+intune-prerequisites
 ```
 
-This configures: os-release spoofing, device broker override, pcscd, p11-kit.
+This configures: D-Bus policy, device broker service, pcscd, PKCS#11, PAM policy,
+keyring, NSS browser module (YubiKey), Azure VPN polkit rules.
 
-### 3. PAM Password Policy
-
-```bash
-sudo tee /etc/pam.d/common-password << 'EOF'
-password    requisite     pam_pwquality.so retry=3 dcredit=-1 ocredit=-1 ucredit=-1 lcredit=-1 minlen=12
-password    required      pam_unix.so sha512 shadow try_first_pass use_authtok
-EOF
-```
-
-### 4. Keyring Setup
+### 3. Keyring Setup
 
 ```bash
 seahorse  # Create "login" keyring with password
-echo -n login > ~/.local/share/keyrings/default
 ```
 
-### 5. Enroll
+### 4. Enroll
 
 ```bash
 intune-portal
 ```
 
-### 6. Enable Agent Timer
+### 5. Enable Agent Timer
 
 ```bash
 systemctl --user enable --now intune-agent.timer
+```
+
+## Azure VPN
+
+### 1. Install AUR Package
+
+```bash
+yay -S microsoft-azure-vpn-client-bin
+```
+
+### 2. System Prerequisites
+
+Already handled by `intune-prerequisites` (polkit rules, network group, client ID patch, os-release VERSION):
+
+```bash
+intune-prerequisites
+```
+
+### 3. Launch
+
+```bash
+microsoft-azurevpnclient
 ```
 
 ## Verify

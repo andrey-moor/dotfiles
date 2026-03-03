@@ -591,8 +591,10 @@ in {
     };
 
     # PKCS#11 module config for p11-kit (YubiKey support)
+    # Native x86_64: use system OpenSC (tracks pacman updates)
+    # Rosetta: use Nix-bundled x86_64 OpenSC (needs matching libopensc.so)
     xdg.configFile."pkcs11/modules/opensc.module".text = ''
-module: ${openscArch}/lib/pkcs11/opensc-pkcs11.so
+module: ${if mode == "native-x86_64" then "/usr/lib/pkcs11/opensc-pkcs11.so" else "${openscArch}/lib/pkcs11/opensc-pkcs11.so"}
 critical: no
 trust-policy: no
 '';
