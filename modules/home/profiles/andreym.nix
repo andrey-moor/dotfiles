@@ -31,6 +31,7 @@ with lib;
         contents = {
           user.email = "amoor@microsoft.com";
           user.signingKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJIvYOLXV0u6EZgw96emCgaMBCYGQLkiW7lJKmYZTfc/";
+          core.sshCommand = "ssh -i ~/.ssh/1p_microsoft.pub -o IdentitiesOnly=yes";
         };
       }
       {
@@ -38,6 +39,7 @@ with lib;
         contents = {
           user.email = "amoor@linkedin.com";
           user.signingKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJtI2UYmOcRkM+PrENRzpRB+4Nzj1Xj8/7tsXfHelBhY";
+          core.sshCommand = "ssh -i ~/.ssh/1p_linkedin.pub -o IdentitiesOnly=yes";
         };
       }
     ];
