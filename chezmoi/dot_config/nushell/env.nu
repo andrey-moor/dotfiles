@@ -53,8 +53,8 @@ $env.GPG_TTY = (do -i { tty } | default "")
 # 1. Forwarded agent (SSH session) — don't override SSH_AUTH_SOCK
 # 2. 1Password agent socket (macOS or Linux)
 # 3. gpg-agent (YubiKey fallback)
-let is_ssh = ($env | get -i SSH_CLIENT | default "" | is-not-empty)
-let has_agent = ($env | get -i SSH_AUTH_SOCK | default "" | is-not-empty)
+let is_ssh = ($env | get -o SSH_CLIENT | default "" | is-not-empty)
+let has_agent = ($env | get -o SSH_AUTH_SOCK | default "" | is-not-empty)
 
 if not ($is_ssh and $has_agent) {
     let op_mac = $"($nu.home-dir)/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
