@@ -106,10 +106,10 @@ with lib;
         "lm-studio"
         # System
         "karabiner-elements"
-        "monitor-control"
+        "monitorcontrol"
         "parallels"
         "little-snitch"
-        "tailscale"
+        "tailscale-app"
         # Design
         "figma"
         "monodraw"
