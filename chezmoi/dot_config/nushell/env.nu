@@ -59,9 +59,11 @@ let has_agent = ($env | get -o SSH_AUTH_SOCK | default "" | is-not-empty)
 if not ($is_ssh and $has_agent) {
     let op_mac = $"($nu.home-dir)/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
     let op_linux = $"($nu.home-dir)/.1password/agent.sock"
-    if ($op_mac | path exists) {
+    # Set socket path without checking path exists — 1Password may start after the shell.
+    # The socket just needs to exist when git/ssh actually uses it, not at shell init.
+    if ($op_mac | path dirname | path exists) {
         $env.SSH_AUTH_SOCK = $op_mac
-    } else if ($op_linux | path exists) {
+    } else if ($op_linux | path dirname | path exists) {
         $env.SSH_AUTH_SOCK = $op_linux
     } else {
         $env.SSH_AUTH_SOCK = (do -i { gpgconf --list-dirs agent-ssh-socket | str trim } | default "")
