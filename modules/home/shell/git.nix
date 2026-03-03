@@ -10,6 +10,25 @@
 with lib;
 let
   cfg = config.modules.shell.git;
+
+  # GCM wrapper: sets env vars for device code flow + credential cache,
+  # and redirects GIT_CONFIG_GLOBAL to a writable file so GCM can cache
+  # Azure AD authority info (it runs `git config --global` internally).
+  # The writable file includes the nix-managed config via [include].
+  gcm-azure = pkgs.writeShellScript "git-credential-manager-azure" ''
+    export GCM_CREDENTIAL_STORE=cache
+    export GCM_MSAUTH_FLOW=auto
+    export GCM_AZREPOS_CREDENTIALTYPE=oauth
+
+    gcm_config="$HOME/.config/git/gcm-config"
+    nix_config="$HOME/.config/git/config"
+    if [ ! -f "$gcm_config" ]; then
+      printf '[include]\n\tpath = %s\n' "$nix_config" > "$gcm_config"
+    fi
+    export GIT_CONFIG_GLOBAL="$gcm_config"
+
+    exec ${pkgs.git-credential-manager}/bin/git-credential-manager "$@"
+  '';
 in
 {
   options.modules.shell.git = {
@@ -65,6 +84,10 @@ in
         diff.algorithm = "histogram";
         merge.conflictStyle = "diff3";
         tag.gpgSign = cfg.signingKey != "";
+        credential."https://dev.azure.com" = {
+          useHttpPath = true;
+          helper = toString gcm-azure;
+        };
         alias = {
           st = "status";
           co = "checkout";
