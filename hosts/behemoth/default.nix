@@ -106,6 +106,7 @@ with lib;
         "lm-studio"
         # System
         "karabiner-elements"
+        "monitor-control"
         "parallels"
         "little-snitch"
         "tailscale"
