@@ -118,6 +118,8 @@ let
         }
         # nix-homebrew if available
       ] ++ (if inputs ? nix-homebrew then [ inputs.nix-homebrew.darwinModules.nix-homebrew ] else [])
+        # mac-app-util: create trampolines so Nix apps appear in Spotlight/Raycast
+      ++ (if inputs ? mac-app-util then [ inputs.mac-app-util.darwinModules.default ] else [])
       ++ modules
       ++ (mergedHost.modules or [])
       ++ (if mergedHost ? config then [ mergedHost.config ] else []);

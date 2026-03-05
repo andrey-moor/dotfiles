@@ -72,7 +72,8 @@ with lib;
       };
     };
 
-    # Security settings (Touch ID for sudo)
+    # Security settings (Touch ID for sudo, including inside tmux)
     security.pam.services.sudo_local.touchIdAuth = true;
+    security.pam.services.sudo_local.reattach = true;
   };
 }

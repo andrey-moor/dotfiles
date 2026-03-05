@@ -40,6 +40,9 @@
       flake = false;
     };
     
+    # macOS app trampoline (makes Nix apps visible in Spotlight/Raycast)
+    mac-app-util.url = "github:hraban/mac-app-util";
+
     # Additional inputs
     catppuccin.url = "github:catppuccin/nix";
     fenix = {

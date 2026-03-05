@@ -122,8 +122,10 @@ with lib;
       ];
       brews = [
         # CLI tools better via Homebrew
+        "agent-browser"
         "azure-cli"
         "openssh"  # FIDO2/Yubikey SSH support (macOS default lacks it)
+        "supabase"
       ];
       masApps = {
         "Screens 5" = 1663047912;
