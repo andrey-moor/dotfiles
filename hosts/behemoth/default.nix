@@ -99,6 +99,7 @@ with lib;
         "fantastical"
         "granola"
         "ia-presenter"
+        "obsidian"
         # Communication
         "zoom"
         # AI/ML
@@ -129,6 +130,7 @@ with lib;
       ];
       masApps = {
         "Screens 5" = 1663047912;
+        "Xcode" = 497799835;
       };
     };
 
