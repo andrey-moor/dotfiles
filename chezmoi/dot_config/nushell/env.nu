@@ -50,9 +50,9 @@ $env.PATH = ($env.PATH | split row (char esep)
 $env.GPG_TTY = (do -i { tty } | default "")
 
 # SSH agent priority:
-# 1. Forwarded agent (SSH/tmux) — use stable symlink (~/.ssh/agent.sock)
-#    that ~/.ssh/rc keeps pointing to the latest forwarded socket.
-#    Survives tmux reattach: existing panes already point at the symlink.
+# 1. Forwarded agent (SSH/tmux) — use stable symlink (~/.ssh/agent.sock).
+#    Direct SSH shells update the symlink to the current forwarded socket.
+#    tmux panes already point at the symlink, so they follow the update.
 # 2. 1Password agent socket (macOS or Linux)
 # 3. gpg-agent (YubiKey fallback)
 let is_ssh = ($env | get -o SSH_CLIENT | default "" | is-not-empty)
@@ -60,6 +60,11 @@ let in_tmux = ($env | get -o TMUX | default "" | is-not-empty)
 
 if $is_ssh or $in_tmux {
     let stable = $"($nu.home-dir)/.ssh/agent.sock"
+    let current = ($env | get -o SSH_AUTH_SOCK | default "")
+    # Direct SSH session: update symlink to the fresh forwarded socket
+    if $is_ssh and $current != "" and $current != $stable {
+        ^ln -sf $current $stable
+    }
     if ($stable | path exists) {
         $env.SSH_AUTH_SOCK = $stable
     }
