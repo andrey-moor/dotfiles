@@ -25,6 +25,20 @@ in {
 
     home.file.".ssh/sockets/.keep".text = "";
 
+    # Stable symlink for forwarded SSH agent (survives tmux reattach).
+    # On each SSH login, ~/.ssh/rc re-links ~/.ssh/agent.sock to the new
+    # ephemeral forwarded socket.  Shell init (env.nu) sets SSH_AUTH_SOCK
+    # to the symlink, so even long-running tmux panes follow the update.
+    home.file.".ssh/rc" = mkIf pkgs.stdenv.isLinux {
+      text = ''
+        #!/bin/bash
+        if [ -n "$SSH_AUTH_SOCK" ] && [ "$SSH_AUTH_SOCK" != "$HOME/.ssh/agent.sock" ]; then
+          ln -sf "$SSH_AUTH_SOCK" "$HOME/.ssh/agent.sock"
+        fi
+      '';
+      executable = true;
+    };
+
     programs.ssh = {
       enable = true;
 

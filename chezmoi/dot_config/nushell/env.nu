@@ -50,17 +50,22 @@ $env.PATH = ($env.PATH | split row (char esep)
 $env.GPG_TTY = (do -i { tty } | default "")
 
 # SSH agent priority:
-# 1. Forwarded agent (SSH session) — don't override SSH_AUTH_SOCK
+# 1. Forwarded agent (SSH/tmux) — use stable symlink (~/.ssh/agent.sock)
+#    that ~/.ssh/rc keeps pointing to the latest forwarded socket.
+#    Survives tmux reattach: existing panes already point at the symlink.
 # 2. 1Password agent socket (macOS or Linux)
 # 3. gpg-agent (YubiKey fallback)
 let is_ssh = ($env | get -o SSH_CLIENT | default "" | is-not-empty)
-let has_agent = ($env | get -o SSH_AUTH_SOCK | default "" | is-not-empty)
+let in_tmux = ($env | get -o TMUX | default "" | is-not-empty)
 
-if not ($is_ssh and $has_agent) {
+if $is_ssh or $in_tmux {
+    let stable = $"($nu.home-dir)/.ssh/agent.sock"
+    if ($stable | path exists) {
+        $env.SSH_AUTH_SOCK = $stable
+    }
+} else {
     let op_mac = $"($nu.home-dir)/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
     let op_linux = $"($nu.home-dir)/.1password/agent.sock"
-    # Set socket path without checking path exists — 1Password may start after the shell.
-    # The socket just needs to exist when git/ssh actually uses it, not at shell init.
     if ($op_mac | path dirname | path exists) {
         $env.SSH_AUTH_SOCK = $op_mac
     } else if ($op_linux | path dirname | path exists) {
