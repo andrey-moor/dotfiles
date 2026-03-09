@@ -101,7 +101,7 @@ def tml [ai?: string] {
 }
 
 # dev layout with claude
-def nic [] { tml claude }
+def nic [] { tml "claude -c" }
 
 # dev layout with opencode
 def nioc [] { tml opencode }

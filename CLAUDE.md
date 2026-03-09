@@ -10,7 +10,7 @@ just build           # Build without applying
 just update          # Update flake inputs (nixpkgs, etc.)
 just fmt             # Format nix files
 just check           # Check flake validity
-just chezmoi-apply   # Apply chezmoi changes to ~/.config
+just chezmoi-apply   # Apply chezmoi changes (~/.config, ~/.claude, etc.)
 just chezmoi-diff    # Preview chezmoi changes
 ```
 
@@ -68,7 +68,11 @@ Chezmoi source lives in `chezmoi/` directory. The `modules.shell.chezmoi` module
 - Configures sourceDir to `${dotfilesDir}/chezmoi`
 - Exports `$DOTFILES` env var for shell scripts
 
-To edit neovim config: edit `chezmoi/dot_config/nvim/...`, then `chezmoi apply`.
+Managed targets:
+- `chezmoi/dot_config/` → `~/.config/` (neovim, nushell, alacritty, etc.)
+- `chezmoi/private_dot_claude/` → `~/.claude/` (settings, global CLAUDE.md, commands)
+
+Claude Code config uses a modify-template (`modify_settings.json`) to merge portable settings while preserving machine-local state (hooks, plugins). Custom commands `/dotfiles:claude-setup` and `/dotfiles:claude-sync` handle plugin installation and bidirectional sync.
 
 ## Hosts
 
