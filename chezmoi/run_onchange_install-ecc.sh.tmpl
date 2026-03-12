@@ -1,0 +1,83 @@
+#!/bin/bash
+# Everything Claude Code (ECC) installer
+# https://github.com/affaan-m/everything-claude-code
+#
+# Triggered by changes to .ecc-version. Downloads and extracts selected
+# rules, agents, and skills into ~/.claude/.
+#
+# ecc-version hash: {{ include ".ecc-version" | sha256sum }}
+
+set -euo pipefail
+
+ECC_REF="{{ include ".ecc-version" | trim }}"
+ECC_REPO="affaan-m/everything-claude-code"
+TARGET_DIR="{{ .chezmoi.homeDir }}/.claude"
+WORK_DIR=$(mktemp -d)
+
+cleanup() { rm -rf "$WORK_DIR"; }
+trap cleanup EXIT
+
+echo "Installing ECC ($ECC_REF) into $TARGET_DIR..."
+
+# Download archive
+if command -v gh &>/dev/null; then
+    gh api "repos/$ECC_REPO/tarball/$ECC_REF" > "$WORK_DIR/ecc.tar.gz"
+else
+    curl -sL "https://api.github.com/repos/$ECC_REPO/tarball/$ECC_REF" -o "$WORK_DIR/ecc.tar.gz"
+fi
+
+# Extract to work dir, stripping the repo prefix
+mkdir -p "$WORK_DIR/extracted"
+tar -xzf "$WORK_DIR/ecc.tar.gz" -C "$WORK_DIR/extracted" --strip-components=1
+
+# --- Rules ---
+# Auto-loaded by Claude Code for ALL sessions (including GSD agents)
+mkdir -p "$TARGET_DIR/rules"
+for lang in common golang python typescript swift kotlin perl php; do
+    if [ -d "$WORK_DIR/extracted/rules/$lang" ]; then
+        mkdir -p "$TARGET_DIR/rules/$lang"
+        cp -f "$WORK_DIR/extracted/rules/$lang/"*.md "$TARGET_DIR/rules/$lang/"
+    fi
+done
+# Remove agents.md — references ECC-specific agents that confuse GSD routing
+rm -f "$TARGET_DIR/rules/common/agents.md"
+
+# --- Agents ---
+# Standalone reviewers that don't overlap with GSD orchestration
+mkdir -p "$TARGET_DIR/agents"
+for agent in \
+    security-reviewer \
+    code-reviewer \
+    database-reviewer \
+    go-reviewer \
+    go-build-resolver \
+    python-reviewer \
+    kotlin-reviewer \
+    build-error-resolver \
+    tdd-guide \
+    refactor-cleaner; do
+    if [ -f "$WORK_DIR/extracted/agents/$agent.md" ]; then
+        cp -f "$WORK_DIR/extracted/agents/$agent.md" "$TARGET_DIR/agents/"
+    fi
+done
+
+# --- Skills ---
+# Domain knowledge for specific contexts
+for skill in \
+    security-review \
+    tdd-workflow \
+    api-design \
+    docker-patterns \
+    golang-patterns \
+    golang-testing \
+    deployment-patterns; do
+    if [ -d "$WORK_DIR/extracted/skills/$skill" ]; then
+        mkdir -p "$TARGET_DIR/skills/$skill"
+        cp -rf "$WORK_DIR/extracted/skills/$skill/"* "$TARGET_DIR/skills/$skill/"
+    fi
+done
+
+echo "ECC installed successfully."
+echo "  Rules:  $(find "$TARGET_DIR/rules" -name '*.md' | wc -l | tr -d ' ') files"
+echo "  Agents: $(ls "$TARGET_DIR/agents/"*-reviewer.md "$TARGET_DIR/agents/"*-resolver.md "$TARGET_DIR/agents/tdd-guide.md" "$TARGET_DIR/agents/refactor-cleaner.md" 2>/dev/null | wc -l | tr -d ' ') files"
+echo "  Skills: $(find "$TARGET_DIR/skills" -path '*/SKILL.md' | wc -l | tr -d ' ') dirs"
