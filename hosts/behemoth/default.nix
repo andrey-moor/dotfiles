@@ -117,6 +117,8 @@ with lib;
         # Media
         "obs"
         "imaging-edge"
+        # Cloud
+        "google-cloud-sdk"
         # Utilities
         "balenaetcher"
         "tigervnc-viewer"
@@ -126,6 +128,7 @@ with lib;
         "agent-browser"
         "azure-cli"
         "openssh"  # FIDO2/Yubikey SSH support (macOS default lacks it)
+        "firebase-cli"
         "supabase"
         "vercel-cli"
       ];
