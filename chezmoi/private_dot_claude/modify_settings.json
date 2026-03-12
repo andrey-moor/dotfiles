@@ -8,6 +8,16 @@
 {{- $data = setValueAtPath "alwaysThinkingEnabled" true $data -}}
 {{- $data = setValueAtPath "effortLevel" "high" $data -}}
 
+{{- /* Ensure Bash tool uses bash, not nushell (avoids export -p parse error) */ -}}
+{{- $env := dict -}}
+{{- if hasKey $data "env" -}}
+{{-   $env = index $data "env" -}}
+{{- end -}}
+{{- if not (hasKey $env "CLAUDE_CODE_SHELL") -}}
+{{-   $_ := set $env "CLAUDE_CODE_SHELL" "bash" -}}
+{{- end -}}
+{{- $_ := set $data "env" $env -}}
+
 {{- /* Portable plugin defaults — add missing, don't override existing */ -}}
 {{- $plugins := dict -}}
 {{- if hasKey $data "enabledPlugins" -}}

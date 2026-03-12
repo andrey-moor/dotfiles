@@ -31,12 +31,15 @@ in {
           extraConfig = ''
             set -g @continuum-restore 'on'
             set -g @continuum-save-interval '10'
+            set -g status-right "#[fg=blue]#{?client_prefix,PREFIX ,}#[fg=brightblack]#h "
           '';
         }
       ];
 
       extraConfig = ''
-        # Default shell
+        # Use nushell as interactive shell but keep bash as $SHELL
+        # (tools like Claude Code run "export -p" which requires a POSIX shell)
+        set -g default-shell "${pkgs.bash}/bin/bash"
         set -g default-command "${pkgs.nushell}/bin/nu"
 
         # Secondary prefix (keep C-b as fallback)
@@ -114,7 +117,6 @@ in {
         # Theme
         set -g status-style "bg=default,fg=default"
         set -g status-left "#[fg=black,bg=blue,bold] #S #[bg=default] "
-        set -g status-right "#[fg=blue]#{?client_prefix,PREFIX ,}#[fg=brightblack]#h "
         set -g window-status-format "#[fg=brightblack] #I:#W "
         set -g window-status-current-format "#[fg=blue,bold] #I:#W "
         set -g pane-border-style "fg=brightblack"
