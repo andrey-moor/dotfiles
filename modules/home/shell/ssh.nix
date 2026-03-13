@@ -46,7 +46,10 @@ in {
       enableDefaultConfig = false;
 
       # Include OrbStack SSH config for VM access (macOS only)
-      includes = [ "~/.orbstack/ssh/config" ];
+      includes = [
+        "~/.orbstack/ssh/config"
+        "~/.ssh/extra_config"
+      ];
 
       matchBlocks = {
         # Global defaults
