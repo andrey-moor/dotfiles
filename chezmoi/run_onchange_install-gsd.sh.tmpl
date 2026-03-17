@@ -1,0 +1,32 @@
+#!/bin/bash
+# Get Shit Done (GSD) installer
+# https://github.com/glittercowboy/get-shit-done
+#
+# Triggered by changes to .gsd-version. Installs GSD globally into ~/.claude/
+# via the official npm package (get-shit-done-cc).
+#
+# gsd-version hash: {{ include ".gsd-version" | sha256sum }}
+
+set -euo pipefail
+
+GSD_VERSION="{{ include ".gsd-version" | trim }}"
+
+if ! command -v npx &>/dev/null; then
+    echo "ERROR: npx not found. Install Node.js to enable GSD installation."
+    exit 1
+fi
+
+echo "Installing GSD v${GSD_VERSION}..."
+
+npx -y "get-shit-done-cc@${GSD_VERSION}" --global
+
+# Verify installation succeeded
+VERSION_FILE="{{ .chezmoi.homeDir }}/.claude/get-shit-done/VERSION"
+if [[ ! -f "$VERSION_FILE" ]]; then
+    echo "ERROR: GSD installation failed (VERSION file missing)."
+    exit 1
+fi
+
+echo "GSD v${GSD_VERSION} installed successfully."
+echo "  Version: $(cat "$VERSION_FILE")"
+echo "  Agents:  $(ls "{{ .chezmoi.homeDir }}/.claude/agents/gsd-"*.md 2>/dev/null | wc -l | tr -d ' ') files"

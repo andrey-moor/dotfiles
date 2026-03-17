@@ -4,11 +4,11 @@
 {{-   $data = fromJson .chezmoi.stdin -}}
 {{- end -}}
 
-{{- /* Portable scalar settings (authoritative — always set) */ -}}
+{{- /* ── Portable scalar settings (authoritative — always set) ── */ -}}
 {{- $data = setValueAtPath "alwaysThinkingEnabled" true $data -}}
 {{- $data = setValueAtPath "effortLevel" "high" $data -}}
 
-{{- /* Ensure Bash tool uses bash, not nushell (avoids export -p parse error) */ -}}
+{{- /* ── Environment variables (additive — don't override existing) ── */ -}}
 {{- $env := dict -}}
 {{- if hasKey $data "env" -}}
 {{-   $env = index $data "env" -}}
@@ -18,19 +18,27 @@
 {{- end -}}
 {{- $_ := set $data "env" $env -}}
 
-{{- /* Portable plugin defaults — add missing, don't override existing */ -}}
+{{- /* ── Plugins (additive — add missing, don't override existing) ── */ -}}
 {{- $plugins := dict -}}
 {{- if hasKey $data "enabledPlugins" -}}
 {{-   $plugins = index $data "enabledPlugins" -}}
 {{- end -}}
+
+{{- /* Remove deprecated plugins */ -}}
+{{- $_ := unset $plugins "playwright@claude-plugins-official" -}}
+{{- $_ := unset $plugins "sentrux@sentrux" -}}
+
 {{- $desired := dict
       "frontend-design@claude-plugins-official" true
       "code-review@claude-plugins-official" true
-      "playwright@claude-plugins-official" true
+      "agent-browser@agent-browser" true
+      "sentrux@sentrux-marketplace" true
       "document-skills@anthropic-agent-skills" true
       "example-skills@anthropic-agent-skills" true
       "context7@claude-plugins-official" true
       "supabase@claude-plugins-official" true
+      "swift-lsp@claude-plugins-official" true
+      "skill-creator@claude-plugins-official" true
 -}}
 {{- range $key, $val := $desired -}}
 {{-   if not (hasKey $plugins $key) -}}
@@ -39,4 +47,19 @@
 {{- end -}}
 {{- $_ := set $data "enabledPlugins" $plugins -}}
 
-{{ $data | toPrettyJson }}
+{{- /* ── MCP servers (authoritative for managed, preserve user-added) ── */ -}}
+{{- $mcpServers := dict -}}
+{{- if hasKey $data "mcpServers" -}}
+{{-   $mcpServers = index $data "mcpServers" -}}
+{{- end -}}
+
+{{- $_ := set $mcpServers "kagi" (dict "command" "op" "args" (list "run" "--" "uvx" "--python" "3.13" "kagimcp") "env" (dict "KAGI_API_KEY" "op://Private/Kagi/api_key")) -}}
+{{- $_ := set $mcpServers "fetch" (dict "command" "uvx" "args" (list "mcp-server-fetch")) -}}
+
+{{- if eq .chezmoi.hostname "behemoth" -}}
+{{-   $_ := set $mcpServers "obsidian" (dict "command" "npx" "args" (list "-y" "@bitbonsai/mcpvault@latest" "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents")) -}}
+{{- end -}}
+
+{{- $_ := set $data "mcpServers" $mcpServers -}}
+
+{{- $data | toPrettyJson }}

@@ -1,0 +1,62 @@
+#!/bin/bash
+# Claude Code plugin installer
+#
+# Triggered when the modify_settings.json template changes. Ensures all
+# desired marketplaces are registered and plugins are installed.
+#
+# settings hash: {{ include "private_dot_claude/modify_settings.json" | sha256sum }}
+
+set -eo pipefail
+
+if ! command -v claude &>/dev/null; then
+    echo "SKIP: claude CLI not found. Install Claude Code first."
+    exit 0
+fi
+
+PLUGINS_FILE="{{ .chezmoi.homeDir }}/.claude/plugins/installed_plugins.json"
+MARKETPLACE_DIR="{{ .chezmoi.homeDir }}/.claude/plugins/marketplaces"
+
+# ── Marketplaces ──
+install_marketplace() {
+    local name="$1" repo="$2"
+    if [ ! -d "$MARKETPLACE_DIR/$name" ]; then
+        echo "Adding marketplace: $name ($repo)..."
+        claude plugin marketplace add "$repo" 2>&1 || echo "  WARN: failed to add $name"
+    fi
+}
+
+install_marketplace "claude-plugins-official" "anthropics/claude-plugins-official"
+install_marketplace "anthropic-agent-skills" "anthropics/skills"
+install_marketplace "agent-browser" "vercel-labs/agent-browser"
+install_marketplace "sentrux-marketplace" "sentrux/sentrux"
+
+# ── Plugins ──
+installed=0
+skipped=0
+
+install_plugin() {
+    local plugin="$1"
+    if [ -f "$PLUGINS_FILE" ] && grep -q "\"$plugin\"" "$PLUGINS_FILE"; then
+        skipped=$((skipped + 1))
+        return
+    fi
+    echo "Installing plugin: $plugin..."
+    if claude plugin install "$plugin" 2>&1; then
+        installed=$((installed + 1))
+    else
+        echo "  WARN: failed to install $plugin"
+    fi
+}
+
+install_plugin "frontend-design@claude-plugins-official"
+install_plugin "code-review@claude-plugins-official"
+install_plugin "agent-browser@agent-browser"
+install_plugin "document-skills@anthropic-agent-skills"
+install_plugin "example-skills@anthropic-agent-skills"
+install_plugin "context7@claude-plugins-official"
+install_plugin "supabase@claude-plugins-official"
+install_plugin "swift-lsp@claude-plugins-official"
+install_plugin "skill-creator@claude-plugins-official"
+install_plugin "sentrux@sentrux-marketplace"
+
+echo "Plugins: $installed installed, $skipped already present."
