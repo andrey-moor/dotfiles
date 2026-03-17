@@ -1,0 +1,45 @@
+#!/bin/bash
+# Claude Code MCP server installer
+#
+# Registers user-scoped MCP servers via `claude mcp add -s user`.
+# These are stored in ~/.claude.json (NOT settings.json).
+#
+# mcp hash: {{ include "private_dot_claude/modify_settings.json" | sha256sum }}
+
+set -eo pipefail
+
+if ! command -v claude &>/dev/null; then
+    echo "SKIP: claude CLI not found. Install Claude Code first."
+    exit 0
+fi
+
+# Helper: add MCP server only if not already configured
+add_mcp() {
+    local name="$1"; shift
+    # Check if server already exists in ~/.claude.json
+    if command -v python3 &>/dev/null; then
+        if python3 -c "
+import json, sys
+with open('{{ .chezmoi.homeDir }}/.claude.json') as f:
+    d = json.load(f)
+sys.exit(0 if '$name' in d.get('mcpServers', {}) else 1)
+" 2>/dev/null; then
+            return
+        fi
+    fi
+    echo "Adding MCP server: $name..."
+    claude mcp add -s user "$@" 2>&1 || echo "  WARN: failed to add $name"
+}
+
+# ── Kagi (search, with 1Password for API key) ──
+add_mcp kagi -e "KAGI_API_KEY=op://Private/Kagi/api_key" -- kagi op run -- uvx --python 3.13 kagimcp
+
+# ── Fetch (general web fetching) ──
+add_mcp fetch -- fetch uvx mcp-server-fetch
+
+# ── Obsidian vault via MCPVault (behemoth only) ──
+{{ if eq .chezmoi.hostname "behemoth" -}}
+add_mcp obsidian -- obsidian npx -y "@bitbonsai/mcpvault@latest" "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents"
+{{ end -}}
+
+echo "MCP servers configured."

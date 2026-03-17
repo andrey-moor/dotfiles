@@ -47,19 +47,8 @@
 {{- end -}}
 {{- $_ := set $data "enabledPlugins" $plugins -}}
 
-{{- /* ── MCP servers (authoritative for managed, preserve user-added) ── */ -}}
-{{- $mcpServers := dict -}}
-{{- if hasKey $data "mcpServers" -}}
-{{-   $mcpServers = index $data "mcpServers" -}}
-{{- end -}}
-
-{{- $_ := set $mcpServers "kagi" (dict "command" "op" "args" (list "run" "--" "uvx" "--python" "3.13" "kagimcp") "env" (dict "KAGI_API_KEY" "op://Private/Kagi/api_key")) -}}
-{{- $_ := set $mcpServers "fetch" (dict "command" "uvx" "args" (list "mcp-server-fetch")) -}}
-
-{{- if eq .chezmoi.hostname "behemoth" -}}
-{{-   $_ := set $mcpServers "obsidian" (dict "command" "npx" "args" (list "-y" "@bitbonsai/mcpvault@latest" "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents")) -}}
-{{- end -}}
-
-{{- $_ := set $data "mcpServers" $mcpServers -}}
+{{- /* ── MCP servers: managed via run_onchange_install-mcp.sh, not here ── */ -}}
+{{- /* User-scoped MCP servers live in ~/.claude.json, not settings.json  */ -}}
+{{- $_ := unset $data "mcpServers" -}}
 
 {{- $data | toPrettyJson }}
