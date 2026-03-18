@@ -107,6 +107,9 @@ in {
         set -g allow-passthrough on
         set -g detach-on-destroy off
 
+        # Pass Wayland display to new panes (needed for wl-copy/wl-paste)
+        set -ga update-environment "WAYLAND_DISPLAY"
+
         # Status bar
         set -g status-position top
         set -g status-interval 5
