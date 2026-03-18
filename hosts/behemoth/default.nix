@@ -152,6 +152,7 @@ with lib;
         nodejs          # Node.js runtime (npx)
         goose-cli       # AI coding agent
         main.ollama     # Local LLM inference
+        qemu            # VM emulation (qemu-img, qemu-system-*)
         (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
         yubikey-manager # ykman CLI for Yubikey management
       ];
