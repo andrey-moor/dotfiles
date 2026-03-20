@@ -19,10 +19,13 @@ MARKETPLACE_DIR="{{ .chezmoi.homeDir }}/.claude/plugins/marketplaces"
 # ── Marketplaces ──
 install_marketplace() {
     local name="$1" repo="$2"
-    if [ ! -d "$MARKETPLACE_DIR/$name" ]; then
-        echo "Adding marketplace: $name ($repo)..."
-        claude plugin marketplace add "$repo" 2>&1 || echo "  WARN: failed to add $name"
+    if [ -d "$MARKETPLACE_DIR/$name" ]; then
+        # Refresh existing marketplace to pick up new plugins
+        echo "Refreshing marketplace: $name..."
+        claude plugin marketplace remove "$name" 2>&1 || true
     fi
+    echo "Adding marketplace: $name ($repo)..."
+    claude plugin marketplace add "$repo" 2>&1 || echo "  WARN: failed to add $name"
 }
 
 install_marketplace "claude-plugins-official" "anthropics/claude-plugins-official"
