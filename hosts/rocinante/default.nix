@@ -31,6 +31,9 @@ with lib;
           ];
         }))
       ])
+      pkgs._1password-cli  # op CLI for secret management
+      pkgs.uv              # Python package runner (uvx)
+      pkgs.nodejs           # Node.js runtime (npx)
       pkgs.dnsutils
       pkgs.netcat-openbsd
       pkgs.shellcheck
