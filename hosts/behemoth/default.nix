@@ -92,6 +92,8 @@ with lib;
         # Development
         "ghostty"
         "cursor"
+        # Browsers
+        "google-chrome"
         # Productivity
         "1password"
         "raycast"

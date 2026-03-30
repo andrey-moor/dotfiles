@@ -1,100 +1,77 @@
-# Omarchy Linux VM Setup for Intune
+# Obsidian Vault Organization
 
 ## What This Is
 
-A reproducible setup process for creating Omarchy Linux VMs on Parallels (Apple Silicon) with full Microsoft Intune enrollment via YubiKey. This includes documentation, automation scripts, and a unified Nix module that handles the complexity of running x86_64 Intune binaries on aarch64-linux via Rosetta emulation.
+A structured Obsidian vault with AI-assisted knowledge management. Claude Code skills handle capture, tagging, and retrieval of links/articles/references. Taxonomy evolves over time with staged proposals and bulk retagging.
 
 ## Core Value
 
-A developer can create an Intune-compliant Linux workstation on Apple Silicon by following documented steps, with automation for error-prone parts and clean Nix modules for the complex bits.
+Save anything interesting with minimal friction and find it months later when it matters — whether through AI search or browsing tagged views.
 
-## Current State
+## Current Milestone: v1 Knowledge Base
 
-**v1 shipped 2026-02-04** — See `.planning/MILESTONES.md` for details.
+**Goal:** Build the knowledge base system — vault structure, taxonomy, processing skills, and capture workflow.
 
-**Codebase:**
-- Unified `intune.nix` module (485 lines) with architecture detection
-- `prerequisites.sh` for system-level Rosetta/Nix setup
-- `intune-prerequisites.sh` for Intune-specific system config
-- `intune-health` diagnostic script for verification
-- 3,000+ lines of documentation (E2E guide, troubleshooting, upgrades)
-
-**Tech Stack:**
-- Host: macOS on Apple M4 Max
-- VM: Parallels Desktop with aarch64-linux (Arch Linux ARM + Omarchy)
-- Emulation: Rosetta for x86_64 Microsoft binaries
-- Intune stack: intune-portal 1.2511.7, microsoft-identity-broker 2.0.4
-- Pinned: OpenSSL 3.3.2 (Code:1200 fix), OpenSC 0.25.1
-
-**Working Reference:**
-- stargazer VM is fully enrolled and functional
-- endurance VM is production Intune device
+**Target features:**
+- Vault reorganization (archive old content, new folder structure)
+- Seed taxonomy with evolution workflow
+- Claude Code skills for add/process/retag/search/taxonomy
+- Obsidian Bases views for browsing
+- iPhone capture via share extension
+- Migration of existing relevant notes
 
 ## Requirements
 
-### Validated (v1)
+### Active
 
-- ✓ VM can be created via prlctl with LUKS encryption — v1
-- ✓ Rosetta enabled and functional for x86_64 binaries — v1
-- ✓ Shared folders mount dotfiles at /mnt/psf/Home/Documents/dotfiles — v1
-- ✓ SSH access works from macOS host to VM — v1
-- ✓ binfmt registration survives reboot (retry loop solution) — v1
-- ✓ GRUB bootloader with encrypt hook works with LUKS — v1
-- ✓ Documented process to create encrypted base template — v1
-- ✓ Clone and setup scripts for reproducible VM creation — v1
-- ✓ Prerequisites script handles sudo-level setup — v1
-- ✓ Nix installs with extra-platforms = x86_64-linux — v1
-- ✓ home-manager switch applies configuration successfully — v1
-- ✓ Unified intune.nix module with architecture detection — v1
-- ✓ Library paths use named abstraction — v1
-- ✓ intune-portal launches and shows login window — v1
-- ✓ microsoft-identity-broker D-Bus service activates — v1
-- ✓ microsoft-identity-device-broker systemd service runs — v1
-- ✓ Device can enroll with Microsoft Intune — v1
-- ✓ intune-agent reports compliance status — v1
-- ✓ os-release spoofs Ubuntu 22.04 for Intune compatibility — v1
-- ✓ pcscd runs and detects YubiKey — v1
-- ✓ OpenSC PKCS#11 module loads certificates from YubiKey — v1
-- ✓ Enrollment can use YubiKey PIV certificate — v1
-- ✓ E2E setup guide from VM creation to enrolled device — v1
-- ✓ Troubleshooting guide covers common issues — v1
-- ✓ Upgrade procedures documented — v1
+- [ ] Vault reorganized with Knowledge/inbox/, _system/, Archive/
+- [ ] Note schema with frontmatter (title, url, source, tags, summary, status, context)
+- [ ] Seed taxonomy in _taxonomy.md with proposal staging
+- [ ] /kb:add skill — quick-add links with optional context
+- [ ] /kb:process skill — fetch, summarize, auto-tag (high confidence) or ask (uncertain)
+- [ ] /kb:retag skill — bulk retag after taxonomy changes
+- [ ] /kb:search skill — search KB via tags + content
+- [ ] /kb:taxonomy skill — view, propose, approve/reject tags
+- [ ] Obsidian Bases views (inbox, all, by-tag, needs-review)
+- [ ] Obsidian note template for manual capture
+- [ ] Existing relevant notes migrated to new schema
+- [ ] DECISIONS.md capturing design rationale
 
-### Active (v2 candidates)
+### Out of Scope (this milestone)
 
-- [ ] Packer template for automated base VM creation
-- [ ] Single-command provisioning from macOS
-- [ ] Automated compliance verification script
-- [ ] Automated tests for module configuration
-- [ ] NixOS full system configuration option
+- Budget/expenses tracking — future milestone
+- People/relationship KB — future milestone
+- Readwise integration — layer after core KB works
+- Automated capture from RSS/email — manual + share extension first
+- NLP-based auto-categorization — taxonomy-based tagging sufficient
 
-### Out of Scope
+## Context
 
-- Native x86_64 Linux setup (Rocinante) — different architecture, separate module exists
-- macOS Intune enrollment — not applicable
-- Non-YubiKey enrollment methods — policy requires YubiKey
-- Limine bootloader with LUKS — cannot handle encrypt hook, GRUB required
-- TPM-based encryption unlock — not available in Parallels VMs
+- Vault syncs via iCloud, used on macOS + iPhone
+- Obsidian Mobile v1.12+ share extension handles iOS capture
+- MCPVault (@bitbonsai/mcpvault) provides Claude access to vault
+- Readwise available but not connected yet — future integration
+- ~170 existing notes to archive/migrate
+- Skills live in dotfiles repo: chezmoi/private_dot_claude/commands/kb/
+
+## Constraints
+
+- **Sync**: iCloud — no server-side processing, everything local
+- **Portability**: Plain markdown + YAML frontmatter only, no plugin-specific syntax
+- **Taxonomy**: KB-only for now, budget/people get their own later
+- **Tags**: Two levels max (Category/Subcategory)
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Use GRUB instead of Limine | Limine encrypt hook issues unresolved | ✓ Good — works reliably |
-| Template-and-clone approach | LUKS passphrase requires human input | ✓ Good — simple workflow |
-| Clone from EncryptedBase-GRUB | Fresh armarchy per VM is simpler than generalization | ✓ Good — clean VMs |
-| OpenSSL 3.3.2 pinned | Fixes Code:1200 broker bug in newer OpenSSL | ✓ Good — enrollment works |
-| Retry loop for binfmt | systemd conditions don't work with async mounts | ✓ Good — survives reboot |
-| Mode detection enum | Clear architecture handling in unified module | ✓ Good — maintainable |
-| Category-based lib paths | Easy removal when arm64 Intune arrives | ✓ Good — future-proof |
-| Test-clone-first upgrades | Never upgrade production directly | ✓ Good — safe process |
-
-## Constraints
-
-- **Encryption**: LUKS full-disk encryption required for Intune compliance
-- **Authentication**: YubiKey PIV certificate required for enrollment (org policy)
-- **Architecture**: Must work on aarch64-linux with x86_64 emulation via Rosetta
-- **Tooling**: Automation must work via prlctl and/or SSH from macOS host
+| Tags over folders | One note can span multiple interests, folders force single hierarchy | — Pending |
+| Two-level max taxonomy | Deep hierarchies become unmanageable | — Pending |
+| KB-only taxonomy | Budget and people will have different schemas, unify later if needed | — Pending |
+| Context field in schema | Captures WHY user saved it, separate from content summary | — Pending |
+| Staged tag proposals | Prevents taxonomy sprawl, new tags need approval | — Pending |
+| Auto-tag with confidence threshold | High confidence = auto-apply, uncertain = ask user | — Pending |
+| Flat Knowledge/ folder | Source is a frontmatter field, not a folder | — Pending |
 
 ---
-*Last updated: 2026-02-04 after v1 milestone*
+*Last updated: 2026-03-29 after project initialization*
