@@ -9,9 +9,20 @@ Create or update a wiki article that synthesizes knowledge from multiple source 
 
 ### 1. Resolve topic
 
-- Parse `$ARGUMENTS` for topic (tag like "AI/RAG" or free text like "RAG retrieval")
+- Parse `$ARGUMENTS` for topic (tag like "AI/RAG" or free text like "RAG retrieval"). Strip `--full` flag if present.
 - Read taxonomy from `Main/_system/_taxonomy.md` to validate/resolve to a tag
-- If ambiguous, ask user to clarify
+- **Disambiguation logic:**
+  - If input exactly matches a tag (e.g., "AI/RAG") → use it directly
+  - If input is a substring matching exactly one tag (e.g., "RAG" → only AI/RAG matches) → use that tag
+  - If input matches multiple tags (e.g., "AI" matches AI/LLMs, AI/Agents, AI/RAG, etc.) → list matches and ask user to pick:
+    ```
+    "AI" matches multiple tags:
+    1. AI/LLMs (24 notes)
+    2. AI/Agents (23 notes)
+    3. AI/RAG (4 notes)
+    Which one? (or "all" for the entire AI category)
+    ```
+  - If no tags match → search taxonomy descriptions for the term. If still no match: "No taxonomy tag matches '<input>'. Add one with `/kb:taxonomy add`?"
 
 ### 2. Find source notes
 

@@ -7,7 +7,27 @@ Retag knowledge base notes after taxonomy changes. Updates all downstream system
 `/kb:retag merge <tag1> <tag2> <target-tag>` — merge two tags into one
 `/kb:retag review` — find notes that may need retagging based on content
 
+All subcommands support `--dry-run` — show what would change without applying.
+
 ## Instructions
+
+### Dry-run mode
+
+If `$ARGUMENTS` contains `--dry-run`:
+- Run the full analysis and compute all changes
+- Present a diff-style preview:
+  ```
+  ## Retag Preview (dry-run)
+
+  Would rename AI/Prompting → AI/PromptEng:
+    - 17 source notes: tags updated
+    - 1 wiki article: wiki/ai-prompting.md → wiki/ai-prompt-eng.md
+    - tags.base: view "AI" unaffected (parent category unchanged)
+    - Index: would regenerate
+
+  No changes applied. Run without --dry-run to apply.
+  ```
+- Do NOT apply any changes
 
 ### Default: Interactive retag
 
@@ -79,7 +99,7 @@ Retag knowledge base notes after taxonomy changes. Updates all downstream system
    If user approves, update the .base file via Bash.
 
 **Index:**
-7. Regenerate `_system/index.md` (same logic as `/kb:index`).
+7. Regenerate `_system/index.md`.
 
 8. Report: `Renamed <old-tag> → <new-tag> in N notes, M wiki articles. Index updated.`
 
@@ -93,7 +113,15 @@ Same as rename but for two source tags:
 4. Add both to Deprecated table via `mcp__obsidian__patch_note`.
 5. **Wiki articles:** If wiki articles exist for either tag's topic, merge them:
    - If only one wiki exists: update its `topic` to target tag, rename file
-   - If both exist: merge content into one article, delete the other, update all backlinks
+   - If both exist:
+     - **Primary** = the article with more sources (or older `last_compiled` if tied)
+     - Read both articles' content
+     - Merge: for each section (Overview, Key Concepts, etc.), combine content from both, deduplicate overlapping points
+     - Union all `sources` arrays, deduplicate
+     - Write merged content to primary article, update `topic` and `tags`
+     - Rename primary to target tag filename if needed via `mcp__obsidian__move_note`
+     - Delete secondary article via Bash `rm` on the filesystem
+     - Update all backlinks: search for `[[wiki/secondary-name]]` across all notes, replace with `[[wiki/primary-name]]` via `mcp__obsidian__patch_note`
 6. **Bases views:** Warn if views reference either old tag.
 7. **Index:** Regenerate `_system/index.md`.
 8. Report: `Merged <tag1> + <tag2> → <target-tag> in N notes`
@@ -101,8 +129,18 @@ Same as rename but for two source tags:
 ### `review`
 
 1. For each note in `Main/Knowledge/` AND `Main/Knowledge/wiki/`, read content and current tags.
-2. Compare content against full taxonomy.
-3. Suggest additional or replacement tags where content has drifted from original tagging.
-4. Present suggestions for user approval.
+2. Use the same confidence-based tagging approach as `/kb:process` (see taxonomy-guide.md):
+   - **High confidence**: Content clearly matches a tag not currently applied
+   - **Medium confidence**: Reasonable inference
+   - Only suggest tags at medium+ confidence
+3. Present suggestions with confidence levels:
+   ```
+   ? note-name.md
+     Current tags: AI/LLMs, Reference
+     Suggested additions:
+       + AI/Prompting (high) — note is primarily about prompting techniques
+       + Tutorials (medium) — contains step-by-step examples
+   ```
+4. Ask user to approve/reject each suggestion.
 5. Apply approved changes via `mcp__obsidian__update_frontmatter`.
 6. Regenerate index after changes.

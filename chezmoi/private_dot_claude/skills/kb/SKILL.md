@@ -95,11 +95,12 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 
 **Triggers**: "find notes about", "what do I have on", "search KB", `/kb:search`
 
-1. Use `mcp__obsidian__search_notes` with `searchContent: true`, `searchFrontmatter: true`, `limit: 20`.
+1. Use `mcp__obsidian__search_notes` with `searchContent: true`, `searchFrontmatter: true`, `limit: N` (default 20, configurable via `--limit`).
 2. Filter to `Main/Knowledge/` path (includes wiki/ and source notes).
 3. For `tag:` prefix, search frontmatter only.
 4. Read frontmatter of matches via `mcp__obsidian__get_frontmatter`.
-5. Present with title, source, tags, summary, context. Indicate wiki articles with `[wiki]` marker.
+5. Present with title, source, tags, summary, context. Mark `[wiki]` and `[derived]` note types.
+6. Post-search: user can archive notes ("archive X" → set status to archived), view full content, or retag from results.
 
 ### 4. Taxonomy
 
