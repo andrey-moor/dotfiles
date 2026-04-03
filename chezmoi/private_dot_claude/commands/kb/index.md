@@ -77,9 +77,22 @@ Dev/Tools (X) | Dev/Rust (Y) | Dev/TypeScript (Z) | ...
 |---------|---------|---------------|--------|
 | [[wiki/name]] | N | date | current/stale |
 
+## Synthesis Candidates
+Subtags with 5+ source notes and no wiki article (excluding cross-cutting tags):
+- **AI/Agents** (26 notes) → `/kb:synthesize AI/Agents`
+- **Dev/Rust** (12 notes) → `/kb:synthesize Dev/Rust`
+
 ## Graph Health
 - Notes with Related links: X/Y (Z%)
 - Orphan notes: N
 ```
 
-8. Confirm: `Index updated: N notes, M wiki articles, K recent additions`
+The **Synthesis Candidates** section is computed by:
+1. Count source notes per specific subtag (not parent categories, not cross-cutting tags like Tutorials/Reference/Inspiration/Tools)
+2. Check if a wiki article exists for that subtag in `Main/Knowledge/wiki/`
+3. List subtags with 5+ notes and no wiki, sorted by count descending
+4. Include the `/kb:synthesize` command for easy copy-paste
+
+If no candidates exist, show: `All eligible topics have wiki articles. ✓`
+
+8. Confirm: `Index updated: N notes, M wiki articles, K recent additions, L synthesis candidates`
