@@ -30,8 +30,11 @@ Use `mcp__obsidian__get_frontmatter` and `mcp__obsidian__read_note` to get curre
 **b. Fetch URL content**
 If the note has a `url` field, fetch content using a tiered strategy:
 
-**Tier 1 — WebFetch (try first):**
-Use `WebFetch` to retrieve page content. This works for static pages (blogs, GitHub, docs, newsletters).
+**Tier 0 — GitHub CLI (for `github.com` URLs):**
+Use `gh repo view owner/repo --json name,description,stargazerCount,primaryLanguage,repositoryTopics,url,readme` for structured repo data. Skip to Tier 1 if `gh` fails.
+
+**Tier 1 — WebFetch:**
+Use `WebFetch` to retrieve page content. This works for static pages (blogs, docs, newsletters).
 
 **Tier 2 — agent-browser (if WebFetch fails or returns no useful content):**
 If WebFetch returns JS scaffolding, "JavaScript is not available", login walls, or empty content, use `agent-browser`:
@@ -145,7 +148,22 @@ Add to proposals? (yes/no)
 If yes, use `mcp__obsidian__patch_note` to append a row to the Proposals table in `Main/_system/_taxonomy.md`.
 This is a content edit (table row), not a frontmatter update, so `patch_note` is correct here.
 
-### 4. Summary
+**h. Wiki suggestions**
+
+After all notes are processed, check if any tags now have 3+ source notes without a wiki article:
+1. Count source notes per subcategory tag (e.g., `AI/RAG`, not `AI`)
+2. Check if `Main/Knowledge/wiki/<tag-kebab>.md` exists
+3. If 3+ sources and no wiki: suggest to user:
+   ```
+   💡 AI/RAG now has 5 sources. Create a synthesis article?
+      Run: /kb:synthesize AI/RAG
+   ```
+
+### 4. Update index
+
+After processing, regenerate `Main/_system/index.md` with current KB stats (same logic as `/kb:index`).
+
+### 5. Summary
 
 After processing all notes:
 ```

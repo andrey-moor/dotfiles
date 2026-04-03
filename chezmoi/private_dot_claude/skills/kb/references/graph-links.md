@@ -48,6 +48,24 @@ If note B doesn't have a `## Related` section yet, append one:
 - [[note-a-filename]] — reason for connection
 ```
 
+## Wiki Articles
+
+Wiki articles in `Knowledge/wiki/` link to their sources in the `## Sources` section (part of the article structure). Source notes link back to their wiki article in `## Related`:
+
+```markdown
+- [[wiki/ai-rag]] — synthesized wiki article
+```
+
+Wiki articles can also link to other wiki articles when topics are connected.
+
+## Derived Notes
+
+Derived notes (`source: derived`) link to their `informed_by` notes in `## Related`. The informed_by notes link back:
+
+```markdown
+- [[derived-note-name]] — derived analysis based on this source
+```
+
 ## When NOT to Link
 
 - Don't link notes that only share a broad category tag (e.g., both have `Dev/Rust` but are about completely different Rust topics)

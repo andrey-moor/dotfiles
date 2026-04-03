@@ -1,37 +1,42 @@
 ---
 name: kb
 description: >-
-  Knowledge base management for Obsidian vault via MCP. Use when the user wants to:
-  (1) Save a link or article ("save this", "bookmark this", "add to KB", any URL shared with intent to save),
-  (2) Process or tag saved content ("process inbox", "tag my notes", "what's in my inbox"),
-  (3) Search their knowledge base ("find my notes about X", "what do I have on Y", "search KB for Z"),
-  (4) Manage taxonomy ("show tags", "add a tag", "rename tag", "what tags do I have"),
-  (5) Retag notes after taxonomy changes ("retag", "update tags", "fix tags").
-  Requires the Obsidian MCP server (mcpvault). Vault structure: Knowledge/ for notes, Knowledge/inbox/ for unprocessed, _system/_taxonomy.md for tag definitions.
+  Obsidian knowledge base via MCP. Triggers: (1) Save links ("save this", "bookmark", URL with intent to save),
+  (2) Process inbox ("tag my notes", "process inbox"), (3) Search ("find notes about X", "what do I have on Y"),
+  (4) Taxonomy ("show tags", "add tag"), (5) Retag ("fix tags", "rename tag"),
+  (6) Synthesize wiki ("synthesize topic", "compile wiki"), (7) Health check ("lint", "check KB"),
+  (8) Capture answer ("capture this", "save this answer", "remember this"),
+  (9) KB overview ("index", "what's in my KB").
+  Requires Obsidian MCP server (mcpvault).
 ---
 
 # Knowledge Base Manager
 
-Obsidian-based knowledge base with AI-assisted tagging and retrieval.
+Obsidian-based knowledge base with AI-assisted tagging, synthesis, and retrieval.
 
 ## Vault Layout
 
 ```
 Main/
-├── Knowledge/          # Processed notes (status: reference)
-│   └── inbox/          # Unprocessed notes (status: inbox)
+├── Knowledge/          # Source + derived notes (status: reference)
+│   ├── inbox/          # Unprocessed notes (status: inbox)
+│   └── wiki/           # Synthesized concept articles (type: wiki)
 ├── _system/
 │   ├── _taxonomy.md    # Tag definitions and proposals
 │   ├── DECISIONS.md    # Design rationale
+│   ├── INSTRUCTIONS.md # Usage guide
+│   ├── index.md        # Auto-maintained KB overview
 │   └── templates/      # Note templates
 ```
 
 ## Key References
 
 - **Note schema**: See [references/schema.md](references/schema.md) for frontmatter fields and allowed values.
+- **Wiki schema**: See [references/wiki-schema.md](references/wiki-schema.md) for wiki article structure and update rules.
 - **Taxonomy guide**: See [references/taxonomy-guide.md](references/taxonomy-guide.md) for tag structure, evolution rules, and confidence-based tagging.
 - **Content fetching**: See [references/content-fetching.md](references/content-fetching.md) for the tiered fetch strategy (WebFetch → agent-browser), Twitter auth, and error handling rules.
 - **Graph links**: See [references/graph-links.md](references/graph-links.md) for cross-note linking strategy that builds the Obsidian graph.
+- **Lint rules**: See [references/lint-rules.md](references/lint-rules.md) for all health check rules and auto-fix capabilities.
 
 Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 
@@ -59,9 +64,9 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 3. For each note:
    a. Read frontmatter via `mcp__obsidian__get_frontmatter`.
    b. Fetch URL content using tiered strategy (see [references/content-fetching.md](references/content-fetching.md)):
+      - **Tier 0**: `gh` CLI (for GitHub repos)
       - **Tier 1**: `WebFetch` (fast, works for static pages)
       - **Tier 2**: `agent-browser` (for JS-heavy pages: Twitter, YouTube, SPAs)
-      - Twitter/X URLs use saved auth state at `~/.agent-browser/twitter-auth.json`
       - **Never silently skip failures** — report auth walls, errors, partial content to user
    c. Generate 1-3 sentence summary from fetched content.
    d. Suggest tags with confidence (see [references/taxonomy-guide.md](references/taxonomy-guide.md)).
@@ -83,16 +88,18 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
    - Find related notes (see [references/graph-links.md](references/graph-links.md)) and append `## Related` section with wiki-links
    - Move to `Main/Knowledge/` via `mcp__obsidian__move_note`
 7. Propose new tags → append to Proposals table in `_taxonomy.md` via `mcp__obsidian__patch_note`.
+8. **Wiki suggestion**: Check if any of the note's tags now have 3+ sources without a wiki article. If so, suggest `/kb:synthesize <tag>`.
+9. **Update index**: Regenerate `_system/index.md` (same logic as `/kb:index`).
 
 ### 3. Search
 
 **Triggers**: "find notes about", "what do I have on", "search KB", `/kb:search`
 
 1. Use `mcp__obsidian__search_notes` with `searchContent: true`, `searchFrontmatter: true`, `limit: 20`.
-2. Filter to `Main/Knowledge/` path only.
+2. Filter to `Main/Knowledge/` path (includes wiki/ and source notes).
 3. For `tag:` prefix, search frontmatter only.
 4. Read frontmatter of matches via `mcp__obsidian__get_frontmatter`.
-5. Present with title, source, tags, summary, context.
+5. Present with title, source, tags, summary, context. Indicate wiki articles with `[wiki]` marker.
 
 ### 4. Taxonomy
 
@@ -118,6 +125,43 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 | `merge <t1> <t2> <target>` | Replace both with target, deduplicate, update taxonomy |
 | `review` | Re-evaluate each note's tags against content, suggest improvements |
 
+### 6. Synthesize
+
+**Triggers**: "synthesize", "compile wiki", "summarize topic", "create wiki article", `/kb:synthesize`
+
+1. Resolve topic to taxonomy tag.
+2. Find source notes by tag match + content search.
+3. Create or incrementally update wiki article in `Knowledge/wiki/` (see [references/wiki-schema.md](references/wiki-schema.md)).
+4. Update source notes with backlinks to wiki article.
+5. Update index.
+
+### 7. Lint
+
+**Triggers**: "lint", "health check", "check KB", "validate notes", `/kb:lint`
+
+| Subcommand | Action |
+|---|---|
+| *(default)* | Full health check report (errors, warnings, info). See [references/lint-rules.md](references/lint-rules.md). |
+| `fix` | Auto-fix mechanical issues (date formats, status mismatches, deprecated tags). Asks before applying. |
+| `urls` | Check for dead URLs (slow, opt-in). |
+
+### 8. Capture
+
+**Triggers**: "capture this answer", "save this to KB", "remember this", `/kb:capture`
+
+1. Extract the most recent substantive answer from conversation.
+2. Identify KB notes referenced → `informed_by` field.
+3. Format as structured note with `source: derived`.
+4. Preview for user approval.
+5. Write to `Knowledge/` with bidirectional links.
+6. Update index.
+
+### 9. Index
+
+**Triggers**: "index", "KB overview", "what's in my KB", `/kb:index`
+
+Regenerate `_system/index.md` with: stats, recent additions, topics by size, wiki articles, graph health.
+
 ## MCP Tool Reference
 
 | Operation | Tool |
@@ -131,3 +175,4 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 | List folder contents | `mcp__obsidian__list_directory` |
 | Full-text search | `mcp__obsidian__search_notes` |
 | Get all tags + counts | `mcp__obsidian__list_all_tags` |
+| Batch read multiple notes | `mcp__obsidian__read_multiple_notes` |

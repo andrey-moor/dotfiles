@@ -2,9 +2,28 @@
 
 How to fetch URL content during `/kb:process`. Uses a tiered approach: fast static fetch first, browser automation as fallback.
 
+## Tier 0: GitHub CLI (for `github.com` URLs)
+
+For `github.com` repo URLs, use `gh` CLI instead of WebFetch — it returns structured data in one call.
+
+Extract owner/repo from URL (e.g., `https://github.com/foo/bar/tree/main` → `foo/bar`):
+
+```bash
+gh repo view foo/bar --json name,description,stargazerCount,primaryLanguage,repositoryTopics,url,readme
+```
+
+From the JSON response, build the note:
+- **title**: `name` + `description`
+- **summary**: `description` + star count + primary language
+- **content**: `readme` field (already markdown)
+- **author**: repo owner (from URL)
+- **tags**: map `repositoryTopics` to taxonomy tags where possible
+
+Skip to Tier 1 if `gh` fails (not installed, auth issue, private repo without access).
+
 ## Tier 1: WebFetch (default)
 
-Use `WebFetch` for the URL. This works for most static pages: blogs, GitHub READMEs, documentation, newsletters.
+Use `WebFetch` for the URL. This works for most static pages: blogs, docs, newsletters.
 
 **Success indicators:** Response contains actual page content (paragraphs, headings, article text).
 

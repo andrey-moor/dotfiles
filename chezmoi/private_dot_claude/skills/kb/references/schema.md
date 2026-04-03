@@ -32,6 +32,7 @@ Infer from URL pattern:
 | `*.podcast*`, podcast platforms | `podcast` |
 | Everything else | `article` |
 | No URL / manual note | `other` |
+| Claude's captured answer | `derived` |
 
 ## Status Values
 
@@ -47,6 +48,17 @@ Infer from URL pattern:
 - Derived from URL path or page title
 - Examples: `github-foo-bar.md`, `building-rag-with-langchain.md`
 
+## Optional Fields (derived notes)
+
+```yaml
+informed_by:              # Source notes that informed a derived answer
+  - "graphrag-vs-vector-db-retrieval"
+  - "colbert-embeddings-vector-search"
+```
+
+Only used when `source: derived`. Links to KB notes that were referenced when generating the captured answer.
+For derived notes: `url` is empty, `context` captures the user's original question.
+
 ## Content Structure
 
 ```markdown
@@ -54,3 +66,5 @@ Infer from URL pattern:
 
 User's manual notes, highlights, or AI-generated content summary.
 ```
+
+For wiki articles, see [wiki-schema.md](wiki-schema.md).
