@@ -36,6 +36,7 @@ with lib;
       pkgs.nodejs           # Node.js runtime (npx)
       pkgs.dnsutils
       pkgs.netcat-openbsd
+      pkgs.grpcurl
       pkgs.shellcheck
       # tailscale: installed via pacman (needs root systemd service)
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.

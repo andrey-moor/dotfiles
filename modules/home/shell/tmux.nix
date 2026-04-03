@@ -82,6 +82,8 @@ in {
         bind -n C-S-End kill-window
         bind -n C-S-PageUp next-window
         bind -n C-S-PageDown previous-window
+        bind -n C-S-Left swap-window -t -1\; select-window -t -1
+        bind -n C-S-Right swap-window -t +1\; select-window -t +1
         bind -n M-1 select-window -t 1
         bind -n M-2 select-window -t 2
         bind -n M-3 select-window -t 3
