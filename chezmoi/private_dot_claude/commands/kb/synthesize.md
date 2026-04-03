@@ -101,7 +101,7 @@ For each source note referenced by the wiki article:
 
 ### 7. Update index
 
-Run the index generation logic (same as `/kb:index`) to reflect the new/updated wiki article.
+Regenerate `Main/_system/index.md` with current KB stats — read all notes, compute counts by status/source/tag, list recent additions, list wiki articles with source counts and last_compiled dates, compute graph health, write via `mcp__obsidian__write_note`.
 
 ### 8. Report
 

@@ -78,6 +78,6 @@ Wait for user approval. If "edit": ask what to change, update, re-preview.
 
 3. Update informed_by notes with backlinks via `mcp__obsidian__patch_note` (append to their `## Related` section)
 
-4. Update index: run the index generation logic (same as `/kb:index`)
+4. Update index: regenerate `Main/_system/index.md` with current KB stats — read all notes, compute counts by status/source/tag, list recent additions, compute graph health, write via `mcp__obsidian__write_note`
 
 5. Confirm: `Captured: <filename> | Tags: <tags> | N source links`

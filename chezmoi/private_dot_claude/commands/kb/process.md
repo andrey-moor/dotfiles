@@ -24,8 +24,16 @@ Use `mcp__obsidian__read_note` to read `Main/_system/_taxonomy.md`. Parse the ca
 
 For each inbox note:
 
-**a. Read the note**
+**a. Read the note and normalize schema**
 Use `mcp__obsidian__get_frontmatter` and `mcp__obsidian__read_note` to get current state.
+
+**Web Clipper schema normalization:** If the note came from Obsidian Web Clipper (has `source` as a URL instead of a type, has `created`/`published` instead of `date_added`, has `description` instead of `summary`), normalize:
+- Extract URL from `source` field → set as `url`
+- Infer source type from URL pattern (github/tweet/article/etc.) → set as `source`
+- Use `created` or `published` date → set as `date_added` (YYYY-MM-DD format)
+- Use `description` → set as initial `summary` (will be overwritten by fetch)
+- Set `status: inbox`, `context: ""`, `tags: []` if missing
+- Apply normalized frontmatter via `mcp__obsidian__update_frontmatter` (merge: true) before proceeding
 
 **b. Fetch URL content**
 If the note has a `url` field, fetch content using a tiered strategy:

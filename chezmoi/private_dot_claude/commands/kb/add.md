@@ -15,13 +15,22 @@ Examples:
    - Everything after the URL → `context` (user's reason for saving)
    - If no URL found, ask the user for one
 
-2. Generate a short filename from the URL:
+2. **Check for duplicate URL**: Use `mcp__obsidian__search_notes` with `searchFrontmatter: true` for the URL.
+   If found in an existing note:
+   ```
+   ⚠ URL already exists in KB: <existing-note-name>.md
+     Added on <date_added> with tags: <tags>
+
+   Save anyway? (yes / open existing / cancel)
+   ```
+
+3. Generate a short filename from the URL:
    - Use the page title if obvious from the URL path
    - Remove special characters, use kebab-case
    - Max 60 characters
    - Example: `https://github.com/foo/bar` → `github-foo-bar.md`
 
-3. Use the `mcp__obsidian__write_note` tool to create the note:
+4. Use the `mcp__obsidian__write_note` tool to create the note:
    - **path**: `Main/Knowledge/inbox/<filename>.md`
    - **frontmatter**:
      ```json
@@ -39,7 +48,7 @@ Examples:
      ```
    - **content**: `## Notes\n\nPending processing. Run \`/kb:process\` to fetch content, generate summary, and apply tags.`
 
-4. Infer `source` from URL pattern:
+5. Infer `source` from URL pattern:
    - `github.com` → `github`
    - `twitter.com` or `x.com` → `tweet`
    - `youtube.com` or `youtu.be` → `youtube`
@@ -47,7 +56,7 @@ Examples:
    - `substack.com` or contains `newsletter` → `newsletter`
    - Otherwise → `article`
 
-5. Confirm to the user:
+6. Confirm to the user:
    ```
    Added to inbox: <filename>
    Source: <source> | Context: <context or "none">

@@ -20,7 +20,7 @@ Health check across the Knowledge Base. Finds data integrity issues, quality gap
 **ERRORS (data integrity):**
 - **E01 missing-field**: Required fields missing or null (title, source, date_added, tags, status)
 - **E02 invalid-status**: Status not one of: inbox, reference, archived
-- **E03 invalid-source**: Source not one of: article, tweet, newsletter, github, youtube, paper, podcast, derived, other
+- **E03 invalid-source**: Source not one of the allowed values from schema.md: article, tweet, newsletter, github, youtube, paper, podcast, derived, other. Note: Web Clipper notes store a URL in `source` — these should be flagged but with a note suggesting `/kb:process` to normalize.
 - **E04 bad-date**: `date_added` not in YYYY-MM-DD format (flag ISO timestamps like `2024-08-30T00:00:00.000Z`)
 - **E05 duplicate-url**: Same URL appears in multiple notes
 - **E06 status-mismatch**: Note in `inbox/` with status != inbox, or note in `Knowledge/` (not inbox/) with status == inbox
