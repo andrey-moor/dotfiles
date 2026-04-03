@@ -158,14 +158,16 @@ This is a content edit (table row), not a frontmatter update, so `patch_note` is
 
 **h. Wiki suggestions**
 
-After all notes are processed, check if any tags now have 3+ source notes without a wiki article:
-1. Count source notes per subcategory tag (e.g., `AI/RAG`, not `AI`)
-2. Check if `Main/Knowledge/wiki/<tag-kebab>.md` exists
-3. If 3+ sources and no wiki: suggest to user:
+After all notes are processed, check if any tags are synthesis candidates:
+1. Count source notes per **specific subtag** (e.g., `AI/RAG`, `Dev/Rust` — not parent categories like `AI` or `Dev`)
+2. **Skip cross-cutting tags**: never suggest for Tutorials, Reference, Inspiration, Tools — too broad to synthesize coherently
+3. Check if `Main/Knowledge/wiki/<tag-kebab>.md` exists for that subtag
+4. If **5+ sources** and no wiki: suggest to user:
    ```
    💡 AI/RAG now has 5 sources. Create a synthesis article?
       Run: /kb:synthesize AI/RAG
    ```
+5. User can always create wiki articles manually for any topic (including freeform topics spanning multiple tags) via `/kb:synthesize`
 
 ### 4. Update index
 

@@ -88,7 +88,7 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
    - Find related notes (see [references/graph-links.md](references/graph-links.md)) and append `## Related` section with wiki-links
    - Move to `Main/Knowledge/` via `mcp__obsidian__move_note`
 7. Propose new tags → append to Proposals table in `_taxonomy.md` via `mcp__obsidian__patch_note`.
-8. **Wiki suggestion**: Check if any of the note's tags now have 3+ sources without a wiki article. If so, suggest `/kb:synthesize <tag>`.
+8. **Wiki suggestion**: Check if any specific subtags have 5+ sources without a wiki article. Skip cross-cutting tags (Tutorials, Reference, Inspiration, Tools). Suggest `/kb:synthesize <tag>` for candidates.
 9. **Update index**: Regenerate `_system/index.md` (same logic as `/kb:index`).
 
 ### 3. Search
@@ -130,10 +130,11 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 
 **Triggers**: "synthesize", "compile wiki", "summarize topic", "create wiki article", `/kb:synthesize`
 
-1. Resolve topic to taxonomy tag.
-2. Find source notes by tag match + content search.
-3. Create or incrementally update wiki article in `Knowledge/wiki/` (see [references/wiki-schema.md](references/wiki-schema.md)).
-4. Update source notes with backlinks to wiki article.
+1. Resolve topic — can be a taxonomy tag (`AI/RAG`) or freeform description (`Rust LLM tools`).
+2. Find source notes by tag match (tag-based) or content search (freeform).
+3. **Coherence check** — if notes cover distinct sub-topics, warn before synthesizing.
+4. Create or incrementally update wiki article in `Knowledge/wiki/` (see [references/wiki-schema.md](references/wiki-schema.md)).
+5. Update source notes with backlinks to wiki article.
 5. Update index.
 
 ### 7. Lint

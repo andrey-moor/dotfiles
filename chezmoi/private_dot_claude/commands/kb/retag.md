@@ -39,6 +39,7 @@ If `$ARGUMENTS` contains `--dry-run`:
    - Notes with empty tags array
    - Notes that might benefit from newly added tags
    - Wiki articles with stale `topic` field matching deprecated/renamed tags
+   - Wiki articles with deprecated tags in their `tags` array (catches freeform-topic wikis where `topic` isn't a tag but `tags` contains the deprecated tag)
 
 4. Present findings:
    ```

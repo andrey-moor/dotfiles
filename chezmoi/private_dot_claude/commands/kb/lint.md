@@ -31,7 +31,7 @@ Health check across the Knowledge Base. Finds data integrity issues, quality gap
 - **W03 no-related**: Note without `## Related` section (orphan in graph)
 - **W04 orphan-tag**: Note using a tag not defined in `_taxonomy.md`
 - **W05 deprecated-tag**: Note using a tag in the Deprecated table
-- **W06 stale-wiki**: Wiki article whose `last_compiled` is older than the newest source note for its topic
+- **W06 stale-wiki**: Wiki article whose `last_compiled` is older than the newest source note for its topic. For tag-based topics: search by tag. For freeform topics (topic field is not a valid tag): search by topic keywords in content/summary, same as synthesize step 2
 
 **INFO (suggestions):**
 - **I01 synthesis-candidate**: Tag with 5+ source notes but no wiki article

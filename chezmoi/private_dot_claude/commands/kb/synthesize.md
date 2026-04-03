@@ -5,38 +5,61 @@ Create or update a wiki article that synthesizes knowledge from multiple source 
 `/kb:synthesize <topic>` — create or incrementally update wiki article
 `/kb:synthesize <topic> --full` — full rewrite from all sources
 
+Topics can be taxonomy tags OR freeform descriptions:
+- `/kb:synthesize AI/RAG` — matches a specific tag
+- `/kb:synthesize "Rust LLM tools"` — freeform topic spanning Dev/Rust + AI/LLMs
+- `/kb:synthesize "indie app business"` — freeform topic spanning Business/SaaS + Business/Startups
+
 ## Instructions
 
 ### 1. Resolve topic
 
-- Parse `$ARGUMENTS` for topic (tag like "AI/RAG" or free text like "RAG retrieval"). Strip `--full` flag if present.
-- Read taxonomy from `Main/_system/_taxonomy.md` to validate/resolve to a tag
-- **Disambiguation logic:**
-  - If input exactly matches a tag (e.g., "AI/RAG") → use it directly
-  - If input is a substring matching exactly one tag (e.g., "RAG" → only AI/RAG matches) → use that tag
-  - If input matches multiple tags (e.g., "AI" matches AI/LLMs, AI/Agents, AI/RAG, etc.) → list matches and ask user to pick:
-    ```
-    "AI" matches multiple tags:
-    1. AI/LLMs (24 notes)
-    2. AI/Agents (23 notes)
-    3. AI/RAG (4 notes)
-    Which one? (or "all" for the entire AI category)
-    ```
-  - If no tags match → search taxonomy descriptions for the term. If still no match: "No taxonomy tag matches '<input>'. Add one with `/kb:taxonomy add`?"
+Parse `$ARGUMENTS` for topic. Strip `--full` flag if present.
+
+**Two modes:**
+
+**Tag-based topic** (input looks like a taxonomy tag):
+- If input exactly matches a tag (e.g., "AI/RAG") → use it, search by tag
+- If input is a substring matching exactly one subtag (e.g., "RAG" → AI/RAG) → use that tag
+- If input matches multiple tags (e.g., "AI") → list matches with note counts, ask user to pick
+- If no tags match → fall through to freeform mode
+
+**Freeform topic** (input is a description, not a tag):
+- Use the topic string as-is for the wiki article title
+- Find source notes by content/summary search (step 2) rather than tag match
+- The wiki article's `topic` field stores the freeform string (not a tag)
+- Tags on the wiki article are inferred from the source notes' tags (union of most common)
 
 ### 2. Find source notes
 
-a. **Tag search**: Use `mcp__obsidian__search_notes` with `searchFrontmatter: true` for the topic tag
-b. **Content search**: Search for topic keywords with `searchContent: true`
+a. **For tag-based topics**: Use `mcp__obsidian__search_notes` with `searchFrontmatter: true` for the tag
+b. **For freeform topics**: Use `mcp__obsidian__search_notes` with `searchContent: true` and `searchFrontmatter: true` for the topic keywords. Read frontmatter of results to confirm relevance.
 c. Deduplicate results. Filter to `Main/Knowledge/` only (exclude wiki/, inbox/, _system/)
 d. Read frontmatter of all matches via `mcp__obsidian__get_frontmatter`
 e. Exclude notes with `type: wiki` (don't synthesize from wiki articles)
 
-If fewer than 2 source notes found: "Only N source(s) for <topic>. Need at least 2 to synthesize."
+If fewer than 2 source notes found: "Only N source(s) for '<topic>'. Need at least 2 to synthesize."
+
+**Coherence check**: Before proceeding, scan the source notes' titles and summaries. If they cover very different sub-topics with no meaningful overlap (e.g., 4 GameDev notes about hex maps, isometric builders, game studios, and RTS games), warn:
+
+```
+Found N notes but they cover distinct sub-topics:
+  - Procedural generation (hex-map-wave-function-collapse)
+  - World building (middle-earth-isometric-builder)
+  - AI agent templates (claude-code-game-studios)
+  - RTS games (widelands-open-source-rts)
+
+A synthesis of all 4 may be incoherent.
+Options:
+  1. Synthesize anyway (broad overview)
+  2. Pick a subset (e.g., just procedural generation notes)
+  3. Cancel
+```
 
 ### 3. Check for existing wiki article
 
-- Check if `Main/Knowledge/wiki/<topic-kebab>.md` exists via `mcp__obsidian__get_frontmatter`
+- For tag-based: check `Main/Knowledge/wiki/<tag-kebab>.md`
+- For freeform: check `Main/Knowledge/wiki/<topic-kebab>.md`
 - If not exists or `--full` flag: go to step 4 (full create)
 - If exists: go to step 5 (incremental update)
 
@@ -76,8 +99,8 @@ c. Write via `mcp__obsidian__write_note` to `Main/Knowledge/wiki/<topic-kebab>.m
    ---
    type: wiki
    title: "<Topic> — Knowledge Synthesis"
-   topic: "<tag>"
-   tags: [<tag>, Reference]
+   topic: "<tag or freeform string>"
+   tags: [<primary tags from sources>, Reference]
    sources:
      - source-note-1
      - source-note-2
