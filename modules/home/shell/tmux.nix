@@ -42,8 +42,6 @@ in {
         set -g default-shell "${pkgs.bash}/bin/bash"
         set -g default-command "${pkgs.nushell}/bin/nu"
 
-        # Secondary prefix (keep C-b as fallback)
-        set -g prefix2 C-b
         bind C-Space send-prefix
 
         # Terminal capabilities
