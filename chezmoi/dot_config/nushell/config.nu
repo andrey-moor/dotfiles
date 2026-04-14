@@ -33,7 +33,8 @@ use $"($NU_SCRIPTS)/aliases/bat/bat-aliases.nu" *
 use $"($NU_SCRIPTS)/aliases/chezmoi/chezmoi-aliases.nu" *
 use $"($NU_SCRIPTS)/aliases/git/git-aliases.nu" *
 
-alias ll = ls -l 
+alias ll = ls -l
+alias gsd = ^gsd  # override nu_scripts git alias (git svn dcommit)
 
 def nix-switch [] { cd $env.DOTFILES; just switch }
 def nix-update [] { cd $env.DOTFILES; just update; just switch }
