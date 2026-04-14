@@ -39,6 +39,7 @@
       "supabase@claude-plugins-official" true
       "swift-lsp@claude-plugins-official" true
       "skill-creator@claude-plugins-official" true
+      "andrej-karpathy-skills@karpathy-skills" true
 -}}
 {{- range $key, $val := $desired -}}
 {{-   if not (hasKey $plugins $key) -}}
@@ -46,6 +47,25 @@
 {{-   end -}}
 {{- end -}}
 {{- $_ := set $data "enabledPlugins" $plugins -}}
+
+{{- /* ── Marketplaces (additive — add missing, don't override existing) ── */ -}}
+{{- $markets := dict -}}
+{{- if hasKey $data "extraKnownMarketplaces" -}}
+{{-   $markets = index $data "extraKnownMarketplaces" -}}
+{{- end -}}
+{{- $desiredMarkets := dict
+      "agent-browser" (dict "source" (dict "source" "github" "repo" "vercel-labs/agent-browser"))
+      "anthropic-agent-skills" (dict "source" (dict "source" "github" "repo" "anthropics/skills"))
+      "claude-plugins-official" (dict "source" (dict "source" "github" "repo" "anthropics/claude-plugins-official"))
+      "sentrux-marketplace" (dict "source" (dict "source" "github" "repo" "sentrux/sentrux"))
+      "karpathy-skills" (dict "source" (dict "source" "github" "repo" "forrestchang/andrej-karpathy-skills"))
+-}}
+{{- range $key, $val := $desiredMarkets -}}
+{{-   if not (hasKey $markets $key) -}}
+{{-     $_ := set $markets $key $val -}}
+{{-   end -}}
+{{- end -}}
+{{- $_ := set $data "extraKnownMarketplaces" $markets -}}
 
 {{- /* ── MCP servers: managed via run_onchange_install-mcp.sh, not here ── */ -}}
 {{- /* User-scoped MCP servers live in ~/.claude.json, not settings.json  */ -}}
