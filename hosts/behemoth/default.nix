@@ -134,10 +134,9 @@ with lib;
         "supabase"
         "vercel-cli"
       ];
-      masApps = {
-        "Screens 5" = 1663047912;
-        "Xcode" = 497799835;
-      };
+      # Mac App Store apps managed manually (`mas install <id>`).
+      # nix-homebrew's brew-bundle mas integration is flaky on Apple Silicon.
+      masApps = { };
     };
 
     # Home-manager user configuration

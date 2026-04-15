@@ -29,7 +29,7 @@ in {
     # nix-homebrew configuration
     nix-homebrew = {
       enable = true;
-      enableRosetta = true;
+      enableRosetta = false;
       user = config.user.name;
       # Migrate existing Homebrew installation
       autoMigrate = true;
