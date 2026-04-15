@@ -18,11 +18,11 @@
 
 stdenvNoCC.mkDerivation rec {
   pname = "lan-mouse-app";
-  version = "latest";
+  version = "main";
 
   src = fetchurl {
-    url = "https://github.com/feschber/lan-mouse/releases/download/${version}/lan-mouse-macos-aarch64.zip";
-    sha256 = "04kfsx2rjbfxgy52rgdgnjfh3gr1rg1v3sq6msrxqbcqr5mycwai";
+    url = "https://github.com/feschber/lan-mouse/releases/download/${version}/lan-mouse-macos-arm64.zip";
+    sha256 = "0m7qkqmcxj4a784kag295701hvgcassfn0lndmnijs0fijk2mypm";
   };
 
   dontBuild = true;

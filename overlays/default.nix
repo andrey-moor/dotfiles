@@ -6,6 +6,7 @@ final: prev: {
   nushell = prev.nushell.overrideAttrs (oldAttrs: {
     doCheck = false;
   });
+
   lan-mouse-app = final.callPackage ../packages/lan-mouse-app { };
 
   # Pin lan-mouse to match the pre-built .app bundle (latest pre-release)

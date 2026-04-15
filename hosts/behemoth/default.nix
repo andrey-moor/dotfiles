@@ -152,7 +152,7 @@ with lib;
         _1password-cli  # op CLI for secret management
         uv              # Python package runner (uvx)
         nodejs          # Node.js runtime (npx)
-        goose-cli       # AI coding agent
+        # goose-cli  # AI coding agent — BLOCKED: nixpkgs v1.23.2 broken, upstream flake broken (block/goose#8514)
         main.ollama     # Local LLM inference
         qemu            # VM emulation (qemu-img, qemu-system-*)
         (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge

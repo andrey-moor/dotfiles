@@ -58,6 +58,7 @@
       url = "github:sadjow/claude-code-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # goose.url = "github:block/goose";  # BLOCKED: upstream flake broken (issue #8514 — missing cargo outputHashes)
 
     # Nix User Repository for Firefox addons
     nur.url = "github:nix-community/NUR";
