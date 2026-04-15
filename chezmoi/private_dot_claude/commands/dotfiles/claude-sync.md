@@ -1,14 +1,15 @@
 Sync current Claude Code settings back to the dotfiles chezmoi source.
 
-## Context
-
-- Current settings: !`cat ~/.claude/settings.json`
-- Current template: !`cat $DOTFILES/chezmoi/private_dot_claude/modify_settings.json`
-- ECC rule files: !`ls ~/.claude/rules/common/ 2>/dev/null | wc -l | tr -d ' '`
-- GSD installed version: !`cat ~/.claude/get-shit-done/VERSION 2>/dev/null`
-- GSD dotfiles pin: !`cat $DOTFILES/chezmoi/.gsd-version 2>/dev/null`
-
 ## Steps
+
+0. **Load context.** Run via Bash (resolves `$DOTFILES` at runtime):
+   ```
+   echo "=== settings.json ==="; cat ~/.claude/settings.json
+   echo "=== modify_settings.json template ==="; cat "$DOTFILES/chezmoi/private_dot_claude/modify_settings.json"
+   echo "ECC rule files: $(ls ~/.claude/rules/common/ 2>/dev/null | wc -l | tr -d ' ')"
+   echo "GSD installed: $(cat ~/.claude/get-shit-done/VERSION 2>/dev/null)"
+   echo "GSD dotfiles pin: $(cat "$DOTFILES/chezmoi/.gsd-version" 2>/dev/null)"
+   ```
 
 1. **Read current state.** From `~/.claude/settings.json`, extract:
    - `enabledPlugins` (all entries with their true/false state)

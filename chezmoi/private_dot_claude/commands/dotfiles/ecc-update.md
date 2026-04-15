@@ -1,12 +1,13 @@
 Check for updates to everything-claude-code (ECC) and optionally apply them.
 
-## Context
-
-- Current ECC pin: !`cat $DOTFILES/chezmoi/.ecc-version 2>/dev/null`
-- ECC rule files: !`ls ~/.claude/rules/common/ 2>/dev/null | wc -l | tr -d ' '`
-- ECC agents: !`ls ~/.claude/agents/*-reviewer.md ~/.claude/agents/*-resolver.md ~/.claude/agents/tdd-guide.md ~/.claude/agents/refactor-cleaner.md 2>/dev/null | wc -l | tr -d ' '`
-
 ## Steps
+
+0. **Load context.** Run via Bash (resolves `$DOTFILES` at runtime):
+   ```
+   echo "Current ECC pin: $(cat "$DOTFILES/chezmoi/.ecc-version" 2>/dev/null)"
+   echo "ECC rule files: $(ls ~/.claude/rules/common/ 2>/dev/null | wc -l | tr -d ' ')"
+   echo "ECC agents: $(ls ~/.claude/agents/*-reviewer.md ~/.claude/agents/*-resolver.md ~/.claude/agents/tdd-guide.md ~/.claude/agents/refactor-cleaner.md 2>/dev/null | wc -l | tr -d ' ')"
+   ```
 
 1. **Read current pin.** Read `$DOTFILES/chezmoi/.ecc-version`. This contains a
    git commit SHA (preferred) or branch name.

@@ -60,3 +60,19 @@ vendor/
 *.pkg.tar.xz
 *.pkg.tar.zst
 hypr-pkgs/
+
+# ── GSD baseline (auto-generated) ──
+.gsd
+.gsd-id
+.bg-shell/
+*.code-workspace
+.env.*
+!.env.example
+.next/
+__pycache__/
+*.pyc
+.venv/
+venv/
+target/
+coverage/
+tmp/
