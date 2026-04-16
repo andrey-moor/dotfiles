@@ -20,10 +20,10 @@ in {
     };
 
     home.packages = with pkgs; [
-      gopls          # Go language server
-      gotools        # goimports, etc.
-      go-tools       # staticcheck
-      delve          # Go debugger
+      gopls                 # Go language server
+      (lib.hiPrio gotools)  # goimports, etc. — hiPrio resolves modernize collision with gopls 0.21+
+      go-tools              # staticcheck
+      delve                 # Go debugger
     ];
   };
 }
