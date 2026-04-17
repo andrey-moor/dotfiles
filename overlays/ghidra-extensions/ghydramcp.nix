@@ -1,14 +1,14 @@
-# GhydraMCP - Ghidra MCP bridge extension
-# https://github.com/starsong-consulting/GhydraMCP
+# GhidraMCP - Ghidra MCP server extension
+# https://github.com/bethington/ghidra-mcp
 { lib, stdenv, fetchurl, unzip }:
 
 stdenv.mkDerivation rec {
-  pname = "ghydramcp";
-  version = "2.1.0";
+  pname = "ghidra-mcp";
+  version = "5.3.1";
 
   src = fetchurl {
-    url = "https://github.com/starsong-consulting/GhydraMCP/releases/download/v${version}/GhydraMCP-v${version}-20251114-121920.zip";
-    hash = "sha256-1adXHOn9PW0MHC8aUcN7R4JbA5TUPpiedjlxe9kh/lM=";
+    url = "https://github.com/bethington/ghidra-mcp/releases/download/v${version}/GhidraMCP-${version}.zip";
+    hash = "sha256-W8bJ9YRPjKsYOAvIEcQRM8D81qRnLE6ra5OI7BI+tvw=";
   };
 
   nativeBuildInputs = [ unzip ];
@@ -22,14 +22,14 @@ stdenv.mkDerivation rec {
     unzip -d $out/lib/ghidra/Ghidra/Extensions $src
 
     # Prevent attempted creation of plugin lock files in the Nix store
-    touch $out/lib/ghidra/Ghidra/Extensions/GhydraMCP/.dbDirLock
+    touch $out/lib/ghidra/Ghidra/Extensions/GhidraMCP/.dbDirLock
 
     runHook postInstall
   '';
 
   meta = with lib; {
-    description = "MCP bridge for AI-assisted reverse engineering with Ghidra";
-    homepage = "https://github.com/starsong-consulting/GhydraMCP";
+    description = "Model Context Protocol server for Ghidra reverse engineering";
+    homepage = "https://github.com/bethington/ghidra-mcp";
     license = licenses.asl20;
     platforms = platforms.all;
   };
