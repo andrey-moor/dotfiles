@@ -34,5 +34,11 @@ in {
       # Full AstroNvim configuration is managed by chezmoi at ~/.config/nvim/
       # This allows Lazy.nvim to manage plugins and write lazy-lock.json
     };
+
+    # Home Manager now writes its own init.lua (provider host_prog setup) when
+    # programs.neovim is enabled, which clobbers the chezmoi-managed AstroNvim
+    # bootstrap. Disable it so chezmoi's init.lua wins. Providers are still
+    # discovered via PATH because withNodeJs/withPython3 put them there.
+    xdg.configFile."nvim/init.lua".enable = mkForce false;
   };
 }
