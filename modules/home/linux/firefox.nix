@@ -21,6 +21,9 @@ in {
     programs.firefox = {
       enable = true;
 
+      # Pin legacy profile path; new home-manager default migrates to XDG.
+      configPath = ".mozilla/firefox";
+
       profiles.default = {
         id = 0;
         isDefault = true;
