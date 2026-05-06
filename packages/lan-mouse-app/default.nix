@@ -22,7 +22,7 @@ stdenvNoCC.mkDerivation rec {
 
   src = fetchurl {
     url = "https://github.com/feschber/lan-mouse/releases/download/${version}/lan-mouse-macos-arm64.zip";
-    sha256 = "0m7qkqmcxj4a784kag295701hvgcassfn0lndmnijs0fijk2mypm";
+    sha256 = "sha256-DXWE0dNvDCJ+vxs3DybLzjYIVmqHtJ4xZN323oHyMiU=";
   };
 
   dontBuild = true;
