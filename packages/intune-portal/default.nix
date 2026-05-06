@@ -16,11 +16,11 @@
 
 stdenvNoCC.mkDerivation rec {
   pname = "intune-portal";
-  version = "1.2511.7-noble";
+  version = "1.2604.13-noble";
 
   src = fetchurl {
     url = "https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/i/${pname}/${pname}_${version}_amd64.deb";
-    sha256 = "13yaiqg63373xk0znm7039pxhk97f59s0rf56lcnzix68ydc0yrh";
+    sha256 = "1wxfcn5c9dkv8lh208z41l7aq5865wbhghbanmwfprfmg11y5jwh";
   };
 
   # No build needed - just extract
