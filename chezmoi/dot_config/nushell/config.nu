@@ -51,9 +51,11 @@ alias kgs = kubectl get svc -A
 alias kctx = kubectx
 alias kns = kubens
 
-# tmux: smart create-or-attach session named after current directory
+# tmux: attach-or-create session (defaults to "main"; pass a name for ad-hoc sessions).
+# Defaulting to "main" keeps a single canonical session so continuum/resurrect doesn't
+# end up persisting multiple parallel sessions across server restarts.
 def t [name?: string] {
-  let session = if $name != null { $name } else { $env.PWD | path basename }
+  let session = if $name != null { $name } else { "main" }
   tmux new-session -A -s $session
 }
 
@@ -61,7 +63,7 @@ def t [name?: string] {
 alias bonfire = /mnt/psf/Home/Documents/Microsoft/monorepo-bonfire/bazel-bin/tools/cli/bonfire/bonfire/bonfire
 
 alias tl = tmux list-sessions
-alias ta = tmux attach-session
+alias ta = tmux new-session -A -s main
 alias tkill = tmux kill-session -t
 
 # tmux dev layout: editor + AI + terminal
