@@ -64,6 +64,25 @@ in {
           };
         };
 
+        # Linux + 1P only: route GitHub auth to the LOCAL 1Password SSH agent
+        # when it's responsive, with the forwarded SSH_AUTH_SOCK as fallback.
+        # Names start with "00"/"01" so they render before the github.com Host
+        # blocks below — `IdentityAgent` is "first match wins" per ssh_config(5).
+        # Effect:
+        #   * Local 1P unlocked → no behemoth round-trip, no Touch-ID prompt.
+        #   * Local 1P locked / agent down + behemoth SSH agent reachable →
+        #     falls through to forwarded agent (current pre-2026-05-07 behavior).
+        #   * Both unavailable → auth fails (expected; unlock something).
+        "00-github-local-1p" = mkIf (op && pkgs.stdenv.isLinux) {
+          match = ''host github.com,github.com-microsoft,github.com-linkedin exec "test -S ~/.1password/agent.sock && timeout 1 env SSH_AUTH_SOCK=~/.1password/agent.sock ssh-add -l >/dev/null 2>&1"'';
+          extraOptions.IdentityAgent = "~/.1password/agent.sock";
+        };
+
+        "01-github-forwarded-fallback" = mkIf (op && pkgs.stdenv.isLinux) {
+          match = ''host github.com,github.com-microsoft,github.com-linkedin exec "test -n \"$SSH_AUTH_SOCK\" && timeout 1 ssh-add -l >/dev/null 2>&1"'';
+          extraOptions.IdentityAgent = "$SSH_AUTH_SOCK";
+        };
+
         # Personal GitHub
         "github.com" = {
           hostname = "github.com";
