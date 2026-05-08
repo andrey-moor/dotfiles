@@ -206,6 +206,7 @@ with lib;
           terraform.enable = true;
           claude.enable = true;
           bazel.enable = true;
+          hunk.enable = true;
         };
       };
     };

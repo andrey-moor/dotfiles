@@ -65,7 +65,11 @@ with lib;
         chezmoi.enable = true;
         openvpn.enable = true;
         lan-mouse = {
-          enable = true;
+          # Disabled 2026-05-06: rolling-main daemon was holding an input-capture
+          # overlay that prevented Wayland from receiving keyboard/mouse on
+          # rocinante. Flip back to true once the upstream bug is fixed; config
+          # below (fingerprints, clients) is preserved.
+          enable = false;
           authorizedFingerprints = {
             "a6:0e:8b:92:c5:00:07:0c:c8:56:42:36:65:81:a4:be:ab:a4:91:47:c5:5b:10:22:de:08:5b:5e:57:27:44:ea" = "behemoth";
           };
@@ -91,6 +95,7 @@ with lib;
         python.enable = true;
         bazel.enable = true;
         terraform.enable = true;
+        hunk.enable = true;
       };
 
       linux = {
