@@ -207,6 +207,7 @@ with lib;
           claude.enable = true;
           bazel.enable = true;
           hunk.enable = true;
+          copilot.enable = true;
         };
       };
     };

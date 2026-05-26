@@ -97,6 +97,7 @@ with lib;
         terraform.enable = true;
         hunk.enable = true;
         lmstudio.enable = true;
+        copilot.enable = true;
       };
 
       linux = {
