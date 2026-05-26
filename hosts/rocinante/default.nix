@@ -96,6 +96,7 @@ with lib;
         bazel.enable = true;
         terraform.enable = true;
         hunk.enable = true;
+        lmstudio.enable = true;
       };
 
       linux = {
