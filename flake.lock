@@ -100,6 +100,26 @@
         "type": "github"
       }
     },
+    "copilot-cli-flake": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1779407932,
+        "narHash": "sha256-34c20Ixblw79Znk7lcvC4mQ3vfsiRsnSRg7zEqYKpRg=",
+        "owner": "scarisey",
+        "repo": "copilot-cli-flake",
+        "rev": "8f9a62398b6a86efee8e3af342096608afab9a4b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "scarisey",
+        "repo": "copilot-cli-flake",
+        "type": "github"
+      }
+    },
     "darwin": {
       "inputs": {
         "nixpkgs": [
@@ -686,6 +706,7 @@
         "agenix": "agenix",
         "catppuccin": "catppuccin",
         "claude-code-nix": "claude-code-nix",
+        "copilot-cli-flake": "copilot-cli-flake",
         "darwin": "darwin_2",
         "disko": "disko",
         "fenix": "fenix",

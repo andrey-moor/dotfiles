@@ -1,6 +1,9 @@
 # modules/home/dev/copilot.nix -- GitHub Copilot CLI (terminal coding agent)
+#
+# Bleeding-edge via scarisey/copilot-cli-flake (auto-bumped weekly).
+# Mirrors the claude-code-nix pattern -- nixpkgs lags 20+ versions.
 
-{ lib, config, pkgs, ... }:
+{ lib, config, pkgs, inputs, ... }:
 
 with lib;
 let cfg = config.modules.dev.copilot;
@@ -11,7 +14,7 @@ in {
 
   config = mkIf cfg.enable {
     home.packages = [
-      pkgs.main.github-copilot-cli
+      inputs.copilot-cli-flake.packages.${pkgs.system}.default
     ];
   };
 }

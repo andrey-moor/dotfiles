@@ -100,7 +100,6 @@ in
 
     home.packages = with pkgs; [
       gh # GitHub CLI
-      github-copilot-cli # GitHub Copilot extension for gh
       git-crypt # Transparent file encryption
     ];
   };
