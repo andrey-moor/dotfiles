@@ -20,6 +20,7 @@ in {
       # Support for various languages in plugins
       withNodeJs = true;
       withPython3 = true;
+      withRuby = false;  # AstroNvim doesn't use Ruby providers; new HM default
 
       # Extra packages available to neovim
       extraPackages = with pkgs; [

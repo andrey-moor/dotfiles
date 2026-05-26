@@ -128,16 +128,16 @@ let
   ];
 
   x11Libs = map (p: "${p}/lib") [
-    pkgSource.xorg.libX11.out
-    pkgSource.xorg.libXext.out
-    pkgSource.xorg.libXrender.out
-    pkgSource.xorg.libXi.out
-    pkgSource.xorg.libXcursor.out
-    pkgSource.xorg.libXrandr.out
-    pkgSource.xorg.libXfixes.out
-    pkgSource.xorg.libXcomposite.out
-    pkgSource.xorg.libXdamage.out
-    pkgSource.xorg.libxcb.out
+    pkgSource.libx11.out
+    pkgSource.libxext.out
+    pkgSource.libxrender.out
+    pkgSource.libxi.out
+    pkgSource.libxcursor.out
+    pkgSource.libxrandr.out
+    pkgSource.libxfixes.out
+    pkgSource.libxcomposite.out
+    pkgSource.libxdamage.out
+    pkgSource.libxcb.out
     pkgSource.libxkbcommon.out
   ];
 
@@ -577,8 +577,8 @@ in {
       zlib.out libssh2.out nghttp2.lib brotli.lib icu.out stdenv.cc.cc.lib
       zstd.out expat.out pcre2.out libxkbcommon.out fontconfig.lib freetype.out
       cairo.out pango.out gdk-pixbuf.out gtk3.out atk.out at-spi2-atk.out at-spi2-core.out harfbuzz.out
-      xorg.libX11.out xorg.libXext.out xorg.libXrender.out xorg.libXi.out xorg.libXcursor.out
-      xorg.libXrandr.out xorg.libXfixes.out xorg.libXcomposite.out xorg.libXdamage.out xorg.libxcb.out
+      libx11.out libxext.out libxrender.out libxi.out libxcursor.out
+      libxrandr.out libxfixes.out libxcomposite.out libxdamage.out libxcb.out
       webkitgtk_4_1.out libsoup_3.out sqlite.out libpsl.out libidn.out
       libpng.out libjpeg.out libwebp.out lcms2.out
       gst_all_1.gstreamer.out gst_all_1.gst-plugins-base.out

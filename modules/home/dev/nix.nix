@@ -12,7 +12,7 @@ in {
   config = mkIf cfg.enable {
     home.packages = with pkgs; [
       # Nix tools
-      nixfmt-rfc-style   # Formatter
+      nixfmt             # Formatter (RFC-style; nixfmt-rfc-style is now an alias)
       nil                # LSP
       nix-prefetch-git   # Prefetch git repos
       nix-tree           # Dependency tree viewer

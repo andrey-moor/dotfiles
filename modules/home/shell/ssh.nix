@@ -51,79 +51,86 @@ in {
         "~/.ssh/extra_config"
       ];
 
-      matchBlocks = {
+      # `programs.ssh.settings` replaces the deprecated `matchBlocks`. Keys
+      # without `Host `/`Match ` prefix become `Host <key>`; we use the
+      # `header` field to render literal `Match …` blocks while keeping
+      # short attribute names for DAG ordering. `IdentityAgent` is first-
+      # match-wins in ssh_config(5), so the 1P/forwarded Match blocks must
+      # render BEFORE the `github.com*` Host blocks — enforced via
+      # `lib.hm.dag.entryBefore`.
+      settings = {
         # Global defaults
         "*" = {
-          extraOptions = {
-            AddKeysToAgent = "yes";
-            ServerAliveInterval = "60";
-            ServerAliveCountMax = "3";
-            ControlMaster = "auto";
-            ControlPath = "~/.ssh/sockets/%r@%n-%p";
-            ControlPersist = "600";
-          };
+          AddKeysToAgent = "yes";
+          ServerAliveInterval = "60";
+          ServerAliveCountMax = "3";
+          ControlMaster = "auto";
+          ControlPath = "~/.ssh/sockets/%r@%n-%p";
+          ControlPersist = "600";
         };
 
         # Linux + 1P only: route GitHub auth to the LOCAL 1Password SSH agent
         # when it's responsive, with the forwarded SSH_AUTH_SOCK as fallback.
-        # Names start with "00"/"01" so they render before the github.com Host
-        # blocks below — `IdentityAgent` is "first match wins" per ssh_config(5).
         # Effect:
         #   * Local 1P unlocked → no behemoth round-trip, no Touch-ID prompt.
         #   * Local 1P locked / agent down + behemoth SSH agent reachable →
         #     falls through to forwarded agent (current pre-2026-05-07 behavior).
         #   * Both unavailable → auth fails (expected; unlock something).
-        "00-github-local-1p" = mkIf (op && pkgs.stdenv.isLinux) {
-          match = ''host github.com,github.com-microsoft,github.com-linkedin exec "test -S ~/.1password/agent.sock && timeout 1 env SSH_AUTH_SOCK=~/.1password/agent.sock ssh-add -l >/dev/null 2>&1"'';
-          extraOptions.IdentityAgent = "~/.1password/agent.sock";
-        };
+        "00-github-local-1p" = mkIf (op && pkgs.stdenv.isLinux) (
+          lib.hm.dag.entryBefore [ "github.com" "github.com-microsoft" "github.com-linkedin" ] {
+            header = ''Match host github.com,github.com-microsoft,github.com-linkedin exec "test -S ~/.1password/agent.sock && timeout 1 env SSH_AUTH_SOCK=~/.1password/agent.sock ssh-add -l >/dev/null 2>&1"'';
+            IdentityAgent = "~/.1password/agent.sock";
+          }
+        );
 
-        "01-github-forwarded-fallback" = mkIf (op && pkgs.stdenv.isLinux) {
-          match = ''host github.com,github.com-microsoft,github.com-linkedin exec "test -n \"$SSH_AUTH_SOCK\" && timeout 1 ssh-add -l >/dev/null 2>&1"'';
-          extraOptions.IdentityAgent = "$SSH_AUTH_SOCK";
-        };
+        "01-github-forwarded-fallback" = mkIf (op && pkgs.stdenv.isLinux) (
+          lib.hm.dag.entryBefore [ "github.com" "github.com-microsoft" "github.com-linkedin" ] {
+            header = ''Match host github.com,github.com-microsoft,github.com-linkedin exec "test -n \"$SSH_AUTH_SOCK\" && timeout 1 ssh-add -l >/dev/null 2>&1"'';
+            IdentityAgent = "$SSH_AUTH_SOCK";
+          }
+        );
 
         # Personal GitHub
         "github.com" = {
-          hostname = "github.com";
-          user = "git";
+          HostName = "github.com";
+          User = "git";
         } // optionalAttrs op {
-          identityFile = "~/.ssh/1p_personal.pub";
-          identitiesOnly = true;
+          IdentityFile = "~/.ssh/1p_personal.pub";
+          IdentitiesOnly = "yes";
         };
 
         # Microsoft/Work GitHub
         "github.com-microsoft" = {
-          hostname = "github.com";
-          user = "git";
-          identitiesOnly = true;
-          identityFile = if op
+          HostName = "github.com";
+          User = "git";
+          IdentitiesOnly = "yes";
+          IdentityFile = if op
             then "~/.ssh/1p_microsoft.pub"
             else "~/.ssh/id_ed25519_sk_rk_microsoft_nano";
         };
 
         # LinkedIn/Work GitHub
         "github.com-linkedin" = {
-          hostname = "github.com";
-          user = "git";
-          identitiesOnly = true;
-          identityFile = if op
+          HostName = "github.com";
+          User = "git";
+          IdentitiesOnly = "yes";
+          IdentityFile = if op
             then "~/.ssh/1p_linkedin.pub"
             else "~/.ssh/id_ed25519_sk_rk_linkedin";
         };
 
         # Rocinante - Linux workstation (Tailscale MagicDNS)
         "rocinante" = {
-          user = "andreym";
+          User = "andreym";
         } // optionalAttrs op {
-          forwardAgent = true;
+          ForwardAgent = "yes";
         };
 
         # Stargazer - Linux VM (Parallels)
         "stargazer" = {
-          user = "andreym";
+          User = "andreym";
         } // optionalAttrs op {
-          forwardAgent = true;
+          ForwardAgent = "yes";
         };
       };
     };
