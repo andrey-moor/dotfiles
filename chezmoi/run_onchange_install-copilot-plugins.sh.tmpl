@@ -1,0 +1,45 @@
+#!/bin/bash
+# GitHub Copilot CLI plugin installer
+#
+# Triggered when the version string below changes. Idempotently ensures
+# all desired Copilot plugins are installed. `copilot plugin install`
+# is a no-op when the plugin is already present at the same version.
+#
+# Bump the version comment to force a re-run after editing this list.
+# desired-version: 2026-05-27-001
+
+set -eo pipefail
+
+if ! command -v copilot &>/dev/null; then
+    echo "SKIP: copilot CLI not found. Install via modules.dev.copilot first."
+    exit 0
+fi
+
+# Filter the spurious "Cannot open directory /nix/store/...openssl-...etc/ssl/certs"
+# warning that the Nix-wrapped copilot prints to stderr. The cert lookup falls
+# through to the system store and the command still succeeds.
+copilot_quiet() { copilot "$@" 2> >(grep -v "Cannot open directory.*openssl.*ssl/certs" >&2); }
+
+installed=0
+skipped=0
+
+install_plugin() {
+    local source_arg="$1" name="$2"
+    if copilot_quiet plugin list 2>/dev/null | grep -q "^[[:space:]]*[•*][[:space:]]*${name}[[:space:]]"; then
+        skipped=$((skipped + 1))
+        return
+    fi
+    echo "Installing Copilot plugin: $name ($source_arg)..."
+    if copilot_quiet plugin install "$source_arg" 2>&1; then
+        installed=$((installed + 1))
+    else
+        echo "  WARN: failed to install $name"
+    fi
+}
+
+# obra/superpowers isn't in awesome-copilot or copilot-plugins marketplaces,
+# so use the (currently deprecated but functional) direct-repo install path.
+# Switch to plugin@marketplace when an upstream marketplace lists it.
+install_plugin "obra/superpowers" "superpowers"
+
+echo "Copilot plugins: $installed installed, $skipped already present."
