@@ -1,9 +1,10 @@
 #!/bin/bash
-# Get Shit Done (GSD) installer
-# https://github.com/glittercowboy/get-shit-done
+# Get Shit Done (GSD) installer -- redux fork (open-gsd org)
+# https://github.com/open-gsd/get-shit-done-redux
 #
-# Triggered by changes to .gsd-version. Installs GSD globally into ~/.claude/
-# via the official npm package (get-shit-done-cc).
+# Triggered by changes to .gsd-version. Installs GSD into ~/.claude/ via the
+# @opengsd/get-shit-done-redux npm package (the active maintained branch
+# after get-shit-done-cc was abandoned).
 #
 # gsd-version hash: {{ include ".gsd-version" | sha256sum }}
 
@@ -18,7 +19,9 @@ fi
 
 echo "Installing GSD v${GSD_VERSION}..."
 
-npx -y "get-shit-done-cc@${GSD_VERSION}" --global
+# --claude --global: install into ~/.claude/. Other runtimes (codex, gemini,
+# opencode) are installed manually via the same package + runtime flag.
+npx -y "@opengsd/get-shit-done-redux@${GSD_VERSION}" --claude --global
 
 # Verify installation succeeded
 VERSION_FILE="{{ .chezmoi.homeDir }}/.claude/get-shit-done/VERSION"
