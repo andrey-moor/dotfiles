@@ -13,9 +13,10 @@
 {{- if hasKey $data "env" -}}
 {{-   $env = index $data "env" -}}
 {{- end -}}
-{{- if not (hasKey $env "CLAUDE_CODE_SHELL") -}}
-{{-   $_ := set $env "CLAUDE_CODE_SHELL" "bash" -}}
-{{- end -}}
+{{- /* Force full path: bare "bash" propagates to SHELL=bash in subprocess  */ -}}
+{{- /* envs, which breaks OpenSSH 10.2 Match exec clauses that resolve $SHELL */ -}}
+{{- /* via execvp (no PATH lookup). /usr/bin/bash exists on macOS + Linux.   */ -}}
+{{- $_ := set $env "CLAUDE_CODE_SHELL" "/usr/bin/bash" -}}
 {{- $_ := set $data "env" $env -}}
 
 {{- /* ── Plugins (additive — add missing, don't override existing) ── */ -}}

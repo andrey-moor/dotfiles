@@ -46,7 +46,7 @@ Install or update Claude Code configuration from the dotfiles repo.
 5. **Verify settings.** Confirm `~/.claude/settings.json` has:
    - `alwaysThinkingEnabled: true`
    - `effortLevel: "high"`
-   - `env.CLAUDE_CODE_SHELL: "bash"`
+   - `env.CLAUDE_CODE_SHELL: "/usr/bin/bash"`
    - `enabledPlugins` with all desired plugins
    - `mcpServers` with kagi, fetch (and obsidian on behemoth)
 
