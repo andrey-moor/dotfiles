@@ -31,6 +31,11 @@ in {
           extraConfig = ''
             set -g @continuum-restore 'on'
             set -g @continuum-save-interval '10'
+            # Restore programs (not just the shell) on session restore. The `~`
+            # prefix makes resurrect substring-match the command, so it matches
+            # Nix-store paths like /nix/store/.../bin/nvim — resurrect's default
+            # `^nvim ` anchor never matches those, so panes came back as bare shells.
+            set -g @resurrect-processes '~nvim ~claude'
             set -g status-right "#[fg=blue]#{?client_prefix,PREFIX ,}#[fg=brightblack]#h "
           '';
         }

@@ -48,7 +48,10 @@ $env.PATH = ($env.PATH | split row (char esep)
 )
 
 # GPG/SSH agent setup
-$env.GPG_TTY = (do -i { tty } | default "")
+# `tty` exits non-zero with no controlling terminal (e.g. non-interactive nu);
+# capture via `complete` so a missing tty cannot abort env.nu.
+let tty_check = (tty | complete)
+$env.GPG_TTY = (if $tty_check.exit_code == 0 { $tty_check.stdout | str trim } else { "" })
 
 # SSH agent priority:
 # 1. Forwarded agent (SSH/tmux) — use stable symlink (~/.ssh/agent.sock).

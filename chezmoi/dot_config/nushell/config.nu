@@ -72,11 +72,21 @@ def tml [ai?: string] {
   let in_tmux = ($env | get -o TMUX | is-not-empty)
 
   if not $in_tmux {
-    let has_session = (do -i { tmux has-session -t main } | complete | get exit_code) == 0
-    if $has_session {
+    # continuum auto-restore can recreate "main" as a hollow, shell-only session
+    # (pane layout restored, but nvim/claude not). Only attach when the dev
+    # layout is actually live; otherwise drop the stale session and rebuild.
+    let pane_cmds = (do -i { tmux list-panes -t main -F '#{pane_current_command}' } | complete | get stdout)
+    let has_layout = ($pane_cmds | lines | any {|cmd| $cmd == $env.EDITOR })
+    if $has_layout {
       tmux attach-session -t main
     } else {
-      tmux new-session -d -s main -c $current_dir
+      # Drop any stale/restored "main"; retry once if continuum recreates it.
+      do -i { tmux kill-session -t main }
+      let created = (do -i { tmux new-session -d -s main -c $current_dir } | complete | get exit_code)
+      if $created != 0 {
+        do -i { tmux kill-session -t main }
+        tmux new-session -d -s main -c $current_dir
+      }
       let editor_pane = (tmux display-message -t main -p '#{pane_id}' | str trim)
       tmux split-window -t main -v -p 15 -c $current_dir
       tmux select-pane -t $editor_pane
