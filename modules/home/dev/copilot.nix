@@ -1,29 +1,29 @@
 # modules/home/dev/copilot.nix -- GitHub Copilot CLI (terminal coding agent)
 #
 # Bleeding-edge via scarisey/copilot-cli-flake (auto-bumped weekly) with an
-# inline overrideAttrs that forces the latest upstream when scarisey hasn't
-# caught up yet. Mirrors the claude-code-nix pattern.
+# inline overrideAttrs that pins ahead of scarisey when upstream npm is newer.
 #
-# To bump the pinned-ahead version:
-#   nix-prefetch-url --type sha256 \
-#     https://registry.npmjs.org/@github/copilot/-/copilot-<NEW>.tgz
-#   ...then update both `version` and `hash` below.
+# To bump to the latest npm release:
+#   just bump-copilot
+#
+# That recipe queries the npm registry, prefetches the tarball hash, and
+# rewrites copilot-pin.json. When scarisey catches up to >= the pinned
+# version, the override silently becomes a no-op (guarded by equality).
 
 { lib, config, pkgs, inputs, ... }:
 
 with lib;
 let
   cfg = config.modules.dev.copilot;
-  pinnedAhead = "1.0.54";
-  pinnedAheadHash = "1indbw8cl0p9h99xmn080wzf170cc7vbbi7h7jcxjnd9yq4nshjs";
+  pin = builtins.fromJSON (builtins.readFile ./copilot-pin.json);
   base = inputs.copilot-cli-flake.packages.${pkgs.system}.default;
   copilot =
-    if base.version == pinnedAhead then base
+    if base.version == pin.version then base
     else base.overrideAttrs (_old: {
-      version = pinnedAhead;
+      version = pin.version;
       src = pkgs.fetchurl {
-        url = "https://registry.npmjs.org/@github/copilot/-/copilot-${pinnedAhead}.tgz";
-        sha256 = pinnedAheadHash;
+        url = "https://registry.npmjs.org/@github/copilot/-/copilot-${pin.version}.tgz";
+        sha256 = pin.hash;
       };
     });
 in {

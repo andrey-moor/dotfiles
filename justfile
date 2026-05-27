@@ -26,6 +26,34 @@ update:
 update-input input:
     nix flake lock --update-input {{input}}
 
+# Bump copilot CLI pin to the latest @github/copilot release on npm
+bump-copilot:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pin_file=modules/home/dev/copilot-pin.json
+    latest=$(curl -fsSL "https://registry.npmjs.org/@github/copilot/latest" \
+      | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])")
+    current=$(python3 -c "import json;print(json.load(open('$pin_file'))['version'])")
+    echo "current pin: $current"
+    echo "npm latest:  $latest"
+    if [ "$latest" = "$current" ]; then
+      echo "already at latest, no change."
+      exit 0
+    fi
+    echo "prefetching tarball hash..."
+    hash=$(nix-prefetch-url --type sha256 \
+      "https://registry.npmjs.org/@github/copilot/-/copilot-$latest.tgz" 2>/dev/null | tail -1)
+    python3 -c "
+    import json
+    p='$pin_file'
+    d=json.load(open(p))
+    d['version']='$latest'
+    d['hash']='$hash'
+    json.dump(d,open(p,'w'),indent=2)
+    open(p,'a').write('\n')
+    "
+    echo "updated $pin_file -> $latest ($hash)"
+
 # Garbage collect old generations
 clean:
     nix-collect-garbage -d
