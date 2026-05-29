@@ -94,6 +94,7 @@ with lib;
         "cursor"
         # Browsers
         "google-chrome"
+        "firefox"
         # Productivity
         "1password"
         "raycast"
