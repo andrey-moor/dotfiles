@@ -160,7 +160,10 @@ in {
           + optionalString cfg.gpu " --gpu"
           + optionalString cfg.renderCursor " --render-cursor"
           + " --max-fps=${toString cfg.maxFps}";
-        Restart = "on-failure";
+        # wayvnc exits 0 (clean) when its captured output is removed (e.g. monitor
+        # powered off), so "on-failure" never restarts it. Use "always" so it
+        # self-heals once an output is available again.
+        Restart = "always";
         RestartSec = 5;
       };
       Install.WantedBy = [ "graphical-session.target" ];
