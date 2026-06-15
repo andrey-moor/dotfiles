@@ -49,6 +49,9 @@ in {
         cleanup = "zap";
         autoUpdate = true;
         upgrade = true;
+        # Homebrew 6 made `brew bundle --cleanup` a dry-run that exits non-zero
+        # unless cleanup is forced, which aborts activation. Force it through.
+        extraFlags = [ "--force-cleanup" ];
       };
 
       # GUI applications
