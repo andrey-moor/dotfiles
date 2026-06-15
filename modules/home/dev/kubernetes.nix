@@ -7,6 +7,9 @@ let cfg = config.modules.dev.kubernetes;
 in {
   options.modules.dev.kubernetes = {
     enable = mkEnableOption "Kubernetes development tools";
+    # helm's nixpkgs packaging breaks recurrently (e.g. 4.2.0 patches a
+    # moved test file). Off by default; flip on once upstream is healthy.
+    helm = mkEnableOption "Helm package manager";
   };
 
   config = mkIf cfg.enable {
@@ -15,7 +18,6 @@ in {
 
     home.packages = with pkgs; [
       kubectl          # Kubernetes CLI
-      kubernetes-helm  # Helm package manager
       kubectx          # Switch between clusters/namespaces
       kind             # Kubernetes in Docker
       kubebuilder      # SDK for building K8s APIs
@@ -24,7 +26,7 @@ in {
       kubelogin        # Azure AKS authentication
       kubefwd          # Bulk port forwarding services for local dev
       argocd           # GitOps continuous deployment CLI
-    ];
+    ] ++ optional cfg.helm kubernetes-helm;  # Helm package manager (opt-in)
 
     # kubectl completion and aliases
     programs.bash.initExtra = mkIf config.programs.bash.enable ''
