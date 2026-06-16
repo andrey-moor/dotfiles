@@ -7,8 +7,9 @@ description: >-
   (6) Synthesize wiki ("synthesize topic", "compile wiki"), (7) Health check ("lint", "check KB"),
   (8) Capture answer ("capture this", "save this answer", "remember this"),
   (9) KB overview ("index", "what's in my KB"),
-  (10) Topics ("discover topics", "restructure my taxonomy", "what topics emerged", "cluster my notes").
-  Requires Obsidian MCP server (mcpvault). Topics (10) additionally use the local `kb-engine` CLI.
+  (10) Topics ("discover topics", "restructure my taxonomy", "what topics emerged", "cluster my notes"),
+  (11) Review ("review my KB", "kb review", "do my weekly review", "process the digest", responding to the weekly digest nudge).
+  Requires Obsidian MCP server (mcpvault). Topics (10) and Review (11) additionally use the local `kb-engine` CLI.
 ---
 
 # Knowledge Base Manager
@@ -241,6 +242,59 @@ Use `--json` on every command so you can parse the output.
   approval gate. Never run `topics apply` without the user's explicit go-ahead.
 
 See `/kb:topics` for the per-subcommand command reference.
+
+### 11. Review
+
+**Triggers**: "review my KB", "kb review", "do my weekly review", "process the digest",
+responding to the weekly digest notification, `/kb:review`
+
+The **nudged ~5-minute pass** that keeps the KB self-maintaining. A weekly **launchd**
+agent (Nix `modules.dev.kb-engine.schedule`) runs the deterministic, LLM-free
+`kb-engine pipeline` (sync → apply active-topic tags → sticky-discover proposals →
+write digest) and fires a notification. The pipeline never silently mis-tags: it
+applies `topic/<slug>` tags only for **active** (approved) topics, so freshly
+discovered clusters stay `proposed` until you confirm them here. This Review op is
+the human half — the judgment the engine deliberately omits.
+
+The digest at `Main/_system/kb-digest.md` is the **entry point**: it lists the inbox
+backlog, proposals awaiting naming/approval, and unfiled notes. Read it first.
+
+**Flow:**
+
+1. **Read the digest.** `mcp__obsidian__read_note` on `Main/_system/kb-digest.md`.
+   It is regenerated weekly by the launchd job; its "Needs review" checklist drives
+   the rest of this pass. If everything is `- [x] Nothing to review.`, say so and stop.
+
+2. **Process new inbox items** (digest "inbox backlog" > 0). Run the **Process**
+   operation (op 2 / `/kb:process`) over `Knowledge/inbox/`: for each unprocessed note,
+   fetch content (tiered `WebFetch` → `agent-browser`, see
+   [references/content-fetching.md](references/content-fetching.md)), generate a summary,
+   and suggest tags. **Auto-apply high-confidence tags**; **batch the borderline ones**
+   and ask the user once. File approved notes from `inbox/` into `Knowledge/`. Dedup is
+   already handled at ingest by `kb-engine import-things`, so expect no duplicate URLs.
+
+3. **Name & govern topic proposals** (digest "proposals awaiting review" > 0). Run the
+   **Topics** operation (op 10 / `/kb:topics`): read the keyword-slug proposals + their
+   member notes, propose human labels and area names, present the restructure as a
+   reviewable diff, and on approval `kb-engine topics render`. Promote a proposal you
+   want to keep into an approved, sticky topic with
+   `kb-engine topics add <slug> --label "<Label>" --description "<…>"`.
+
+4. **Apply newly-approved topics (optional, gated).** Only after the user confirms, write
+   `topic/<slug>` tags for the topics just promoted to active:
+   ```bash
+   kb-engine topics apply --status active --json
+   ```
+   This is the only note-mutating step and running it IS the gate. Surface any
+   `skipped_missing` member paths; never drop them silently.
+
+5. **Wrap up.** Optionally `kb-engine digest` (or just re-run `pipeline`) to refresh
+   `kb-digest.md`, and report what was processed, named, and applied.
+
+Note: the launchd job refreshes the digest weekly, so the backlog can't silently rot —
+the nudge keeps reminding you until the checklist is clear.
+
+See `/kb:review` for the command reference.
 
 ## MCP Tool Reference
 

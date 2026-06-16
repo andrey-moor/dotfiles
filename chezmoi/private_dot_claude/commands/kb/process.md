@@ -5,6 +5,17 @@ Process knowledge base inbox: fetch content, generate summaries, and apply tags.
 `/kb:process` — process all inbox notes
 `/kb:process <filename>` — process a specific note
 
+## Model
+
+- **Auto-file high-confidence, batch the borderline.** Notes whose tags are all
+  high-confidence are tagged and filed to `Knowledge/` automatically. Borderline
+  (medium/low) suggestions are **collected and asked together** at the end, so the
+  user makes one pass instead of being interrupted per note.
+- **Dedup is handled at ingest.** `kb-engine import-things` normalizes and dedups URLs
+  against the existing vault and within the import batch, so inbox stubs should not carry
+  duplicate URLs by the time you process them.
+- This is the per-item engine behind the weekly `/kb:review` pass (op 11).
+
 ## Instructions
 
 ### 1. Find inbox notes
