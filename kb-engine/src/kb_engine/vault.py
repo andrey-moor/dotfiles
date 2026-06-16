@@ -61,7 +61,21 @@ def read_note(path: Path, base: Path) -> Note:
     )
 
 
-def iter_notes(root: Path) -> Iterator[Note]:
+def iter_notes(
+    root: Path,
+    base: Path | None = None,
+    exclude_dirs: tuple[str, ...] = (),
+) -> Iterator[Note]:
+    """Yield notes for every ``*.md`` file under ``root``, sorted by path.
+
+    ``base`` anchors the returned ``Note.path`` (defaults to ``root``), so a
+    vault root can be passed to get vault-relative ``Knowledge/...`` paths.
+    ``exclude_dirs`` skips top-level subdirectories of ``root`` by name.
+    """
+    anchor = root if base is None else base
     for path in sorted(root.rglob("*.md")):
-        if path.is_file():
-            yield read_note(path, base=root)
+        if not path.is_file():
+            continue
+        if exclude_dirs and path.relative_to(root).parts[0] in exclude_dirs:
+            continue
+        yield read_note(path, base=anchor)

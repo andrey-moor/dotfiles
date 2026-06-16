@@ -5,11 +5,11 @@ from kb_engine.config import Config
 from kb_engine.embeddings import Embedder
 from kb_engine.models import Note
 from kb_engine.store import Store
-from kb_engine.vault import read_note
+from kb_engine.vault import iter_notes
 
 # Inbox holds unprocessed captures; never embed it. Everything else under
 # Knowledge/ (including synthesized wiki/ articles) is indexed.
-EXCLUDED_PREFIX = "inbox/"
+EXCLUDED_DIRS = ("inbox",)
 
 
 @dataclass(frozen=True)
@@ -24,15 +24,12 @@ def _disk_notes(cfg: Config) -> dict[str, Note]:
     knowledge_dir = cfg.knowledge_dir
     if not knowledge_dir.is_dir():
         return {}
-    notes: dict[str, Note] = {}
-    for path in sorted(knowledge_dir.rglob("*.md")):
-        if not path.is_file():
-            continue
-        if path.relative_to(knowledge_dir).as_posix().startswith(EXCLUDED_PREFIX):
-            continue
-        note = read_note(path, base=cfg.vault_path)
-        notes[note.path] = note
-    return notes
+    return {
+        note.path: note
+        for note in iter_notes(
+            knowledge_dir, base=cfg.vault_path, exclude_dirs=EXCLUDED_DIRS
+        )
+    }
 
 
 def _index_note(store: Store, note: Note, embedder: Embedder, max_tokens: int) -> None:
