@@ -55,3 +55,42 @@ def test_existing_wiki_excludes_candidate(tmp_path):
         {"rag": [TopicMember(f"Knowledge/r{i}.md", 0.9, "auto") for i in range(6)]},
     )
     assert synthesis_candidates(s, tmp_path, min_members=5) == []  # wiki/rag.md exists
+
+
+def test_no_topics_yields_no_candidates(tmp_path):
+    (tmp_path / "Knowledge" / "wiki").mkdir(parents=True)
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    assert synthesis_candidates(s, tmp_path, min_members=5) == []
+
+
+def test_candidates_sorted_by_size_desc(tmp_path):
+    (tmp_path / "Knowledge" / "wiki").mkdir(parents=True)
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    small = Topic(
+        slug="five",
+        label="Five",
+        keywords=("five",),
+        centroid=np.ones(4, np.float32),
+        kind="discovered",
+        status="proposed",
+    )
+    big = Topic(
+        slug="eight",
+        label="Eight",
+        keywords=("eight",),
+        centroid=np.ones(4, np.float32),
+        kind="discovered",
+        status="proposed",
+    )
+    s.save_topics(
+        [small, big],
+        {
+            "five": [TopicMember(f"Knowledge/f{i}.md", 0.9, "auto") for i in range(5)],
+            "eight": [TopicMember(f"Knowledge/e{i}.md", 0.9, "auto") for i in range(8)],
+        },
+    )
+    cands = synthesis_candidates(s, tmp_path, min_members=5)
+    assert [c.slug for c in cands] == ["eight", "five"]  # biggest first
+    assert [c.size for c in cands] == [8, 5]

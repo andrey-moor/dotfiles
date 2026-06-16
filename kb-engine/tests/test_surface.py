@@ -44,3 +44,16 @@ def test_related_to_note_excludes_self(tmp_path):
     assert "Knowledge/a.md" not in paths  # don't surface the note itself
     assert paths[0] == "Knowledge/b.md"  # nearest neighbor first
     assert hits[0].title == "B"
+
+
+def test_related_to_query_empty_store(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    e = FakeEmbedder(dim=32)
+    assert related_to_query(s, e, "anything", limit=5) == []
+
+
+def test_related_to_note_missing_note_returns_empty(tmp_path):
+    s, _e = _store_with(tmp_path, {"Knowledge/a.md": "long term memory"})
+    # A note with no stored vector (never synced) yields no neighbors.
+    assert related_to_note(s, "Knowledge/missing.md", limit=5) == []

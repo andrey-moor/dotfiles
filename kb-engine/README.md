@@ -326,6 +326,41 @@ nags weekly, so the backlog can't silently rot.
 `import-things`, `digest`, and `pipeline` are the engine commands behind the
 Phase-3b cadence (read Things → import to inbox → weekly pipeline → review).
 
+## Synthesis candidates
+
+`synthesis-candidates` lists topics that have enough material to be worth a wiki
+article but **don't have one yet** — so synthesis stops going idle. A topic is a
+candidate when it has `>= --min` members (default `5`) and no article exists at
+`<vault>/Knowledge/wiki/<slug>.md` (filename match on the topic slug). Results are
+sorted by member count, biggest first. It is **read-only** (reads the stored topics
++ scans `Knowledge/wiki/`); the actual wiki *writing* stays in the `kb` skill
+(`/kb:synthesize`).
+
+```bash
+kb-engine --vault "<vault>" synthesis-candidates           # >=5 members, no wiki
+kb-engine --vault "<vault>" synthesis-candidates --min 3 --json
+```
+
+`--json` emits `{candidates:[{slug, label, size}]}`.
+
+## Proactive surfacing (related)
+
+`related` answers "what's relevant to what I'm working on now". Pass **exactly one**
+of `--query` (free-text context/project) or `--to` (a vault-relative note path):
+
+- `--query` reuses **hybrid search** (semantic + keyword, scoped to `Knowledge/`,
+  excluding `inbox/`), the same retrieval behind `search`.
+- `--to` takes the note's mean-pooled vector and ranks all **other** notes by cosine,
+  **excluding the note itself**. A note with no stored vector yields no results.
+
+```bash
+kb-engine --vault "<vault>" related --query "long-term memory for AI agents" --limit 5
+kb-engine --vault "<vault>" related --to "Knowledge/graph-memory.md" --json
+```
+
+`--json` emits `{hits:[{note_path, title, score}]}`, ranked best-first. Like `search`,
+it is **read-only** and never mutates the vault.
+
 ## Development & testing
 
 The bulk of the suite is torch-free: a deterministic `FakeEmbedder` plus temp
