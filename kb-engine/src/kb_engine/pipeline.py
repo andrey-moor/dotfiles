@@ -38,11 +38,12 @@ class PipelineResult:
     synced: int  # notes added or changed this run
     applied: int  # notes that gained a topic/ tag (active topics only)
     proposals: int  # new discovered topics from the residual
+    inbox: int  # inbox stubs awaiting processing (Knowledge/inbox/)
     unfiled: int  # notes assigned to no topic
     digest_path: str  # vault-relative path of the written digest
 
 
-def _count_inbox(vault_path: Path) -> int:
+def count_inbox(vault_path: Path) -> int:
     """Number of markdown stubs in ``Knowledge/inbox/``."""
     inbox = vault_path / _INBOX_RELDIR
     if not inbox.is_dir():
@@ -50,7 +51,7 @@ def _count_inbox(vault_path: Path) -> int:
     return sum(1 for _ in inbox.glob("*.md"))
 
 
-def _unfiled_notes(store: Store) -> list[str]:
+def unfiled_notes(store: Store) -> list[str]:
     """Note paths in the store assigned to no topic, sorted."""
     all_notes = set(store.all_note_shas())
     filed = {
@@ -78,8 +79,8 @@ def run_pipeline(
 
     sticky_result = sticky_discover(store, clusterer)
 
-    inbox_count = _count_inbox(cfg.vault_path)
-    unfiled = _unfiled_notes(store)
+    inbox_count = count_inbox(cfg.vault_path)
+    unfiled = unfiled_notes(store)
     text = build_digest(
         store, vault_path=cfg.vault_path, inbox_count=inbox_count, unfiled=unfiled
     )
@@ -91,6 +92,7 @@ def run_pipeline(
         synced=synced,
         applied=apply_result.n_changed,
         proposals=sticky_result.n_new_topics,
+        inbox=inbox_count,
         unfiled=len(unfiled),
         digest_path=_DIGEST_RELPATH.as_posix(),
     )

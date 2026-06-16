@@ -40,6 +40,7 @@ def test_pipeline_runs_steps_and_summarizes(tmp_path):
     assert res.synced == 2  # both notes embedded
     assert res.applied == 0  # no active topics yet -> no note mutation
     assert res.proposals == 1  # one discovered proposal from the cluster
+    assert res.inbox == 1  # the one inbox stub awaits processing
     assert (cfg.vault_path / "_system" / "kb-digest.md").exists()
     assert res.digest_path == "_system/kb-digest.md"
 
@@ -91,6 +92,7 @@ def test_pipeline_empty_vault(tmp_path):
     assert res.synced == 0
     assert res.applied == 0
     assert res.proposals == 0
+    assert res.inbox == 0
     assert res.unfiled == 0
     assert (cfg.vault_path / "_system" / "kb-digest.md").exists()
 
@@ -105,9 +107,10 @@ def test_pipeline_cli_json(tmp_path, monkeypatch):
     )
     assert r.exit_code == 0, r.output
     out = json.loads(r.output)
-    assert {"synced", "applied", "proposals", "unfiled", "digest_path"} <= out.keys()
+    assert {"synced", "applied", "proposals", "inbox", "unfiled", "digest_path"} <= out.keys()
     assert out["synced"] == 2
     assert out["applied"] == 0  # no active topics -> no mutation
+    assert out["inbox"] == 1  # one inbox stub -> matches the nudge expression
     assert out["digest_path"] == "_system/kb-digest.md"
     assert (v / "_system" / "kb-digest.md").exists()
 

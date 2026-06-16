@@ -12,7 +12,7 @@ from kb_engine.importing.things import read_things_tasks
 from kb_engine.importing.urls import normalize_url
 from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
 from kb_engine.models import TopicMember
-from kb_engine.pipeline import _count_inbox, _unfiled_notes, run_pipeline
+from kb_engine.pipeline import count_inbox, run_pipeline, unfiled_notes
 from kb_engine.search import hybrid_search
 from kb_engine.store import SLUG_PATTERN, Store, is_valid_slug
 from kb_engine.sync import rebuild as rebuild_index
@@ -40,7 +40,7 @@ _IMPORT_SAMPLE_SIZE = 5
 
 _DIGEST_RELPATH = Path("_system") / "kb-digest.md"
 
-# _count_inbox / _unfiled_notes live in kb_engine.pipeline (imported above) so the
+# count_inbox / unfiled_notes live in kb_engine.pipeline (imported above) so the
 # digest command and the pipeline share one definition.
 
 
@@ -728,8 +728,8 @@ def digest(cfg: Config, as_json: bool) -> None:
     store = Store(cfg.db_path)
     try:
         store.init_schema()  # tolerate a never-synced DB
-        inbox_count = _count_inbox(cfg.vault_path)
-        unfiled = _unfiled_notes(store)
+        inbox_count = count_inbox(cfg.vault_path)
+        unfiled = unfiled_notes(store)
         text = build_digest(
             store,
             vault_path=cfg.vault_path,
@@ -788,13 +788,14 @@ def pipeline(cfg: Config, as_json: bool) -> None:
             "synced": result.synced,
             "applied": result.applied,
             "proposals": result.proposals,
+            "inbox": result.inbox,
             "unfiled": result.unfiled,
             "digest_path": result.digest_path,
         },
         as_json,
         f"Pipeline: synced={result.synced} applied={result.applied} "
-        f"proposals={result.proposals} unfiled={result.unfiled} "
-        f"-> {result.digest_path}",
+        f"proposals={result.proposals} inbox={result.inbox} "
+        f"unfiled={result.unfiled} -> {result.digest_path}",
     )
 
 
