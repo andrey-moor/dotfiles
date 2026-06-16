@@ -67,7 +67,7 @@ in {
         enable = true;
         config = {
           ProgramArguments = [ "${pipelineRunner}" ];
-          StartCalendarInterval = [ cfg.schedule.calendar ];
+          StartCalendarInterval = cfg.schedule.calendar;
           StandardOutPath = "${logDir}/kb-engine-pipeline.log";
           StandardErrorPath = "${logDir}/kb-engine-pipeline.err";
         };

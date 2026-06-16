@@ -34,7 +34,6 @@ _TRACKING_PARAMS = frozenset(
 # "x.com" don't shadow each other. ".substack.com" matches any subdomain.
 _SOURCE_BY_HOST_SUFFIX: tuple[tuple[str, str], ...] = (
     ("github.com", "github"),
-    ("gist.github.com", "github"),
     ("twitter.com", "tweet"),
     ("x.com", "tweet"),
     ("nitter.net", "tweet"),

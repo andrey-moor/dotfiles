@@ -53,3 +53,5 @@ def test_infer_source_known_hosts():
     assert infer_source("https://youtu.be/abc") == "youtube"
     assert infer_source("https://arxiv.org/abs/2401.00001") == "paper"
     assert infer_source("https://foo.substack.com/p/bar") == "newsletter"
+    # gist.github.com resolves to github via the github.com suffix match
+    assert infer_source("https://gist.github.com/x/y") == "github"
