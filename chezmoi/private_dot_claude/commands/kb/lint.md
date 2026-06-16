@@ -8,6 +8,12 @@ Health check across the Knowledge Base. Finds data integrity issues, quality gap
 
 ## Instructions
 
+### 0. Scope
+
+Run all checks over `Main/Knowledge/` only (source + `wiki/` + `inbox/`). Exclude `Main/Orrery/`,
+`Main/Archive/`, `Main/Clippings/`, and `_system/`. Never count inline hashtags from those folders
+as KB tags.
+
 ### 1. Gather data
 
 - Read taxonomy from `Main/_system/_taxonomy.md` (including Deprecated table)
@@ -22,7 +28,8 @@ Health check across the Knowledge Base. Finds data integrity issues, quality gap
 - **E02 invalid-status**: Status not one of: inbox, reference, archived
 - **E03 invalid-source**: Source not one of the allowed values from schema.md: article, tweet, newsletter, github, youtube, paper, podcast, derived, other. Note: Web Clipper notes store a URL in `source` — these should be flagged but with a note suggesting `/kb:process` to normalize.
 - **E04 bad-date**: `date_added` not in YYYY-MM-DD format (flag ISO timestamps like `2024-08-30T00:00:00.000Z`)
-- **E05 duplicate-url**: Same URL appears in multiple notes
+- **E05 duplicate-url**: Same URL — or byte-identical body — across notes, including `inbox/`
+- **E07 inbox-raw-schema**: Inbox note with `source` = a URL or no `status` field — repairable by the normalization in E07 (url←source, source←inferred type, date_added←created, status←inbox, strip Knowledge/inbox tag, drop published/created/description)
 - **E06 status-mismatch**: Note in `inbox/` with status != inbox, or note in `Knowledge/` (not inbox/) with status == inbox
 
 **WARNINGS (quality):**
@@ -32,12 +39,15 @@ Health check across the Knowledge Base. Finds data integrity issues, quality gap
 - **W04 orphan-tag**: Note using a tag not defined in `_taxonomy.md`
 - **W05 deprecated-tag**: Note using a tag in the Deprecated table
 - **W06 stale-wiki**: Wiki article whose `last_compiled` is older than the newest source note for its topic. For tag-based topics: search by tag. For freeform topics (topic field is not a valid tag): search by topic keywords in content/summary, same as synthesize step 2
+- **W07 stale-index**: `_system/index.md` `last_updated` > 14 days old, or its Stats counts diverge from the live note counts
+- **W08 stub-body**: Reference note whose body contains "Pending processing" or "Content not yet fetched"
 
 **INFO (suggestions):**
 - **I01 synthesis-candidate**: Tag with 5+ source notes but no wiki article
 - **I02 lonely-tag**: Tag used by only 1 note (potential taxonomy cleanup)
 - **I03 short-summary**: Summary shorter than 10 words
 - **I04 old-note**: Note older than 90 days with status reference (may need review)
+- **I05 inbox-backlog**: > 10 notes in `inbox/`, or the oldest inbox note is > 30 days old
 
 ### 3. Present report
 
@@ -67,6 +77,8 @@ Auto-fixable issues:
 - **E04**: Convert ISO timestamps to YYYY-MM-DD via `mcp__obsidian__update_frontmatter`
 - **E06**: Update status to match location via `mcp__obsidian__update_frontmatter`
 - **W05**: Replace deprecated tags with mapped replacements via `mcp__obsidian__update_frontmatter`
+- **E07**: normalize raw Web-Clipper schema (url←source, source←inferred type, date_added←created, status←inbox, strip Knowledge/inbox tag, drop published/created/description)
+- **W07**: regenerate the index via `/kb:index`
 
 Workflow:
 1. List all auto-fixable issues with proposed changes
