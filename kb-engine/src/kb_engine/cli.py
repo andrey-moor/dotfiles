@@ -7,16 +7,21 @@ import click
 
 from kb_engine.config import Config
 from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
+from kb_engine.models import TopicMember
 from kb_engine.search import hybrid_search
 from kb_engine.store import Store
 from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
 from kb_engine.topics.areas import build_areas
+from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
 
 DEFAULT_SEARCH_LIMIT = 10
 DEFAULT_AREA_THRESHOLD = 0.3
+DEFAULT_ASSIGN_HIGH = 0.55
+DEFAULT_ASSIGN_LOW = 0.4
+_ASSIGNABLE_STATUSES = frozenset({"active", "proposed"})
 
 
 def _build_embedder(cfg: Config) -> Embedder:
@@ -306,6 +311,69 @@ def topics_list(cfg: Config, as_json: bool) -> None:
         click.echo(
             f"{row['slug']}  [{row['kind']}/{row['status']}]  ({row['size']} notes)"
         )
+
+
+@topics.command("assign")
+@click.option("--high", default=DEFAULT_ASSIGN_HIGH, show_default=True, type=float)
+@click.option("--low", default=DEFAULT_ASSIGN_LOW, show_default=True, type=float)
+@click.option(
+    "--apply",
+    "apply_changes",
+    is_flag=True,
+    help="Persist high-confidence assignments (dry-run reports only by default).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_assign(
+    cfg: Config, high: float, low: float, apply_changes: bool, as_json: bool
+) -> None:
+    """Assign notes to nearest topic by cosine; dry-run unless ``--apply``."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        note_vectors = dict(store.note_vectors())
+        assignable = [
+            topic
+            for topic in store.load_topics()
+            if topic.status in _ASSIGNABLE_STATUSES
+        ]
+        assigned, borderline = assign_notes(note_vectors, assignable, high, low)
+        if apply_changes:
+            members_by_slug: dict[str, list[TopicMember]] = {}
+            for note_path, (slug, score) in assigned.items():
+                members_by_slug.setdefault(slug, []).append(
+                    TopicMember(note_path=note_path, score=score, source="auto")
+                )
+            for slug, members in members_by_slug.items():
+                store.set_members(slug, members)
+        assigned_rows = [
+            {"note": note_path, "topic": slug, "score": round(score, 6)}
+            for note_path, (slug, score) in sorted(assigned.items())
+        ]
+        borderline_rows = [
+            {"note": note_path, "topic": slug, "score": round(score, 6)}
+            for note_path, (slug, score) in borderline
+        ]
+        n_unassigned = len(note_vectors) - len(assigned) - len(borderline)
+    finally:
+        store.close()
+
+    if as_json:
+        click.echo(
+            json.dumps(
+                {
+                    "assigned": assigned_rows,
+                    "borderline": borderline_rows,
+                    "unassigned": n_unassigned,
+                    "applied": apply_changes,
+                }
+            )
+        )
+        return
+    click.echo(
+        f"assigned={len(assigned_rows)} borderline={len(borderline_rows)} "
+        f"unassigned={n_unassigned} applied={apply_changes}"
+    )
 
 
 if __name__ == "__main__":

@@ -289,6 +289,24 @@ class Store:
             )
         return areas
 
+    def set_members(self, slug: str, members: list[TopicMember]) -> None:
+        """Add/update topic members additively (existing members are kept).
+
+        Uses INSERT OR REPLACE on the (topic_slug, note_path) primary key, so a
+        member already present is updated in place and new ones are appended
+        without clearing the rest.
+        """
+        with self._conn:
+            for member in members:
+                self._conn.execute(
+                    """
+                    INSERT OR REPLACE INTO topic_members(
+                        topic_slug, note_path, score, source
+                    ) VALUES(?, ?, ?, ?)
+                    """,
+                    (slug, member.note_path, member.score, member.source),
+                )
+
     def keyword_search(self, query: str, limit: int = 20) -> list[tuple[str, float]]:
         match = _sanitize_fts_query(query)
         if not match:
