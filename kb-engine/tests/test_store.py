@@ -1,5 +1,5 @@
 import numpy as np
-from kb_engine.store import Store
+from kb_engine.store import Store, _sanitize_fts_query
 
 
 def test_upsert_and_fetch_note_and_vectors(tmp_path):
@@ -27,6 +27,32 @@ def test_keyword_search_uses_fts(tmp_path):
     s.replace_chunks("Knowledge/a.md", [(0, "long term memory for agents", np.ones(4, np.float32))])
     hits = s.keyword_search("memory", limit=5)
     assert hits and hits[0][0] == "Knowledge/a.md"
+
+
+def test_keyword_search_preserves_internal_hyphens(tmp_path):
+    # A hyphenated term like "jina-v3" must match a chunk containing "jina-v3";
+    # the tokenizer must not split it into "jina" + "v3".
+    s = Store(tmp_path / "t.db"); s.init_schema()
+    s.upsert_note(path="Knowledge/a.md", title="Models", sha256="h", tags=[])
+    s.replace_chunks(
+        "Knowledge/a.md",
+        [(0, "we evaluated jina-v3 embeddings", np.ones(4, np.float32))],
+    )
+    hits = s.keyword_search("jina-v3", limit=5)
+    assert hits and hits[0][0] == "Knowledge/a.md"
+
+
+def test_sanitize_fts_query_keeps_hyphens_and_unicode():
+    # Internal hyphens are preserved as one term; non-ASCII word chars survive.
+    assert _sanitize_fts_query("jina-v3") == '"jina-v3"'
+    assert _sanitize_fts_query("GPT-4") == '"GPT-4"'
+    assert _sanitize_fts_query("café") == '"café"'
+    # Leading/trailing punctuation is still stripped; multi-term still splits.
+    assert _sanitize_fts_query("-leading-") == '"leading"'
+    assert _sanitize_fts_query("co-op test") == '"co-op" "test"'
+    # Empty / punctuation-only stays empty (unchanged).
+    assert _sanitize_fts_query('"?!.* ') == ""
+    assert _sanitize_fts_query("   ") == ""
 
 
 def test_keyword_search_punctuation_only_query_returns_empty(tmp_path):

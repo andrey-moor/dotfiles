@@ -18,8 +18,10 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, note_path UNINDEXED);
 """
 
-# Keep alphanumerics/underscores as FTS terms; everything else is a separator.
-_FTS_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
+# FTS terms = unicode word runs that may contain mid-word hyphens (e.g.
+# "jina-v3", "GPT-4", "café"). Leading/trailing punctuation is stripped; a
+# lone word char still matches via the final alternative.
+_FTS_TOKEN_RE = re.compile(r"\w[\w\-]*\w|\w", re.UNICODE)
 
 
 def _to_blob(vector: np.ndarray) -> bytes:
