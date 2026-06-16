@@ -12,6 +12,7 @@ from kb_engine.importing.things import read_things_tasks
 from kb_engine.importing.urls import normalize_url
 from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
 from kb_engine.models import TopicMember
+from kb_engine.pipeline import _count_inbox, _unfiled_notes, run_pipeline
 from kb_engine.search import hybrid_search
 from kb_engine.store import SLUG_PATTERN, Store, is_valid_slug
 from kb_engine.sync import rebuild as rebuild_index
@@ -37,27 +38,10 @@ DEFAULT_APPLY_STATUS = "active"
 _THINGS_DB_GLOB = "Library/Group Containers/*ThingsMac*/**/main.sqlite"
 _IMPORT_SAMPLE_SIZE = 5
 
-_INBOX_RELDIR = Path("Knowledge") / "inbox"
 _DIGEST_RELPATH = Path("_system") / "kb-digest.md"
 
-
-def _count_inbox(vault_path: Path) -> int:
-    """Number of markdown stubs in ``Knowledge/inbox/``."""
-    inbox = vault_path / _INBOX_RELDIR
-    if not inbox.is_dir():
-        return 0
-    return sum(1 for _ in inbox.glob("*.md"))
-
-
-def _unfiled_notes(store: Store) -> list[str]:
-    """Note paths in the store assigned to no topic, sorted."""
-    all_notes = set(store.all_note_shas())
-    filed = {
-        member.note_path
-        for topic in store.load_topics()
-        for member in store.topic_members(topic.slug)
-    }
-    return sorted(all_notes - filed)
+# _count_inbox / _unfiled_notes live in kb_engine.pipeline (imported above) so the
+# digest command and the pipeline share one definition.
 
 
 def _default_things_db() -> Path | None:
@@ -778,6 +762,39 @@ def digest(cfg: Config, as_json: bool) -> None:
         as_json,
         f"Digest: inbox={inbox_count} proposals={n_proposals} "
         f"topics={n_topics} areas={n_areas} unfiled={len(unfiled)} -> {rel}",
+    )
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def pipeline(cfg: Config, as_json: bool) -> None:
+    """Run the deterministic maintenance pipeline (sync → apply → discover → digest).
+
+    LLM-free and safe to run unattended: it embeds new/changed notes, applies
+    ``topic/<slug>`` tags for *active* topics only (proposals stay proposed, so
+    nothing is silently mis-tagged), clusters the residual into new proposals,
+    and writes ``_system/kb-digest.md``. This is what the weekly launchd agent runs.
+    """
+    store = Store(cfg.db_path)
+    try:
+        result = run_pipeline(
+            cfg, store, _build_embedder(cfg), _build_clusterer()
+        )
+    finally:
+        store.close()
+    _emit(
+        {
+            "synced": result.synced,
+            "applied": result.applied,
+            "proposals": result.proposals,
+            "unfiled": result.unfiled,
+            "digest_path": result.digest_path,
+        },
+        as_json,
+        f"Pipeline: synced={result.synced} applied={result.applied} "
+        f"proposals={result.proposals} unfiled={result.unfiled} "
+        f"-> {result.digest_path}",
     )
 
 
