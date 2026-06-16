@@ -11,6 +11,8 @@ from kb_engine.search import hybrid_search
 from kb_engine.store import Store
 from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
+from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
+from kb_engine.topics.discover import discover_topics
 
 DEFAULT_SEARCH_LIMIT = 10
 
@@ -20,6 +22,19 @@ def _build_embedder(cfg: Config) -> Embedder:
     if os.environ.get("KB_FAKE_EMBED") == "1":
         return FakeEmbedder(dim=cfg.embed_dim)
     return LocalJinaEmbedder(model_name=cfg.model_name, dim=cfg.embed_dim)
+
+
+def _build_clusterer() -> Clusterer:
+    """Use a deterministic FakeClusterer when KB_FAKE_CLUSTER is set, else real UMAP/HDBSCAN.
+
+    KB_FAKE_CLUSTER is a comma-separated list of int labels (-1 = noise), e.g.
+    "0,0,-1". An empty/unset value falls back to the real clusterer.
+    """
+    raw = os.environ.get("KB_FAKE_CLUSTER", "").strip()
+    if raw:
+        labels = [int(part) for part in raw.split(",")]
+        return FakeClusterer(labels=labels)
+    return UmapHdbscanClusterer()
 
 
 def _emit(payload: dict, as_json: bool, human: str) -> None:
@@ -144,6 +159,52 @@ def rebuild(cfg: Config, as_json: bool) -> None:
         as_json,
         f"Rebuilt: added={stats.added} changed={stats.changed} deleted={stats.deleted}",
     )
+
+
+@main.group()
+def topics() -> None:
+    """Discover and inspect topics over the KB's embeddings."""
+
+
+@topics.command("discover")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_discover(cfg: Config, as_json: bool) -> None:
+    """Cluster note vectors into topics (UMAP→HDBSCAN) and persist them."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()  # tolerate discovering against a never-synced DB
+        result = discover_topics(store, _build_clusterer())
+        topic_rows = [
+            {
+                "slug": topic.slug,
+                "label": topic.label,
+                "keywords": list(topic.keywords),
+                "size": len(result.members_by_slug.get(topic.slug, [])),
+            }
+            for topic in result.topics
+        ]
+    finally:
+        store.close()
+
+    if as_json:
+        click.echo(
+            json.dumps(
+                {
+                    "n_topics": result.n_topics,
+                    "n_unfiled": result.n_unfiled,
+                    "topics": topic_rows,
+                }
+            )
+        )
+        return
+    if not topic_rows:
+        click.echo(f"No topics discovered. unfiled={result.n_unfiled}")
+        return
+    for row in topic_rows:
+        keywords = ", ".join(row["keywords"])
+        click.echo(f"{row['slug']}  ({row['size']} notes)  [{keywords}]")
+    click.echo(f"unfiled={result.n_unfiled}")
 
 
 if __name__ == "__main__":

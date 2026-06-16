@@ -134,6 +134,28 @@ class Store:
         if current_path is not None:
             yield current_path, np.mean(acc, axis=0).astype(np.float32)
 
+    def note_texts(self) -> dict[str, str]:
+        """Return ``{note_path: "title first-chunk-text"}`` for keyword labeling.
+
+        Each note contributes its title plus the text of its first chunk
+        (ordinal 0) — enough signal for c-TF-IDF labels without loading whole
+        notes. Notes with no chunks contribute their title alone.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT n.path, n.title, (
+                SELECT text FROM chunks
+                WHERE note_path = n.path ORDER BY ordinal LIMIT 1
+            ) AS first_chunk
+            FROM notes n
+            """
+        ).fetchall()
+        texts: dict[str, str] = {}
+        for path, title, first_chunk in rows:
+            parts = [part for part in (title, first_chunk) if part]
+            texts[path] = " ".join(parts)
+        return texts
+
     def save_topics(
         self,
         topics: list[Topic],

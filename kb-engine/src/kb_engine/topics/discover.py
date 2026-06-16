@@ -1,7 +1,11 @@
+from dataclasses import dataclass
+
 import numpy as np
 
 from kb_engine.models import Topic, TopicMember
+from kb_engine.topics.clustering import Clusterer
 from kb_engine.topics.labeling import slugify, top_keywords
+from kb_engine.store import Store
 
 _KEYWORDS_PER_TOPIC = 5
 _LABEL_KEYWORDS = 3
@@ -104,3 +108,44 @@ def _unique_slug(base: str, used: set[str]) -> str:
     while f"{base}-{suffix}" in used:
         suffix += 1
     return f"{base}-{suffix}"
+
+
+@dataclass(frozen=True)
+class DiscoverResult:
+    topics: list[Topic]
+    members_by_slug: dict[str, list[TopicMember]]
+    unfiled: list[str]
+    n_topics: int
+    n_unfiled: int
+
+
+def discover_topics(store: Store, clusterer: Clusterer) -> DiscoverResult:
+    """Cluster the store's note vectors into topics and persist them.
+
+    Reads mean-pooled note vectors (sorted by path), clusters them, builds
+    topics with keyword labels, saves them to the store, and returns a summary.
+    An empty corpus yields an empty result without invoking the clusterer.
+    """
+    note_vectors = list(store.note_vectors())
+    if not note_vectors:
+        return DiscoverResult(
+            topics=[], members_by_slug={}, unfiled=[], n_topics=0, n_unfiled=0
+        )
+
+    paths = [path for path, _ in note_vectors]
+    matrix = np.vstack([vector for _, vector in note_vectors])
+    labels = clusterer.cluster(matrix)
+
+    texts_by_path = store.note_texts()
+    topics, members_by_slug, unfiled = build_topics(
+        paths, matrix, texts_by_path, labels
+    )
+    store.save_topics(topics, members_by_slug)
+
+    return DiscoverResult(
+        topics=topics,
+        members_by_slug=members_by_slug,
+        unfiled=unfiled,
+        n_topics=len(topics),
+        n_unfiled=len(unfiled),
+    )

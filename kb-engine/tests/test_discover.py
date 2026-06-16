@@ -1,6 +1,15 @@
 import numpy as np
 
-from kb_engine.topics.discover import build_topics
+from kb_engine.store import Store
+from kb_engine.topics.clustering import FakeClusterer
+from kb_engine.topics.discover import build_topics, discover_topics
+
+
+def _seed(store: Store, rows: list[tuple[str, str]]) -> None:
+    for i, (path, text) in enumerate(rows):
+        store.upsert_note(path=path, title=path, sha256="h", tags=[])
+        vector = np.eye(4, dtype=np.float32)[i % 4]
+        store.replace_chunks(path, [(0, text, vector)])
 
 
 def test_build_topics_centroids_labels_and_noise():
@@ -21,3 +30,44 @@ def test_build_topics_centroids_labels_and_noise():
     assert unfiled == ["Knowledge/c.md"]  # noise -> unfiled
     # member score = cosine of note vec to centroid
     assert all(0.0 <= m.score <= 1.0001 for m in members[t.slug])
+
+
+def test_discover_topics_stores_and_reports(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    _seed(
+        s,
+        [
+            ("Knowledge/a.md", "rust macros"),
+            ("Knowledge/b.md", "rust borrow"),
+            ("Knowledge/c.md", "llm prompt"),
+        ],
+    )
+    result = discover_topics(s, FakeClusterer(labels=[0, 0, -1]))
+    assert result.n_topics == 1 and result.n_unfiled == 1
+    assert {t.slug for t in s.load_topics()} == {result.topics[0].slug}
+    assert result.unfiled == ["Knowledge/c.md"]
+
+
+def test_discover_topics_all_noise_yields_no_topics(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    _seed(
+        s,
+        [
+            ("Knowledge/a.md", "rust macros"),
+            ("Knowledge/b.md", "llm prompt"),
+        ],
+    )
+    result = discover_topics(s, FakeClusterer(labels=[-1, -1]))
+    assert result.n_topics == 0
+    assert result.n_unfiled == 2
+    assert s.load_topics() == []
+
+
+def test_discover_topics_empty_corpus(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    result = discover_topics(s, FakeClusterer(labels=[]))
+    assert result.n_topics == 0 and result.n_unfiled == 0
+    assert result.topics == [] and result.unfiled == []

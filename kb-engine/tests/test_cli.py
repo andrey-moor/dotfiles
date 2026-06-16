@@ -75,6 +75,62 @@ def test_sync_human_output(tmp_path, monkeypatch):
     assert "added" in r.output.lower()
 
 
+def _topics_vault(tmp_path):
+    k = tmp_path / "Knowledge"
+    k.mkdir()
+    notes = {
+        "a.md": ("Rust A", "rust macros"),
+        "b.md": ("Rust B", "rust borrow"),
+        "c.md": ("LLM", "llm prompt"),
+    }
+    for name, (title, body) in notes.items():
+        (k / name).write_text(f"---\ntitle: {title}\n---\n{body}")
+    return tmp_path
+
+
+def test_topics_discover_cli_json(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,-1")
+    v = _topics_vault(tmp_path)
+    db = tmp_path / "t.db"
+    CliRunner().invoke(main, ["--vault", str(v), "--db", str(db), "sync"])
+    r = CliRunner().invoke(
+        main, ["--vault", str(v), "--db", str(db), "topics", "discover", "--json"]
+    )
+    assert r.exit_code == 0
+    out = json.loads(r.output)
+    assert out["n_topics"] == 1 and out["n_unfiled"] == 1
+    assert out["topics"][0]["size"] == 2
+    assert "slug" in out["topics"][0] and "keywords" in out["topics"][0]
+
+
+def test_topics_discover_cli_human_output(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,-1")
+    v = _topics_vault(tmp_path)
+    db = tmp_path / "t.db"
+    CliRunner().invoke(main, ["--vault", str(v), "--db", str(db), "sync"])
+    r = CliRunner().invoke(
+        main, ["--vault", str(v), "--db", str(db), "topics", "discover"]
+    )
+    assert r.exit_code == 0
+    assert "unfiled" in r.output.lower()
+
+
+def test_topics_discover_on_unsynced_db_does_not_crash(tmp_path, monkeypatch):
+    # Discover before ever syncing must init the schema, not raise "no such table".
+    monkeypatch.setenv("KB_FAKE_CLUSTER", "")
+    v = _topics_vault(tmp_path)
+    db = tmp_path / "fresh.db"
+    r = CliRunner().invoke(
+        main, ["--vault", str(v), "--db", str(db), "topics", "discover", "--json"]
+    )
+    assert r.exit_code == 0
+    assert r.exception is None
+    out = json.loads(r.output)
+    assert out["n_topics"] == 0 and out["n_unfiled"] == 0
+
+
 def test_search_on_unsynced_db_returns_empty_without_crash(tmp_path, monkeypatch):
     # Searching before ever syncing must not raise sqlite "no such table: chunks";
     # the command initializes the schema first and returns zero hits cleanly.

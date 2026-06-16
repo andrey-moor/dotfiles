@@ -20,6 +20,24 @@ def test_note_vectors_mean_pools_chunks(tmp_path):
     assert np.allclose(nv["Knowledge/a.md"], [0.5, 0.5, 0, 0])
 
 
+def test_note_texts_joins_title_and_first_chunk(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.upsert_note(path="Knowledge/a.md", title="Rust", sha256="h", tags=[])
+    s.replace_chunks(
+        "Knowledge/a.md",
+        [
+            (0, "borrow checker", np.zeros(4, np.float32)),
+            (1, "lifetimes", np.zeros(4, np.float32)),
+        ],
+    )
+    # Note with no chunks contributes its title only.
+    s.upsert_note(path="Knowledge/b.md", title="Empty", sha256="h", tags=[])
+    texts = s.note_texts()
+    assert texts["Knowledge/a.md"] == "Rust borrow checker"  # title + first chunk only
+    assert texts["Knowledge/b.md"] == "Empty"
+
+
 def test_save_and_load_topics(tmp_path):
     s = Store(tmp_path / "t.db")
     s.init_schema()
