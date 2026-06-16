@@ -11,10 +11,12 @@ from kb_engine.search import hybrid_search
 from kb_engine.store import Store
 from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
+from kb_engine.topics.areas import build_areas
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
 
 DEFAULT_SEARCH_LIMIT = 10
+DEFAULT_AREA_THRESHOLD = 0.3
 
 
 def _build_embedder(cfg: Config) -> Embedder:
@@ -205,6 +207,41 @@ def topics_discover(cfg: Config, as_json: bool) -> None:
         keywords = ", ".join(row["keywords"])
         click.echo(f"{row['slug']}  ({row['size']} notes)  [{keywords}]")
     click.echo(f"unfiled={result.n_unfiled}")
+
+
+@topics.command("areas")
+@click.option(
+    "--threshold",
+    default=DEFAULT_AREA_THRESHOLD,
+    show_default=True,
+    type=float,
+    help="Cosine distance cut for agglomerative grouping of topic centroids.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_areas(cfg: Config, threshold: float, as_json: bool) -> None:
+    """Group discovered topics into areas (agglomerative on centroids)."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()  # tolerate running against a never-synced DB
+        areas = build_areas(store.load_topics(), distance_threshold=threshold)
+        store.save_areas(areas)
+        area_rows = [
+            {"slug": area.slug, "label": area.label, "topics": list(area.topic_slugs)}
+            for area in areas
+        ]
+    finally:
+        store.close()
+
+    if as_json:
+        click.echo(json.dumps({"n_areas": len(area_rows), "areas": area_rows}))
+        return
+    if not area_rows:
+        click.echo("No areas.")
+        return
+    for row in area_rows:
+        topics_list = ", ".join(row["topics"])
+        click.echo(f"{row['slug']}  ({len(row['topics'])} topics)  [{topics_list}]")
 
 
 if __name__ == "__main__":

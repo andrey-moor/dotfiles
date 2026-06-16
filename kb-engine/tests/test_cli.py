@@ -131,6 +131,27 @@ def test_topics_discover_on_unsynced_db_does_not_crash(tmp_path, monkeypatch):
     assert out["n_topics"] == 0 and out["n_unfiled"] == 0
 
 
+def test_topics_areas_cli(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,1,1")
+    v = tmp_path / "Knowledge"
+    v.mkdir(parents=True)
+    for n, (t, b) in {
+        "a.md": ("A", "rust macros"),
+        "b.md": ("B", "rust borrow"),
+        "c.md": ("C", "llm prompt"),
+        "d.md": ("D", "llm tokens"),
+    }.items():
+        (v / n).write_text(f"---\ntitle: {t}\n---\n{b}")
+    db = tmp_path / "t.db"
+    args = ["--vault", str(tmp_path), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    CliRunner().invoke(main, args + ["topics", "discover"])
+    r = CliRunner().invoke(main, args + ["topics", "areas", "--json"])
+    assert r.exit_code == 0
+    assert "areas" in json.loads(r.output)
+
+
 def test_search_on_unsynced_db_returns_empty_without_crash(tmp_path, monkeypatch):
     # Searching before ever syncing must not raise sqlite "no such table: chunks";
     # the command initializes the schema first and returns zero hits cleanly.
