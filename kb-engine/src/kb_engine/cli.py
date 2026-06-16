@@ -15,6 +15,7 @@ from kb_engine.models import TopicMember
 from kb_engine.pipeline import count_inbox, run_pipeline, unfiled_notes
 from kb_engine.search import hybrid_search
 from kb_engine.store import SLUG_PATTERN, Store, is_valid_slug
+from kb_engine.synthesis import synthesis_candidates
 from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
 from kb_engine.topics.areas import build_areas
@@ -27,6 +28,7 @@ from kb_engine.topics.render import render_topics
 from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
 
 DEFAULT_SEARCH_LIMIT = 10
+DEFAULT_SYNTHESIS_MIN = 5
 DEFAULT_AREA_THRESHOLD = 0.3
 DEFAULT_ASSIGN_HIGH = 0.55
 DEFAULT_ASSIGN_LOW = 0.4
@@ -168,6 +170,37 @@ def search(cfg: Config, query: str, limit: int, as_json: bool) -> None:
         return
     for hit in hits:
         click.echo(f"{hit['score']:.4f}  {hit['title']}  ({hit['note_path']})")
+
+
+@main.command("synthesis-candidates")
+@click.option(
+    "--min",
+    "min_members",
+    default=DEFAULT_SYNTHESIS_MIN,
+    show_default=True,
+    type=int,
+    help="Minimum member count for a topic to be a synthesis candidate.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def synthesis_candidates_cmd(cfg: Config, min_members: int, as_json: bool) -> None:
+    """List topics with >=N members and no wiki article (synthesis targets)."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()  # tolerate running against a never-synced DB
+        cands = synthesis_candidates(store, cfg.vault_path, min_members=min_members)
+        rows = [{"slug": c.slug, "label": c.label, "size": c.size} for c in cands]
+    finally:
+        store.close()
+
+    if as_json:
+        click.echo(json.dumps({"candidates": rows}))
+        return
+    if not rows:
+        click.echo("No synthesis candidates.")
+        return
+    for row in rows:
+        click.echo(f"{row['slug']}  ({row['size']} notes)  {row['label']}")
 
 
 @main.command()

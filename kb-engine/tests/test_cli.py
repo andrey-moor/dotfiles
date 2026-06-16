@@ -1,9 +1,26 @@
 import json
 
+import numpy as np
 from click.testing import CliRunner
 
 from kb_engine.cli import main
+from kb_engine.models import Topic, TopicMember
 from kb_engine.store import Store
+
+
+def _seed_topic(store, slug, n_members):
+    topic = Topic(
+        slug=slug,
+        label=slug.upper(),
+        keywords=(slug,),
+        centroid=np.ones(4, np.float32),
+        kind="discovered",
+        status="proposed",
+    )
+    store.save_topics(
+        [topic],
+        {slug: [TopicMember(f"Knowledge/{slug}-{i}.md", 0.9, "auto") for i in range(n_members)]},
+    )
 
 
 def _vault(tmp_path):
@@ -575,3 +592,30 @@ def test_digest_cli_human_output(tmp_path, monkeypatch):
     r = CliRunner().invoke(main, args + ["digest"])
     assert r.exit_code == 0, r.output
     assert "inbox" in r.output.lower()
+
+
+def test_synthesis_candidates_cli_json(tmp_path):
+    (tmp_path / "Knowledge" / "wiki").mkdir(parents=True)
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    _seed_topic(store, "rag", 6)
+    store.close()
+    r = CliRunner().invoke(
+        main, ["--vault", str(tmp_path), "--db", str(db), "synthesis-candidates", "--json"]
+    )
+    assert r.exit_code == 0, r.output
+    cands = json.loads(r.output)["candidates"]
+    assert [c["slug"] for c in cands] == ["rag"]
+    assert cands[0]["size"] == 6
+
+
+def test_synthesis_candidates_cli_human_empty(tmp_path):
+    # No topics seeded -> human output reports nothing.
+    (tmp_path / "Knowledge" / "wiki").mkdir(parents=True)
+    db = tmp_path / "t.db"
+    r = CliRunner().invoke(
+        main, ["--vault", str(tmp_path), "--db", str(db), "synthesis-candidates"]
+    )
+    assert r.exit_code == 0, r.output
+    assert "no synthesis candidates" in r.output.lower()
