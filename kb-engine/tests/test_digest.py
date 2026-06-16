@@ -60,3 +60,13 @@ def test_count_proposals_counts_discovered_and_proposed(tmp_path):
     store = _seeded_store(tmp_path)
     # 1 proposed discovered topic; the manual one is active, not counted
     assert count_proposals(store.load_topics()) == 1
+
+
+def test_build_digest_truncates_long_unfiled_list(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    unfiled = [f"Knowledge/n{i:03}.md" for i in range(30)]
+    text = build_digest(s, vault_path=tmp_path, inbox_count=0, unfiled=unfiled)
+    assert "…and 5 more" in text
+    # only the first 25 are listed inline
+    assert text.count("[[Knowledge/n") == 25

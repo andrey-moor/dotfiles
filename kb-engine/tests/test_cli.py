@@ -430,6 +430,43 @@ def test_import_things_area_filter(tmp_path):
     assert out["n_urls"] == 1
 
 
+def test_default_things_db_prefers_live_over_backups(tmp_path, monkeypatch):
+    # The standard glob also matches Backups/*.thingsdatabase/main.sqlite; the
+    # default must pick the LIVE database, never a dated backup. (Phase-3b's
+    # scheduled job relies on this default resolving correctly.)
+    from kb_engine import cli
+
+    base = tmp_path / "Library" / "Group Containers" / "X.ThingsMac" / "ThingsData-AB"
+    live = base / "Things Database.thingsdatabase" / "main.sqlite"
+    backup = base / "Backups" / "Things Database Backup 2026-06-07.thingsdatabase" / "main.sqlite"
+    for p in (live, backup):
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("")
+    monkeypatch.setattr(cli.Path, "home", staticmethod(lambda: tmp_path))
+    resolved = cli._default_things_db()
+    assert resolved == live
+    assert "Backups" not in str(resolved)
+
+
+def test_default_things_db_falls_back_to_backup_if_only_option(tmp_path, monkeypatch):
+    # If somehow only a backup exists, still return something rather than None.
+    from kb_engine import cli
+
+    base = tmp_path / "Library" / "Group Containers" / "X.ThingsMac" / "ThingsData-AB"
+    backup = base / "Backups" / "Things Database Backup 2026-06-07.thingsdatabase" / "main.sqlite"
+    backup.parent.mkdir(parents=True, exist_ok=True)
+    backup.write_text("")
+    monkeypatch.setattr(cli.Path, "home", staticmethod(lambda: tmp_path))
+    assert cli._default_things_db() == backup
+
+
+def test_default_things_db_none_when_absent(tmp_path, monkeypatch):
+    from kb_engine import cli
+
+    monkeypatch.setattr(cli.Path, "home", staticmethod(lambda: tmp_path))
+    assert cli._default_things_db() is None
+
+
 def test_import_things_missing_db_errors_clearly(tmp_path):
     v = _import_vault(tmp_path / "vault")
     r = CliRunner().invoke(

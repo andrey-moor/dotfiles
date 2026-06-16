@@ -102,3 +102,34 @@ def test_import_urls_creates_inbox_dir_if_missing(tmp_path):
     res = import_urls(tmp_path, [("https://e.com/p", "P")])
     assert res.written == 1
     assert (tmp_path / "Knowledge" / "inbox").is_dir()
+
+
+def test_import_urls_slug_falls_back_to_host_for_rootlike_url(tmp_path):
+    # URL with no usable path and a URL-shaped title -> slug from the host.
+    (tmp_path / "Knowledge" / "inbox").mkdir(parents=True)
+    res = import_urls(tmp_path, [("https://example.com/", "https://example.com/")])
+    assert res.written == 1
+    name = glob.glob(str(tmp_path / "Knowledge" / "inbox" / "*.md"))[0].split("/")[-1]
+    assert name == "example-com.md"
+
+
+def test_import_urls_skips_filenames_already_on_disk(tmp_path):
+    # Stubs from a prior run occupy <slug>.md and <slug>-2.md; a new colliding
+    # title must land on <slug>-3.md (the suffix loop steps past taken files).
+    inbox = tmp_path / "Knowledge" / "inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "same-title.md").write_text("---\ntitle: A\nurl: https://x.com/0\n---\nb")
+    (inbox / "same-title-2.md").write_text("---\ntitle: B\nurl: https://x.com/1\n---\nb")
+    res = import_urls(tmp_path, [("https://new.com/z", "Same Title")])
+    assert res.written == 1
+    assert (inbox / "same-title-3.md").exists()
+
+
+def test_import_urls_writes_distinct_stub_per_url(tmp_path):
+    # Two URLs (as a task with multiple links would flatten to) -> two stubs.
+    (tmp_path / "Knowledge" / "inbox").mkdir(parents=True)
+    res = import_urls(
+        tmp_path, [("https://a.com/1", "First"), ("https://b.com/2", "Second")]
+    )
+    assert res.written == 2
+    assert len(glob.glob(str(tmp_path / "Knowledge" / "inbox" / "*.md"))) == 2

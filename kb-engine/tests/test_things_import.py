@@ -88,6 +88,48 @@ def test_read_things_missing_db_raises(tmp_path):
         read_things_tasks(tmp_path / "nope.sqlite", status="open")
 
 
+def test_read_things_invalid_status_raises(tmp_path):
+    with pytest.raises(ValueError):
+        read_things_tasks(_fixture_things(tmp_path), status="bogus")
+
+
+def test_read_things_copies_wal_sidecar(tmp_path):
+    # A -wal sidecar present alongside the DB must be copied so committed-but-
+    # uncheckpointed rows are visible in the read-only copy.
+    db = _fixture_things(tmp_path)
+    # Force WAL mode so a real -wal file exists with pending rows.
+    c = sqlite3.connect(db)
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute(
+        "INSERT INTO TMTask VALUES(0,0,0,'walrow','https://wal.com/x',NULL,NULL,'tw')"
+    )
+    c.commit()
+    assert db.with_name(db.name + "-wal").exists()
+    tasks = read_things_tasks(db, status="open")
+    c.close()
+    assert "https://wal.com/x" in {u for t in tasks for u in t.urls}
+
+
+def test_read_things_task_with_multiple_urls(tmp_path):
+    # A task whose notes hold two links yields one ThingsTask with both URLs.
+    db = tmp_path / "main.sqlite"
+    c = sqlite3.connect(db)
+    c.executescript(
+        """
+      CREATE TABLE TMArea(uuid TEXT, title TEXT);
+      CREATE TABLE TMTask(type INT, status INT, trashed INT, title TEXT,
+                          notes TEXT, area TEXT, project TEXT, uuid TEXT);
+      INSERT INTO TMTask VALUES(0,0,0,'two',
+        'https://a.com/1 and https://b.com/2',NULL,NULL,'t1');
+    """
+    )
+    c.commit()
+    c.close()
+    tasks = read_things_tasks(db, status="open")
+    assert len(tasks) == 1
+    assert tasks[0].urls == ("https://a.com/1", "https://b.com/2")
+
+
 def test_read_things_does_not_mutate_or_lock_source(tmp_path):
     # The source DB is copied read-only; the original is never modified and the
     # reader must work even with a concurrent writer connection held open.

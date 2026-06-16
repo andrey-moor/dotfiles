@@ -61,9 +61,16 @@ def _unfiled_notes(store: Store) -> list[str]:
 
 
 def _default_things_db() -> Path | None:
-    """First match of the standard Things DB glob under $HOME, or None."""
+    """Resolve the live Things DB under $HOME, or None.
+
+    The standard glob also matches dated copies under ``Backups/``; those are
+    skipped so the *live* database is chosen. Only if nothing but a backup
+    exists is a backup returned (better than nothing).
+    """
     matches = sorted(Path.home().glob(_THINGS_DB_GLOB))
-    return matches[0] if matches else None
+    live = [m for m in matches if "Backups" not in m.parts]
+    chosen = live or matches
+    return chosen[0] if chosen else None
 
 
 def _task_items(tasks: list) -> list[tuple[str, str]]:

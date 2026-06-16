@@ -215,6 +215,73 @@ kb-engine --vault "<vault>" topics apply --status active --json
 
 `--json` emits `{status, n_changed, n_tags_added, skipped_missing}`.
 
+## Importing from Things
+
+`import-things` reads a local **Things 3** SQLite database, extracts URLs from
+URL-bearing tasks, dedups them, and writes proper-schema **inbox stubs** into
+`Knowledge/inbox/`. It is the unattended on-ramp that turns "read later" tasks
+into reviewable KB notes.
+
+Reading is **safe while Things is running**: the DB (plus any `-wal`/`-shm`
+sidecars) is copied to a temp file and opened **read-only** — the engine never
+touches the live database, and never writes back to Things. Only `type=0`
+(tasks, not projects/headings), `trashed=0` tasks are considered; by default
+only **open** tasks (`--status open`). A task contributes a stub per URL found
+in its title or notes; tasks with no URL are ignored.
+
+Dedup happens on the **normalized URL** (tracking params like `utm_*`/`fbclid`
+and the fragment dropped, trailing slash stripped) both against existing vault
+note URLs (scanning `Knowledge/**/*.md` frontmatter `url`) and within the batch,
+so re-running never creates duplicates.
+
+```bash
+# Preview only — counts + a small sample, writes NOTHING
+kb-engine --vault "<vault>" import-things --status open --dry-run --json
+
+# Real import — writes Knowledge/inbox/<slug>.md stubs
+kb-engine --vault "<vault>" import-things --status open
+```
+
+Flags:
+
+- `--things-db PATH` — Things SQLite path. Default: the standard
+  `~/Library/Group Containers/*ThingsMac*/**/main.sqlite` (first match); a clear
+  error is raised if not found.
+- `--status open|completed|all` — which task status to import (default `open`).
+- `--area NAME` / `--project NAME` — restrict to an area/project by title
+  (repeatable).
+- `--date YYYY-MM-DD` — `date_added` stamped on stubs (default: today). The
+  date is applied by the CLI, not the engine core, so the writer stays
+  deterministic.
+- `--dry-run` — report what would happen without writing.
+- `--json` — machine-readable output.
+
+`--dry-run --json` emits `{dry_run:true, things_db, status, n_tasks, n_urls,
+would_write, would_skip_existing, sample:[{url, title}]}`. A real run emits
+`{dry_run:false, written, skipped_existing, skipped_dup_in_batch}`. Each stub
+carries frontmatter `{title, url, source, date_added, summary:"",
+status:"inbox", context:"Imported from Things", tags:[]}` and a `## Notes`
+body — ready to flow through the normal inbox-processing pipeline.
+
+## Digest
+
+`digest` writes a deterministic KB state report to `<vault>/_system/kb-digest.md`
+— a single glance at what needs attention: inbox backlog, topic proposals
+awaiting naming/approval, topic/area counts, and unfiled notes (with a "needs
+review" checklist). The body contains **no timestamps**, so re-running rewrites a
+byte-identical file (idempotent); `_system/` lives outside `Knowledge/`, so it is
+never embedded.
+
+```bash
+kb-engine --vault "<vault>" digest          # writes the file + one-line summary
+kb-engine --vault "<vault>" digest --json
+```
+
+`--json` emits `{inbox, proposals, topics, areas, unfiled, digest_path}`.
+
+`import-things` and `digest` are the two engine commands the Phase-3b scheduled
+pipeline drives (read Things → import to inbox → process → refresh digest).
+
 ## Development & testing
 
 The bulk of the suite is torch-free: a deterministic `FakeEmbedder` plus temp

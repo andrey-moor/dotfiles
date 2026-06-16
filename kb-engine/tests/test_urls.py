@@ -43,6 +43,10 @@ def test_infer_source():
     assert infer_source("https://example.com/post") == "article"
 
 
+def test_normalize_url_preserves_nonstandard_port():
+    assert normalize_url("https://Example.com:8443/p/") == "https://example.com:8443/p"
+
+
 def test_infer_source_known_hosts():
     assert infer_source("https://twitter.com/u/status/1") == "tweet"
     assert infer_source("https://www.youtube.com/watch?v=abc") == "youtube"
