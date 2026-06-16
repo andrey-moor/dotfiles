@@ -279,8 +279,52 @@ kb-engine --vault "<vault>" digest --json
 
 `--json` emits `{inbox, proposals, topics, areas, unfiled, digest_path}`.
 
-`import-things` and `digest` are the two engine commands the Phase-3b scheduled
-pipeline drives (read Things → import to inbox → process → refresh digest).
+## Scheduled pipeline
+
+`pipeline` is the **deterministic, LLM-free** maintenance command that runs
+unattended. It composes the already-tested steps into one pass:
+
+1. **`sync`** — embed new/changed notes, drop deleted (cache follows the vault).
+2. **`topics apply --status active`** — write `topic/<slug>` tags, **but only for
+   approved (active) topics**. Discovered proposals stay `proposed`, so an
+   unattended run **never silently mis-tags** notes. (With no active topics yet,
+   this is a no-op — `applied=0`.)
+3. **sticky discover** — cluster the residual into new `proposed` topics,
+   preserving any approved structure.
+4. **`digest`** — write `<vault>/_system/kb-digest.md`, the review entry point.
+
+```bash
+kb-engine --vault "<vault>" pipeline          # one-line summary
+kb-engine --vault "<vault>" pipeline --json
+```
+
+`--json` emits `{synced, applied, proposals, unfiled, digest_path}`. Everything it
+touches is either the rebuildable engine cache or the regenerable `_system/`
+digest — except the gated `apply`, which only ever writes tags for topics you have
+already approved. That safety property is what makes it sound to run on a schedule.
+
+### Weekly cadence
+
+The intended operating loop is **unattended pipeline + a short human review**:
+
+- **Unattended (weekly):** a macOS **launchd** agent — defined by the Nix module
+  `modules.dev.kb-engine.schedule` (enabled on behemoth) — runs
+  `kb-engine --vault "<Main>" pipeline` every Monday at 09:00, then fires a
+  notification ("KB digest ready — N to review"). Logs land in
+  `~/Library/Logs/kb-engine-pipeline.{log,err}`. Toggle with
+  `modules.dev.kb-engine.schedule.enable`; the run cadence is
+  `modules.dev.kb-engine.schedule.calendar` (a launchd `StartCalendarInterval`).
+- **Review (~5 min, human):** prompted by the nudge, the `kb` skill's **Review**
+  operation (`/kb:review`) reads the digest and drives the judgment the engine
+  omits — process new inbox items (`/kb:process`), name/approve topic proposals
+  (`/kb:topics`), and optionally promote-then-`apply` newly approved topics.
+
+So the engine keeps the cache and digest current and proposes structure, while
+note mutation stays gated behind an approved, human-confirmed `apply`. The digest
+nags weekly, so the backlog can't silently rot.
+
+`import-things`, `digest`, and `pipeline` are the engine commands behind the
+Phase-3b cadence (read Things → import to inbox → weekly pipeline → review).
 
 ## Development & testing
 
