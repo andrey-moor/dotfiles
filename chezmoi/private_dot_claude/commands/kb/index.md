@@ -18,6 +18,9 @@ Generate or refresh the Knowledge Base index — a living overview of everything
    - Count by source type (article, tweet, github, youtube, derived, etc.)
    - Count wiki articles (from wiki/ folder)
    - Count derived notes (source == "derived")
+   - **Inbox health:** count notes in `Knowledge/inbox/`; of those, count any still in raw
+     Web-Clipper schema (`source` is a URL or `status` missing); compute the oldest inbox note's
+     age (today − min `date_added`).
 
 3. **Recent additions:**
    - Sort all notes by `date_added` descending
@@ -56,6 +59,11 @@ last_updated: <today YYYY-MM-DD>
 - **Wiki articles:** W
 - **Derived notes:** D
 - **Sources:** A articles, B tweets, C github, D youtube, E newsletters
+
+## Inbox Health
+- **Inbox notes:** N (X still raw Web-Clipper schema)
+- **Oldest inbox note:** D days
+- Backlog: ✓ clear / ⚠ N awaiting `/kb:process`
 
 ## Recent Additions (last 14 days)
 - [[note-name]] — summary (date_added)
