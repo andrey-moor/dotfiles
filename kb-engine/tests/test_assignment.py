@@ -53,6 +53,15 @@ def test_assign_skips_zero_norm_centroid():
     assert assigned["Knowledge/a.md"][0] == "rust"  # zero-norm topic ignored
 
 
+def test_assign_zero_note_vector_is_unassigned():
+    # A zero-norm note vector yields cosine 0 against every topic → unassigned.
+    topics = [_t("rust", [1, 0, 0])]
+    assigned, borderline = assign_notes(
+        {"Knowledge/z.md": np.zeros(3, np.float32)}, topics, high=0.9, low=0.5
+    )
+    assert assigned == {} and borderline == []
+
+
 def test_assign_tie_break_is_deterministic():
     # Both centroids equidistant from the note; the lexicographically-larger
     # slug wins, regardless of input ordering.

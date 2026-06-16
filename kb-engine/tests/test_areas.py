@@ -33,6 +33,40 @@ def test_build_areas_empty():
     assert build_areas([], distance_threshold=0.3) == []
 
 
+def _t_kw(slug, vec, keywords):
+    return Topic(
+        slug=slug,
+        label=slug,
+        keywords=keywords,
+        centroid=np.array(vec, np.float32),
+        kind="discovered",
+        status="proposed",
+    )
+
+
+def test_build_areas_dedupes_colliding_slugs():
+    # Two far-apart clusters whose top keyword is identical must get distinct
+    # area slugs (second disambiguated with a "-2" suffix).
+    topics = [
+        _t_kw("rust-a", [1, 0, 0], ("rust",)),
+        _t_kw("rust-b", [0, 1, 0], ("rust",)),
+    ]
+    areas = build_areas(topics, distance_threshold=0.3)
+    slugs = [a.slug for a in areas]
+    assert len(areas) == 2
+    assert len(set(slugs)) == 2 and any(s.endswith("-2") for s in slugs)
+
+
+def test_build_areas_falls_back_to_indexed_slug_without_keywords():
+    # Topics with no keywords can't derive a slug, so the area uses "area-{i}".
+    topics = [
+        _t_kw("x", [1, 0, 0], ()),
+        _t_kw("y", [0, 1, 0], ()),
+    ]
+    areas = build_areas(topics, distance_threshold=0.3)
+    assert {a.slug for a in areas} == {"area-0", "area-1"}
+
+
 def _topic(slug):
     return Topic(
         slug=slug,

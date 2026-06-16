@@ -88,6 +88,58 @@ kb-engine --vault "<vault>" topics discover --json
 
 `--json` emits `{n_topics, n_unfiled, topics:[{slug, label, keywords, size}]}`.
 
+### Areas
+
+`topics areas` groups discovered topics into broader **areas** by agglomerative
+clustering (`scikit-learn`, `metric="cosine"`, `linkage="average"`) over the
+topic centroids. The cut is tunable with `--threshold` (default `0.3`); a higher
+threshold yields fewer, broader areas. Each run replaces the stored areas.
+
+```bash
+# Group the current topics into areas (run `topics discover` first)
+kb-engine --vault "<vault>" topics areas
+kb-engine --vault "<vault>" topics areas --threshold 0.4 --json
+```
+
+`--json` emits `{n_areas, areas:[{slug, label, topics:[slug...]}]}`.
+
+### Manual topics
+
+`topics add` creates a **manual** topic (`kind="manual"`, `status="active"`)
+anchored by an embedding of its `label + ". " + description`. Manual topics
+coexist with discovered ones and **survive a subsequent `topics discover`** (only
+discovered topics are replaced on re-discovery). `topics list` shows all topics —
+manual first, then discovered — with their member counts.
+
+```bash
+kb-engine --vault "<vault>" topics add my-topic \
+    --label "My Topic" --description "about rust filesystems"
+kb-engine --vault "<vault>" topics list          # or --json
+```
+
+`topics add --json` emits `{slug, label, kind, status}`; adding a slug that
+already exists fails. `topics list --json` emits
+`{topics:[{slug, label, kind, status, size}]}`.
+
+### Assignment
+
+`topics assign` incrementally assigns notes to their nearest topic by cosine
+similarity to the centroid: `score ≥ --high` → auto-member, `--low ≤ score <
+--high` → reported as **borderline** for review, below `--low` → unassigned
+(defaults: `--high 0.55`, `--low 0.4`). It considers `active` and `proposed`
+topics. It is **dry-run by default** — it only reports; pass `--apply` to persist
+high-confidence members (the engine never mutates membership silently).
+
+```bash
+# Preview assignments (no writes)
+kb-engine --vault "<vault>" topics assign --json
+# Persist high-confidence members
+kb-engine --vault "<vault>" topics assign --apply
+```
+
+`--json` emits `{assigned:[{note, topic, score}], borderline:[...], unassigned:N,
+applied:bool}`.
+
 The engine stays **LLM-free**: labels here are deterministic keyword slugs.
 Pretty, human-readable topic names are produced later by the `kb` skill layer —
 this engine only provides the clustering, centroids, and keyword labels.
@@ -108,8 +160,9 @@ Environment toggles:
   `transformers<5.0` / `einops` needed by jina-v3. Required to actually embed;
   not needed for the unit suite or `--help`.
 - **`[topics]` extra** — installs `umap-learn` + `hdbscan` + `scikit-learn` for
-  the real clusterer. Imported lazily inside `topics discover`; the unit suite
-  uses a deterministic `FakeClusterer` and needs none of it.
+  the real clusterer (`topics discover`) and the agglomerative grouping behind
+  `topics areas`. Both import lazily; the unit suite uses a deterministic
+  `FakeClusterer` / `FakeEmbedder` and needs neither the ML stack nor a model.
 - **`KB_FAKE_EMBED=1`** — the CLI uses the deterministic `FakeEmbedder` instead
   of the real model. Used by the CLI tests to exercise `sync`/`search` without
   downloading a model.
