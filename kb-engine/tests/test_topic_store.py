@@ -59,6 +59,62 @@ def test_save_and_load_topics(tmp_path):
     assert mem[0].note_path == "Knowledge/a.md" and abs(mem[0].score - 0.9) < 1e-6
 
 
+def test_save_topics_renames_discovered_colliding_with_manual(tmp_path):
+    # A retained manual topic "rust" plus an incoming discovered topic that also
+    # slugifies to "rust" must NOT raise UNIQUE: the discovered one is suffixed
+    # to "rust-2", its members re-keyed, and the manual "rust" left untouched.
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.add_manual_topic("rust", "Rust", "rust", np.array([1, 0, 0], np.float32))
+    s.set_members(
+        "rust", [TopicMember(note_path="Knowledge/manual.md", score=0.9, source="seed")]
+    )
+    discovered = Topic(
+        slug="rust",
+        label="Rust Discovered",
+        keywords=("rust",),
+        centroid=np.array([0, 1, 0], np.float32),
+        kind="discovered",
+        status="proposed",
+    )
+    s.save_topics(
+        [discovered],
+        {"rust": [TopicMember(note_path="Knowledge/disc.md", score=0.8, source="auto")]},
+    )
+    by_slug = {t.slug: t for t in s.load_topics()}
+    # manual "rust" untouched
+    assert by_slug["rust"].kind == "manual"
+    assert {m.note_path for m in s.topic_members("rust")} == {"Knowledge/manual.md"}
+    # discovered stored under a suffixed slug, with its members re-keyed
+    assert "rust-2" in by_slug and by_slug["rust-2"].kind == "discovered"
+    assert {m.note_path for m in s.topic_members("rust-2")} == {"Knowledge/disc.md"}
+
+
+def test_save_topics_collision_rename_is_deterministic(tmp_path):
+    # Re-running discovery with the same colliding incoming topic produces the
+    # same renamed slug every time (deterministic; no accumulation).
+    def run() -> set[str]:
+        s = Store(tmp_path / f"t-{run.n}.db")
+        run.n += 1
+        s.init_schema()
+        s.add_manual_topic("rust", "Rust", "rust", np.array([1, 0, 0], np.float32))
+        discovered = Topic(
+            slug="rust",
+            label="Rust D",
+            keywords=("rust",),
+            centroid=np.array([0, 1, 0], np.float32),
+            kind="discovered",
+            status="proposed",
+        )
+        s.save_topics([discovered], {"rust": []})
+        return {t.slug for t in s.load_topics()}
+
+    run.n = 0
+    first = run()
+    second = run()
+    assert first == second == {"rust", "rust-2"}  # stable, manual + suffixed
+
+
 def test_save_topics_replaces_previous_discovered(tmp_path):
     s = Store(tmp_path / "t.db")
     s.init_schema()

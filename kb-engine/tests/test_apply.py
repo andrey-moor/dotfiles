@@ -115,6 +115,18 @@ def test_apply_skips_missing_note_files(tmp_path):
     assert "Knowledge/a.md" in res.skipped_missing
 
 
+def test_apply_handles_scalar_tags_value(tmp_path):
+    # A note whose `tags` is a scalar (e.g. `tags: 42`) must not crash apply —
+    # the scalar is treated as a single existing tag and the topic tag is added.
+    s = _store_with_active_topic(tmp_path)
+    _note(tmp_path, "Knowledge/a.md", "---\ntitle: A\ntags: 42\n---\nbody")
+    res = apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "a.md")
+    assert "topic/rust-macros" in fm["tags"]
+    assert "42" in fm["tags"]  # the scalar preserved as a string tag
+    assert res.n_changed == 1
+
+
 def test_apply_skips_note_path_outside_vault(tmp_path):
     # A member note_path that escapes the vault ("../outside.md") must be skipped:
     # never write frontmatter outside the vault, and report it as skipped.

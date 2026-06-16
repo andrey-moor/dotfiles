@@ -54,6 +54,16 @@ def is_valid_slug(slug: str) -> bool:
     return bool(_SLUG_RE.match(slug))
 
 
+def _next_free_slug(base: str, taken: set[str]) -> str:
+    """Return ``base`` if free, else ``base-2``, ``base-3``, … (deterministic)."""
+    if base not in taken:
+        return base
+    suffix = 2
+    while f"{base}-{suffix}" in taken:
+        suffix += 1
+    return f"{base}-{suffix}"
+
+
 def _to_blob(vector: np.ndarray) -> bytes:
     return np.asarray(vector, np.float32).tobytes()
 
@@ -198,18 +208,30 @@ class Store:
 
         Existing ``kind='discovered'`` topics are deleted first (cascading their
         members) so a re-discover replaces stale proposals, while ``kind='manual'``
-        topics are left untouched.
+        topics are left untouched. If an incoming discovered slug collides with a
+        retained (non-discovered) slug, it is deterministically suffixed
+        (``-2``, ``-3``, …) instead of raising a UNIQUE error — its members are
+        re-keyed to match.
         """
+        retained = {
+            slug
+            for (slug,) in self._conn.execute(
+                "SELECT slug FROM topics WHERE kind != 'discovered'"
+            )
+        }
+        taken = set(retained)
         with self._conn:
             self._conn.execute("DELETE FROM topics WHERE kind='discovered'")
             for topic in topics:
+                slug = _next_free_slug(topic.slug, taken)
+                taken.add(slug)
                 self._conn.execute(
                     """
                     INSERT INTO topics(slug, label, keywords, centroid, kind, status)
                     VALUES(?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        topic.slug,
+                        slug,
                         topic.label,
                         json.dumps(list(topic.keywords)),
                         _to_blob(topic.centroid),
@@ -223,7 +245,7 @@ class Store:
                         INSERT INTO topic_members(topic_slug, note_path, score, source)
                         VALUES(?, ?, ?, ?)
                         """,
-                        (topic.slug, member.note_path, member.score, member.source),
+                        (slug, member.note_path, member.score, member.source),
                     )
 
     def load_topics(self) -> list[Topic]:

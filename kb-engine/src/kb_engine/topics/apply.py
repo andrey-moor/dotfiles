@@ -18,11 +18,16 @@ class ApplyResult:
 
 
 def _as_tag_list(value: object) -> list[str]:
-    """Normalize a frontmatter ``tags`` value (absent/scalar/list) to a list."""
+    """Normalize a frontmatter ``tags`` value (absent/scalar/list) to a list.
+
+    A scalar (``str``/``int``/``float`` — e.g. ``tags: 42``) is treated as a
+    single-element list so a malformed note can't abort the whole apply with a
+    ``TypeError`` from iterating a non-iterable.
+    """
     if value is None:
         return []
-    if isinstance(value, str):
-        return [value]
+    if isinstance(value, (str, int, float)):
+        return [str(value)]
     return [str(item) for item in value]
 
 
