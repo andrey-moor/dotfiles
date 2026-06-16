@@ -1,9 +1,148 @@
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
 import click
+
+from kb_engine.config import Config
+from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
+from kb_engine.search import hybrid_search
+from kb_engine.store import Store
+from kb_engine.sync import rebuild as rebuild_index
+from kb_engine.sync import sync as sync_index
+
+DEFAULT_SEARCH_LIMIT = 10
+
+
+def _build_embedder(cfg: Config) -> Embedder:
+    """Use the deterministic FakeEmbedder when KB_FAKE_EMBED=1, else real jina-v3."""
+    if os.environ.get("KB_FAKE_EMBED") == "1":
+        return FakeEmbedder(dim=cfg.embed_dim)
+    return LocalJinaEmbedder(model_name=cfg.model_name, dim=cfg.embed_dim)
+
+
+def _emit(payload: dict, as_json: bool, human: str) -> None:
+    if as_json:
+        click.echo(json.dumps(payload))
+    else:
+        click.echo(human)
 
 
 @click.group()
-def main() -> None:
+@click.option(
+    "--vault",
+    "vault",
+    required=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Path to the Obsidian vault root.",
+)
+@click.option(
+    "--db",
+    "db",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="SQLite cache path (defaults to ~/.local/state/kb-engine/kb-engine.db).",
+)
+@click.pass_context
+def main(ctx: click.Context, vault: Path, db: Path | None) -> None:
     """kb-engine — local embedding + hybrid search for an Obsidian KB."""
+    ctx.obj = Config(vault_path=vault, db_path=db)
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def sync(cfg: Config, as_json: bool) -> None:
+    """Incrementally embed new/changed notes and drop deleted ones."""
+    store = Store(cfg.db_path)
+    try:
+        stats = sync_index(cfg, store, _build_embedder(cfg))
+    finally:
+        store.close()
+    _emit(
+        {"added": stats.added, "changed": stats.changed, "deleted": stats.deleted},
+        as_json,
+        f"Synced: added={stats.added} changed={stats.changed} deleted={stats.deleted}",
+    )
+
+
+@main.command()
+@click.argument("query")
+@click.option("--limit", default=DEFAULT_SEARCH_LIMIT, show_default=True, type=int)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def search(cfg: Config, query: str, limit: int, as_json: bool) -> None:
+    """Hybrid (semantic + keyword) search over Knowledge/."""
+    store = Store(cfg.db_path)
+    try:
+        results = hybrid_search(store, _build_embedder(cfg), query, limit=limit)
+        hits = [
+            {
+                "note_path": path,
+                "title": store.note_title(path) or path,
+                "score": round(score, 6),
+            }
+            for path, score in results
+        ]
+    finally:
+        store.close()
+
+    if as_json:
+        click.echo(json.dumps({"hits": hits}))
+        return
+    if not hits:
+        click.echo("No results.")
+        return
+    for hit in hits:
+        click.echo(f"{hit['score']:.4f}  {hit['title']}  ({hit['note_path']})")
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def status(cfg: Config, as_json: bool) -> None:
+    """Show cache stats: note/chunk counts, DB path, last sync time."""
+    db_exists = cfg.db_path.exists()
+    last_sync = (
+        datetime.fromtimestamp(cfg.db_path.stat().st_mtime, tz=timezone.utc).isoformat()
+        if db_exists
+        else None
+    )
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        notes = store.count_notes()
+        chunks = store.count_chunks()
+    finally:
+        store.close()
+    _emit(
+        {
+            "notes": notes,
+            "chunks": chunks,
+            "db_path": str(cfg.db_path),
+            "last_sync": last_sync,
+        },
+        as_json,
+        f"notes={notes} chunks={chunks} db={cfg.db_path} last_sync={last_sync}",
+    )
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def rebuild(cfg: Config, as_json: bool) -> None:
+    """Drop the entire cache and re-embed the vault from scratch."""
+    store = Store(cfg.db_path)
+    try:
+        stats = rebuild_index(cfg, store, _build_embedder(cfg))
+    finally:
+        store.close()
+    _emit(
+        {"added": stats.added, "changed": stats.changed, "deleted": stats.deleted},
+        as_json,
+        f"Rebuilt: added={stats.added} changed={stats.changed} deleted={stats.deleted}",
+    )
 
 
 if __name__ == "__main__":
