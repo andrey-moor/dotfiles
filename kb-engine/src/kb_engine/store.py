@@ -113,6 +113,20 @@ class Store:
         rows = self._conn.execute("SELECT path, sha256 FROM notes").fetchall()
         return {path: sha for path, sha in rows}
 
+    def notes_by_tag(self) -> dict[str, set[str]]:
+        """Return ``{tag: {note_path, ...}}`` built from each note's tags JSON.
+
+        Untagged notes contribute nothing. Used by the restructure-diff to map
+        existing taxonomy tags onto discovered topic membership.
+        """
+        by_tag: dict[str, set[str]] = {}
+        for path, tags_json in self._conn.execute(
+            "SELECT path, tags FROM notes"
+        ).fetchall():
+            for tag in json.loads(tags_json) if tags_json else []:
+                by_tag.setdefault(tag, set()).add(path)
+        return by_tag
+
     def note_title(self, note_path: str) -> str | None:
         row = self._conn.execute(
             "SELECT title FROM notes WHERE path=?", (note_path,)

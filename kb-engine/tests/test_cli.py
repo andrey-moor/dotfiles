@@ -181,6 +181,77 @@ def test_topics_areas_cli(tmp_path, monkeypatch):
     assert "areas" in json.loads(r.output)
 
 
+def _tagged_vault(tmp_path):
+    # 3 notes; a,b tagged Dev/Rust, c tagged AI/RAG. _taxonomy.md declares both
+    # plus an orphan tag (Home/Gear) carried by no note that clusters.
+    k = tmp_path / "Knowledge"
+    k.mkdir()
+    notes = {
+        "a.md": ("Rust A", "Dev/Rust", "rust macros"),
+        "b.md": ("Rust B", "Dev/Rust", "rust borrow"),
+        "c.md": ("RAG", "AI/RAG", "retrieval embeddings"),
+    }
+    for name, (title, tag, body) in notes.items():
+        (k / name).write_text(f"---\ntitle: {title}\ntags: [{tag}]\n---\n{body}")
+    sysdir = tmp_path / "_system"
+    sysdir.mkdir()
+    (sysdir / "_taxonomy.md").write_text(
+        "## Categories\n"
+        "- **Dev/Rust** — rust\n"
+        "- **AI/RAG** — retrieval\n"
+        "- **Home/Gear** — gear\n"
+    )
+    return tmp_path
+
+
+def test_topics_diff_taxonomy_cli_json(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,1")  # a,b -> topic0; c -> topic1
+    v = _tagged_vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    CliRunner().invoke(main, args + ["topics", "discover"])
+    r = CliRunner().invoke(main, args + ["topics", "diff-taxonomy", "--json"])
+    assert r.exit_code == 0
+    out = json.loads(r.output)
+    assert {"mapping", "new_topics", "orphan_tags"} <= out.keys()
+    # Dev/Rust (notes a,b) aligns with the topic holding a,b
+    rust_ranked = out["mapping"]["Dev/Rust"]
+    assert rust_ranked and rust_ranked[0]["overlap"] > 0
+    # Home/Gear is declared but no note carries it -> not even in the diff inputs
+    assert "Home/Gear" not in out["mapping"]
+
+
+def test_topics_diff_taxonomy_missing_file_is_greenfield(tmp_path, monkeypatch):
+    # No _taxonomy.md: every discovered topic is "new" (nothing to align against).
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,1")
+    k = tmp_path / "Knowledge"
+    k.mkdir()
+    for name, (title, body) in {
+        "a.md": ("A", "rust macros"),
+        "b.md": ("B", "rust borrow"),
+        "c.md": ("C", "llm prompt"),
+    }.items():
+        (k / name).write_text(f"---\ntitle: {title}\ntags: [Dev/Rust]\n---\n{body}")
+    db = tmp_path / "t.db"
+    args = ["--vault", str(tmp_path), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    CliRunner().invoke(main, args + ["topics", "discover"])
+    # point at a taxonomy path that does not exist
+    missing = tmp_path / "nope.md"
+    r = CliRunner().invoke(
+        main, args + ["topics", "diff-taxonomy", "--taxonomy", str(missing), "--json"]
+    )
+    assert r.exit_code == 0
+    out = json.loads(r.output)
+    assert out["mapping"] == {}
+    assert out["orphan_tags"] == []
+    # all discovered topics are new structure in greenfield
+    assert len(out["new_topics"]) == 2
+
+
 def test_search_on_unsynced_db_returns_empty_without_crash(tmp_path, monkeypatch):
     # Searching before ever syncing must not raise sqlite "no such table: chunks";
     # the command initializes the schema first and returns zero hits cleanly.

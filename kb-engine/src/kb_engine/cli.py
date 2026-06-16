@@ -17,12 +17,14 @@ from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
 from kb_engine.topics.sticky import sticky_discover
+from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
 
 DEFAULT_SEARCH_LIMIT = 10
 DEFAULT_AREA_THRESHOLD = 0.3
 DEFAULT_ASSIGN_HIGH = 0.55
 DEFAULT_ASSIGN_LOW = 0.4
 _ASSIGNABLE_STATUSES = frozenset({"active", "proposed"})
+_TAXONOMY_RELPATH = Path("_system") / "_taxonomy.md"
 
 
 def _build_embedder(cfg: Config) -> Embedder:
@@ -285,6 +287,73 @@ def topics_areas(cfg: Config, threshold: float, as_json: bool) -> None:
     for row in area_rows:
         topics_list = ", ".join(row["topics"])
         click.echo(f"{row['slug']}  ({len(row['topics'])} topics)  [{topics_list}]")
+
+
+@topics.command("diff-taxonomy")
+@click.option(
+    "--taxonomy",
+    "taxonomy_path",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Taxonomy file (default <vault>/_system/_taxonomy.md).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_diff_taxonomy(
+    cfg: Config, taxonomy_path: Path | None, as_json: bool
+) -> None:
+    """Diff discovered topics against the existing _taxonomy.md (Jaccard set math).
+
+    Reports, per existing tag, the ranked aligned topics; topics with no aligned
+    tag (``new_topics`` — structure the data found); and tags with no aligned
+    topic (``orphan_tags``). A missing taxonomy file is treated as greenfield, so
+    every discovered topic is reported as new.
+    """
+    path = taxonomy_path or (cfg.vault_path / _TAXONOMY_RELPATH)
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        notes_by_tag = store.notes_by_tag()
+        if path.exists():
+            declared = parse_taxonomy_tags(path)
+            existing = {
+                tag: notes_by_tag[tag] for tag in declared if tag in notes_by_tag
+            }
+        else:
+            existing = {}
+        topic_members = {
+            topic.slug: {m.note_path for m in store.topic_members(topic.slug)}
+            for topic in store.load_topics()
+        }
+        diff = diff_taxonomy(existing, topic_members)
+    finally:
+        store.close()
+
+    mapping_rows = {
+        tag: [{"topic": slug, "overlap": round(overlap, 6)} for slug, overlap in ranked]
+        for tag, ranked in diff.mapping.items()
+    }
+    payload = {
+        "mapping": mapping_rows,
+        "new_topics": diff.new_topics,
+        "orphan_tags": diff.orphan_tags,
+        "covered_topics": diff.covered_topics,
+    }
+    if as_json:
+        click.echo(json.dumps(payload))
+        return
+    click.echo(
+        f"tags={len(mapping_rows)} covered_topics={len(diff.covered_topics)} "
+        f"new_topics={len(diff.new_topics)} orphan_tags={len(diff.orphan_tags)}"
+    )
+    for tag, ranked in mapping_rows.items():
+        best = ranked[0] if ranked else None
+        aligned = f"{best['topic']} ({best['overlap']:.2f})" if best else "—"
+        click.echo(f"  {tag} -> {aligned}")
+    if diff.new_topics:
+        click.echo(f"new (no aligned tag): {', '.join(diff.new_topics)}")
+    if diff.orphan_tags:
+        click.echo(f"orphan tags (no aligned topic): {', '.join(diff.orphan_tags)}")
 
 
 @topics.command("add")

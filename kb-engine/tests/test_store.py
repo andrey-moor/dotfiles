@@ -63,3 +63,22 @@ def test_keyword_search_punctuation_only_query_returns_empty(tmp_path):
     # MATCH grammar and must return no hits.
     assert s.keyword_search('"?!.* ', limit=5) == []
     assert s.keyword_search("   ", limit=5) == []
+
+
+def test_notes_by_tag_groups_paths_by_tag(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.upsert_note(path="Knowledge/a.md", title="A", sha256="h", tags=["Dev/Rust", "Tools"])
+    s.upsert_note(path="Knowledge/b.md", title="B", sha256="h", tags=["Dev/Rust"])
+    s.upsert_note(path="Knowledge/c.md", title="C", sha256="h", tags=[])
+    by_tag = s.notes_by_tag()
+    assert by_tag["Dev/Rust"] == {"Knowledge/a.md", "Knowledge/b.md"}
+    assert by_tag["Tools"] == {"Knowledge/a.md"}
+    # untagged notes contribute no entries
+    assert all("Knowledge/c.md" not in paths for paths in by_tag.values())
+
+
+def test_notes_by_tag_empty_store(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    assert s.notes_by_tag() == {}
