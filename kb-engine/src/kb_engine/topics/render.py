@@ -116,20 +116,46 @@ def _render_proposals_block(
     return "\n".join(lines)
 
 
+def _strip_markers(text: str) -> str:
+    """Remove every stray START/END marker line, collapsing the blank gap left.
+
+    Used to recover from a malformed taxonomy (lone, out-of-order, or duplicate
+    markers) before a clean block is re-appended.
+    """
+    stripped = re.sub(
+        rf"[ \t]*(?:{re.escape(PROPOSALS_START)}|{re.escape(PROPOSALS_END)})[ \t]*\n?",
+        "",
+        text,
+    )
+    return re.sub(r"\n{3,}", "\n\n", stripped)
+
+
 def _splice_proposals(existing_text: str, block_body: str) -> str:
     """Replace content between the proposal markers, preserving the rest.
 
-    If both markers are present, only the text between them is replaced. If they
-    are absent, a ``## Proposals`` section with the marker block is appended.
+    Only a *well-formed* pair (a START followed by an END) is spliced in place.
+    Any malformed state — lone marker, END-before-START, or duplicates — is
+    repaired by stripping every stray marker, then appending a single fresh
+    block. This keeps the result a single well-formed block and idempotent.
     """
     marked = f"{PROPOSALS_START}\n{block_body}\n{PROPOSALS_END}"
-    if PROPOSALS_START in existing_text and PROPOSALS_END in existing_text:
+    start = existing_text.find(PROPOSALS_START)
+    end = existing_text.find(PROPOSALS_END)
+    well_formed = (
+        start != -1
+        and end != -1
+        and start < end
+        and existing_text.count(PROPOSALS_START) == 1
+        and existing_text.count(PROPOSALS_END) == 1
+    )
+    if well_formed:
         pattern = re.compile(
             re.escape(PROPOSALS_START) + r".*?" + re.escape(PROPOSALS_END),
             re.DOTALL,
         )
         return pattern.sub(lambda _: marked, existing_text, count=1)
-    base = existing_text.rstrip("\n")
+
+    base = _strip_markers(existing_text).rstrip("\n")
     section = f"## Proposals\n\n{marked}\n"
     if base:
         return f"{base}\n\n{section}"

@@ -6,6 +6,7 @@ from kb_engine.topics.render import (
     PROPOSALS_END,
     PROPOSALS_START,
     RenderResult,
+    _splice_proposals,
     render_topics,
 )
 
@@ -130,6 +131,80 @@ def test_render_proposals_creates_block_when_absent(tmp_path):
     assert PROPOSALS_START in text and PROPOSALS_END in text
     assert "## Categories" in text  # original preserved
     assert "rust-macros" in text
+
+
+def _well_formed_single_block(text: str) -> bool:
+    """Exactly one START and one END, START before END (a single clean block)."""
+    return (
+        text.count(PROPOSALS_START) == 1
+        and text.count(PROPOSALS_END) == 1
+        and text.index(PROPOSALS_START) < text.index(PROPOSALS_END)
+    )
+
+
+def test_splice_only_start_marker_produces_single_block():
+    out = _splice_proposals(f"# Tax\n\n{PROPOSALS_START}\nleftover\n", "BODY")
+    # A lone START is stripped (no dangling marker) and a fresh block appended.
+    assert _well_formed_single_block(out)
+    assert "BODY" in out
+    assert PROPOSALS_START not in out.split("## Proposals")[0]  # no orphan marker
+
+
+def test_splice_only_end_marker_produces_single_block():
+    out = _splice_proposals(f"# Tax\n\nstray\n{PROPOSALS_END}\nafter\n", "BODY")
+    assert _well_formed_single_block(out)
+    assert "BODY" in out
+
+
+def test_splice_end_before_start_produces_single_block():
+    text = f"# Tax\n\n{PROPOSALS_END}\nmiddle\n{PROPOSALS_START}\n"
+    out = _splice_proposals(text, "BODY")
+    assert _well_formed_single_block(out)
+    assert "BODY" in out
+
+
+def test_splice_duplicate_markers_produces_single_block():
+    text = (
+        f"# Tax\n\n{PROPOSALS_START}\nA\n{PROPOSALS_END}\n"
+        f"\n{PROPOSALS_START}\nB\n{PROPOSALS_END}\n"
+    )
+    out = _splice_proposals(text, "BODY")
+    assert _well_formed_single_block(out)
+    assert "BODY" in out
+
+
+def test_splice_malformed_is_idempotent_on_second_pass():
+    # First splice repairs the malformed markers; a second splice with the same
+    # body must be a no-op (render-not-append guarantee holds after repair).
+    for text in (
+        f"# Tax\n\n{PROPOSALS_START}\nleftover\n",
+        f"# Tax\n\nstray\n{PROPOSALS_END}\n",
+        f"# Tax\n\n{PROPOSALS_END}\nmiddle\n{PROPOSALS_START}\n",
+        f"# Tax\n\n{PROPOSALS_START}\nA\n{PROPOSALS_END}\n{PROPOSALS_START}\nB\n{PROPOSALS_END}\n",
+    ):
+        once = _splice_proposals(text, "BODY")
+        twice = _splice_proposals(once, "BODY")
+        assert twice == once
+        assert _well_formed_single_block(twice)
+
+
+def test_render_malformed_markers_repaired_and_idempotent(tmp_path):
+    # End-to-end through render_topics: a _taxonomy.md with a lone START marker is
+    # repaired to a single well-formed block, and a second render is a no-op.
+    s = _store_with_topics(tmp_path)
+    sysdir = tmp_path / "_system"
+    sysdir.mkdir(parents=True, exist_ok=True)
+    taxonomy = sysdir / "_taxonomy.md"
+    taxonomy.write_text(
+        f"# Taxonomy\n\n## Categories\n- keep\n\n{PROPOSALS_START}\nDANGLING\n"
+    )
+    render_topics(s, vault_path=tmp_path)
+    first = taxonomy.read_text()
+    assert _well_formed_single_block(first)  # dangling START repaired
+    assert "## Categories" in first and "- keep" in first
+    assert "rust-macros" in first
+    render_topics(s, vault_path=tmp_path)
+    assert taxonomy.read_text() == first  # idempotent after repair
 
 
 def test_render_proposals_idempotent_with_existing_block(tmp_path):
