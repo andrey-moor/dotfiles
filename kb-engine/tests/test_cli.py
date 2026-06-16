@@ -252,6 +252,21 @@ def test_topics_diff_taxonomy_missing_file_is_greenfield(tmp_path, monkeypatch):
     assert len(out["new_topics"]) == 2
 
 
+def test_topics_render_cli_writes_index(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,-1")
+    v = _topics_vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    CliRunner().invoke(main, args + ["topics", "discover"])
+    r = CliRunner().invoke(main, args + ["topics", "render", "--json"])
+    assert r.exit_code == 0
+    out = json.loads(r.output)
+    assert out["n_topics"] == 1
+    assert (tmp_path / "_system" / "topics" / "index.md").exists()
+
+
 def test_search_on_unsynced_db_returns_empty_without_crash(tmp_path, monkeypatch):
     # Searching before ever syncing must not raise sqlite "no such table: chunks";
     # the command initializes the schema first and returns zero hits cleanly.

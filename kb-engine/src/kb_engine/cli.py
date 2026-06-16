@@ -17,6 +17,7 @@ from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
 from kb_engine.topics.sticky import sticky_discover
+from kb_engine.topics.render import render_topics
 from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
 
 DEFAULT_SEARCH_LIMIT = 10
@@ -354,6 +355,34 @@ def topics_diff_taxonomy(
         click.echo(f"new (no aligned tag): {', '.join(diff.new_topics)}")
     if diff.orphan_tags:
         click.echo(f"orphan tags (no aligned topic): {', '.join(diff.orphan_tags)}")
+
+
+@topics.command("render")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_render(cfg: Config, as_json: bool) -> None:
+    """Render topic/area MOCs to _system/topics/ + proposals into _taxonomy.md.
+
+    Idempotent and render-not-append: rewrites the MOC files and splices the
+    proposal table between stable markers, preserving the rest of the taxonomy.
+    """
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        result = render_topics(store, cfg.vault_path)
+    finally:
+        store.close()
+    _emit(
+        {
+            "n_topics": result.n_topics,
+            "n_areas": result.n_areas,
+            "index_path": result.index_path,
+            "taxonomy_path": result.taxonomy_path,
+        },
+        as_json,
+        f"Rendered {result.n_topics} topics, {result.n_areas} areas -> "
+        f"{result.index_path}",
+    )
 
 
 @topics.command("add")
