@@ -313,3 +313,143 @@ def test_search_on_unsynced_db_returns_empty_without_crash(tmp_path, monkeypatch
     assert r.exit_code == 0
     assert r.exception is None
     assert json.loads(r.output) == {"hits": []}
+
+
+# --- import-things -----------------------------------------------------------
+
+import sqlite3  # noqa: E402
+
+
+def _things_db(tmp_path):
+    db = tmp_path / "main.sqlite"
+    c = sqlite3.connect(db)
+    c.executescript(
+        """
+      CREATE TABLE TMArea(uuid TEXT, title TEXT);
+      CREATE TABLE TMTask(type INT, status INT, trashed INT, title TEXT,
+                          notes TEXT, area TEXT, project TEXT, uuid TEXT);
+      INSERT INTO TMArea VALUES('A1','Reading');
+      INSERT INTO TMTask VALUES(0,0,0,'Cool article','see https://e.com/p','A1',NULL,'t1');
+      INSERT INTO TMTask VALUES(0,0,0,'https://github.com/a/b',NULL,NULL,NULL,'t2');
+      INSERT INTO TMTask VALUES(0,3,0,'done','https://done.com',NULL,NULL,'t3');
+    """
+    )
+    c.commit()
+    c.close()
+    return db
+
+
+def _import_vault(tmp_path):
+    (tmp_path / "Knowledge" / "inbox").mkdir(parents=True)
+    return tmp_path
+
+
+def test_import_things_dry_run_reports_and_writes_nothing(tmp_path):
+    things = _things_db(tmp_path)
+    v = _import_vault(tmp_path / "vault")
+    r = CliRunner().invoke(
+        main,
+        [
+            "--vault", str(v),
+            "import-things", "--things-db", str(things),
+            "--status", "open", "--dry-run", "--json",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    out = json.loads(r.output)
+    assert out["dry_run"] is True
+    assert out["n_tasks"] == 2
+    assert out["n_urls"] == 2
+    assert out["would_write"] == 2
+    assert out["would_skip_existing"] == 0
+    assert "sample" in out
+    # nothing written
+    import glob
+
+    assert glob.glob(str(v / "Knowledge" / "inbox" / "*.md")) == []
+
+
+def test_import_things_real_run_writes_stubs(tmp_path):
+    things = _things_db(tmp_path)
+    v = _import_vault(tmp_path / "vault")
+    r = CliRunner().invoke(
+        main,
+        [
+            "--vault", str(v),
+            "import-things", "--things-db", str(things),
+            "--date", "2026-06-16", "--json",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    out = json.loads(r.output)
+    assert out["written"] == 2
+    assert out["skipped_existing"] == 0
+    assert out["skipped_dup_in_batch"] == 0
+    import glob
+
+    import frontmatter
+
+    stubs = glob.glob(str(v / "Knowledge" / "inbox" / "*.md"))
+    assert len(stubs) == 2
+    fm = frontmatter.load(stubs[0])
+    assert fm["date_added"] == "2026-06-16"
+    assert fm["status"] == "inbox"
+
+
+def test_import_things_dedups_against_existing_vault_url(tmp_path):
+    things = _things_db(tmp_path)
+    v = _import_vault(tmp_path / "vault")
+    # one of the Things URLs already exists in the vault
+    (v / "Knowledge" / "have.md").write_text(
+        "---\ntitle: Have\nurl: https://e.com/p\n---\nbody"
+    )
+    r = CliRunner().invoke(
+        main,
+        ["--vault", str(v), "import-things", "--things-db", str(things), "--json"],
+    )
+    assert r.exit_code == 0, r.output
+    out = json.loads(r.output)
+    assert out["written"] == 1
+    assert out["skipped_existing"] == 1
+
+
+def test_import_things_area_filter(tmp_path):
+    things = _things_db(tmp_path)
+    v = _import_vault(tmp_path / "vault")
+    r = CliRunner().invoke(
+        main,
+        [
+            "--vault", str(v),
+            "import-things", "--things-db", str(things),
+            "--area", "Reading", "--dry-run", "--json",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    out = json.loads(r.output)
+    assert out["n_tasks"] == 1
+    assert out["n_urls"] == 1
+
+
+def test_import_things_missing_db_errors_clearly(tmp_path):
+    v = _import_vault(tmp_path / "vault")
+    r = CliRunner().invoke(
+        main,
+        [
+            "--vault", str(v),
+            "import-things", "--things-db", str(tmp_path / "nope.sqlite"),
+            "--json",
+        ],
+    )
+    assert r.exit_code != 0
+    assert "not found" in r.output.lower() or "nope.sqlite" in r.output
+
+
+def test_import_things_human_output(tmp_path):
+    things = _things_db(tmp_path)
+    v = _import_vault(tmp_path / "vault")
+    r = CliRunner().invoke(
+        main,
+        ["--vault", str(v), "import-things", "--things-db", str(things), "--dry-run"],
+    )
+    assert r.exit_code == 0, r.output
+    assert "would write" in r.output.lower() or "would_write" in r.output.lower()

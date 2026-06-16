@@ -1,11 +1,14 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import click
 
 from kb_engine.config import Config
+from kb_engine.importing.inbox import existing_urls, import_urls
+from kb_engine.importing.things import read_things_tasks
+from kb_engine.importing.urls import normalize_url
 from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
 from kb_engine.models import TopicMember
 from kb_engine.search import hybrid_search
@@ -28,6 +31,32 @@ DEFAULT_ASSIGN_LOW = 0.4
 _ASSIGNABLE_STATUSES = frozenset({"active", "proposed"})
 _TAXONOMY_RELPATH = Path("_system") / "_taxonomy.md"
 DEFAULT_APPLY_STATUS = "active"
+
+# Standard Things 3 SQLite location on macOS.
+_THINGS_DB_GLOB = "Library/Group Containers/*ThingsMac*/**/main.sqlite"
+_IMPORT_SAMPLE_SIZE = 5
+
+
+def _default_things_db() -> Path | None:
+    """First match of the standard Things DB glob under $HOME, or None."""
+    matches = sorted(Path.home().glob(_THINGS_DB_GLOB))
+    return matches[0] if matches else None
+
+
+def _task_items(tasks: list) -> list[tuple[str, str]]:
+    """Flatten Things tasks to ``(url, title)`` items.
+
+    Each URL on a task gets its own item. The title is the task title, unless
+    the title is itself a URL (a bare-link task), in which case the URL is used
+    as the title so the stub names from the link.
+    """
+    items: list[tuple[str, str]] = []
+    for task in tasks:
+        title = task.title.strip()
+        title_is_url = title.lower().startswith(("http://", "https://"))
+        for url in task.urls:
+            items.append((url, url if title_is_url else (title or url)))
+    return items
 
 
 def _build_embedder(cfg: Config) -> Embedder:
@@ -555,6 +584,120 @@ def topics_assign(
     click.echo(
         f"assigned={len(assigned_rows)} borderline={len(borderline_rows)} "
         f"unassigned={n_unassigned} applied={apply_changes}"
+    )
+
+
+@main.command("import-things")
+@click.option(
+    "--things-db",
+    "things_db",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Things SQLite path (default: the standard ThingsMac location).",
+)
+@click.option(
+    "--status",
+    default="open",
+    show_default=True,
+    type=click.Choice(["open", "completed", "all"]),
+    help="Which task status to import.",
+)
+@click.option(
+    "--area", "areas", multiple=True, help="Only this area (repeatable)."
+)
+@click.option(
+    "--project", "projects", multiple=True, help="Only this project (repeatable)."
+)
+@click.option(
+    "--date",
+    "date_added",
+    default=None,
+    help="date_added to stamp on stubs (default: today). YYYY-MM-DD.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Report what would be imported without writing anything.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def import_things(
+    cfg: Config,
+    things_db: Path | None,
+    status: str,
+    areas: tuple[str, ...],
+    projects: tuple[str, ...],
+    date_added: str | None,
+    dry_run: bool,
+    as_json: bool,
+) -> None:
+    """Import open URL-bearing Things tasks into ``Knowledge/inbox/`` stubs.
+
+    Reads Things read-only (via a temp copy, safe while Things runs), extracts
+    URLs, dedups against existing vault note URLs and within the batch, and
+    writes proper-schema inbox stubs. ``--dry-run`` reports counts and a small
+    sample without writing.
+    """
+    db = things_db or _default_things_db()
+    if db is None:
+        raise click.ClickException(
+            "Things DB not found. Pass --things-db PATH "
+            f"(looked for ~/{_THINGS_DB_GLOB})."
+        )
+    try:
+        tasks = read_things_tasks(
+            db, status=status, areas=list(areas) or None, projects=list(projects) or None
+        )
+    except FileNotFoundError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    items = _task_items(tasks)
+
+    if dry_run:
+        existing = existing_urls(cfg.vault_path)
+        seen: set[str] = set()
+        would_write = would_skip_existing = 0
+        for url, _title in items:
+            normalized = normalize_url(url)
+            if normalized in existing:
+                would_skip_existing += 1
+            elif normalized not in seen:
+                seen.add(normalized)
+                would_write += 1
+        sample = [
+            {"url": normalize_url(url), "title": title}
+            for url, title in items[:_IMPORT_SAMPLE_SIZE]
+        ]
+        _emit(
+            {
+                "dry_run": True,
+                "things_db": str(db),
+                "status": status,
+                "n_tasks": len(tasks),
+                "n_urls": len(items),
+                "would_write": would_write,
+                "would_skip_existing": would_skip_existing,
+                "sample": sample,
+            },
+            as_json,
+            f"[dry-run] tasks={len(tasks)} urls={len(items)} "
+            f"would_write={would_write} would_skip_existing={would_skip_existing}",
+        )
+        return
+
+    stamp = date_added or date.today().isoformat()
+    result = import_urls(cfg.vault_path, items, date_added=stamp)
+    _emit(
+        {
+            "dry_run": False,
+            "written": result.written,
+            "skipped_existing": result.skipped_existing,
+            "skipped_dup_in_batch": result.skipped_dup_in_batch,
+        },
+        as_json,
+        f"Imported: written={result.written} "
+        f"skipped_existing={result.skipped_existing} "
+        f"skipped_dup_in_batch={result.skipped_dup_in_batch}",
     )
 
 
