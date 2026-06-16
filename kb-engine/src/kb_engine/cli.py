@@ -702,6 +702,18 @@ def topics_assign(
     "--project", "projects", multiple=True, help="Only this project (repeatable)."
 )
 @click.option(
+    "--exclude-area",
+    "exclude_areas",
+    multiple=True,
+    help="Drop tasks in this area (repeatable, applied on top of --area).",
+)
+@click.option(
+    "--exclude-project",
+    "exclude_projects",
+    multiple=True,
+    help="Drop tasks in this project (repeatable, applied on top of --project).",
+)
+@click.option(
     "--date",
     "date_added",
     default=None,
@@ -720,6 +732,8 @@ def import_things(
     status: str,
     areas: tuple[str, ...],
     projects: tuple[str, ...],
+    exclude_areas: tuple[str, ...],
+    exclude_projects: tuple[str, ...],
     date_added: str | None,
     dry_run: bool,
     as_json: bool,
@@ -739,7 +753,12 @@ def import_things(
         )
     try:
         tasks = read_things_tasks(
-            db, status=status, areas=list(areas) or None, projects=list(projects) or None
+            db,
+            status=status,
+            areas=list(areas) or None,
+            projects=list(projects) or None,
+            exclude_areas=list(exclude_areas) or None,
+            exclude_projects=list(exclude_projects) or None,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(str(exc)) from exc

@@ -481,6 +481,70 @@ def test_import_things_area_filter(tmp_path):
     assert out["n_urls"] == 1
 
 
+def test_import_things_exclude_area_reduces_count(tmp_path):
+    # --exclude-area drops the 'Reading' task (https://e.com/p), leaving fewer
+    # tasks/urls than an unfiltered dry-run.
+    things = _things_db(tmp_path)
+    v = _import_vault(tmp_path / "vault")
+    base = CliRunner().invoke(
+        main,
+        [
+            "--vault", str(v),
+            "import-things", "--things-db", str(things),
+            "--status", "open", "--dry-run", "--json",
+        ],
+    )
+    assert base.exit_code == 0, base.output
+    base_out = json.loads(base.output)
+
+    excluded = CliRunner().invoke(
+        main,
+        [
+            "--vault", str(v),
+            "import-things", "--things-db", str(things),
+            "--status", "open", "--exclude-area", "Reading",
+            "--dry-run", "--json",
+        ],
+    )
+    assert excluded.exit_code == 0, excluded.output
+    excl_out = json.loads(excluded.output)
+
+    assert excl_out["n_tasks"] < base_out["n_tasks"]
+    assert excl_out["n_urls"] < base_out["n_urls"]
+    assert excl_out["n_tasks"] == base_out["n_tasks"] - 1
+
+
+def test_import_things_exclude_project_reduces_count(tmp_path):
+    # A URL task under a 'Junk' project is dropped by --exclude-project.
+    db = tmp_path / "main.sqlite"
+    c = sqlite3.connect(db)
+    c.executescript(
+        """
+      CREATE TABLE TMArea(uuid TEXT, title TEXT);
+      CREATE TABLE TMTask(type INT, status INT, trashed INT, title TEXT,
+                          notes TEXT, area TEXT, project TEXT, uuid TEXT);
+      INSERT INTO TMTask VALUES(1,0,0,'Junk',NULL,NULL,NULL,'pj');
+      INSERT INTO TMTask VALUES(0,0,0,'keep','https://keep.com/x',NULL,NULL,'t1');
+      INSERT INTO TMTask VALUES(0,0,0,'drop','https://drop.com/x',NULL,'pj','t2');
+    """
+    )
+    c.commit()
+    c.close()
+    v = _import_vault(tmp_path / "vault")
+    r = CliRunner().invoke(
+        main,
+        [
+            "--vault", str(v),
+            "import-things", "--things-db", str(db),
+            "--exclude-project", "Junk", "--dry-run", "--json",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    out = json.loads(r.output)
+    assert out["n_tasks"] == 1
+    assert out["sample"][0]["url"] == "https://keep.com/x"
+
+
 def test_default_things_db_prefers_live_over_backups(tmp_path, monkeypatch):
     # The standard glob also matches Backups/*.thingsdatabase/main.sqlite; the
     # default must pick the LIVE database, never a dated backup. (Phase-3b's

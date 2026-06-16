@@ -14,12 +14,18 @@ def _fixture_things(tmp_path):
       CREATE TABLE TMTask(type INT, status INT, trashed INT, title TEXT,
                           notes TEXT, area TEXT, project TEXT, uuid TEXT);
       INSERT INTO TMArea VALUES('A1','Reading');
+      INSERT INTO TMArea VALUES('A2','🏡 Home');
       INSERT INTO TMTask VALUES(0,0,0,'Cool article','see https://e.com/p','A1',NULL,'t1');
       INSERT INTO TMTask VALUES(0,0,0,'https://github.com/a/b',NULL,NULL,NULL,'t2');
       INSERT INTO TMTask VALUES(0,3,0,'done link','https://done.com',NULL,NULL,'t3');
       INSERT INTO TMTask VALUES(0,0,1,'trashed','https://t.com',NULL,NULL,'t4');
       INSERT INTO TMTask VALUES(0,0,0,'no url task','just text',NULL,NULL,'t5');
       INSERT INTO TMTask VALUES(1,0,0,'a project','https://proj.com',NULL,NULL,'p1');
+      -- excludable: a URL task in the 🏡 Home area
+      INSERT INTO TMTask VALUES(0,0,0,'home thing','https://home.com/x','A2',NULL,'t6');
+      -- excludable: a URL task under the 🎄 Christmas project
+      INSERT INTO TMTask VALUES(1,0,0,'🎄 Christmas',NULL,NULL,NULL,'xmas');
+      INSERT INTO TMTask VALUES(0,0,0,'gift idea','https://xmas.com/g',NULL,'xmas','t7');
     """
     )
     c.commit()
@@ -30,7 +36,12 @@ def _fixture_things(tmp_path):
 def test_read_things_open_url_tasks(tmp_path):
     tasks = read_things_tasks(_fixture_things(tmp_path), status="open")
     urls = sorted(u for t in tasks for u in t.urls)
-    assert urls == ["https://e.com/p", "https://github.com/a/b"]
+    assert urls == [
+        "https://e.com/p",
+        "https://github.com/a/b",
+        "https://home.com/x",
+        "https://xmas.com/g",
+    ]
     assert any(t.area == "Reading" for t in tasks)
 
 
@@ -52,7 +63,43 @@ def test_read_things_all_status_excludes_trashed_and_projects(tmp_path):
     # and only url-bearing tasks survive.
     tasks = read_things_tasks(_fixture_things(tmp_path), status="all")
     urls = sorted(u for t in tasks for u in t.urls)
-    assert urls == ["https://done.com", "https://e.com/p", "https://github.com/a/b"]
+    assert urls == [
+        "https://done.com",
+        "https://e.com/p",
+        "https://github.com/a/b",
+        "https://home.com/x",
+        "https://xmas.com/g",
+    ]
+
+
+def test_read_things_exclude_areas_and_projects(tmp_path):
+    # Exclusion drops tasks in the excluded area (🏡 Home → home.com/x) and the
+    # excluded project (🎄 Christmas → xmas.com/g) while keeping no-area/other
+    # tasks. Matching is exact on the emoji-bearing title.
+    db = _fixture_things(tmp_path)
+    tasks = read_things_tasks(
+        db,
+        status="open",
+        exclude_areas=["🏡 Home"],
+        exclude_projects=["🎄 Christmas"],
+    )
+    urls = sorted(u for t in tasks for u in t.urls)
+    assert urls == ["https://e.com/p", "https://github.com/a/b"]
+    assert all(t.area != "🏡 Home" for t in tasks)
+    assert all(t.project != "🎄 Christmas" for t in tasks)
+
+
+def test_read_things_exclusion_applies_on_top_of_inclusion(tmp_path):
+    # Inclusion narrows to the Reading area; an exclusion of that same area then
+    # drops everything (exclusion applies on top of inclusion).
+    db = _fixture_things(tmp_path)
+    assert read_things_tasks(db, status="open", areas=["Reading"])
+    assert (
+        read_things_tasks(
+            db, status="open", areas=["Reading"], exclude_areas=["Reading"]
+        )
+        == []
+    )
 
 
 def test_read_things_returns_frozen_tasks(tmp_path):

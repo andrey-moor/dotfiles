@@ -75,12 +75,16 @@ def read_things_tasks(
     status: str = "open",
     areas: list[str] | None = None,
     projects: list[str] | None = None,
+    exclude_areas: list[str] | None = None,
+    exclude_projects: list[str] | None = None,
 ) -> list[ThingsTask]:
     """Return URL-bearing Things tasks matching the filters (read-only, safe).
 
     ``status`` is one of ``open`` (default), ``completed``, or ``all``. ``areas``
-    and ``projects`` (if given) filter by exact area/project title. Only tasks
-    with at least one extracted URL (from title or notes) are returned.
+    and ``projects`` (if given) filter by exact area/project title (inclusion).
+    ``exclude_areas`` and ``exclude_projects`` (if given) drop tasks whose
+    resolved area/project title matches exactly — applied on top of inclusion.
+    Only tasks with at least one extracted URL (from title or notes) survive.
     """
     db_path = Path(db_path)
     if not db_path.exists():
@@ -92,6 +96,8 @@ def read_things_tasks(
 
     area_filter = set(areas) if areas else None
     project_filter = set(projects) if projects else None
+    area_exclude = set(exclude_areas) if exclude_areas else None
+    project_exclude = set(exclude_projects) if exclude_projects else None
 
     with tempfile.TemporaryDirectory(prefix="kb-things-") as tmp:
         copy_path = _copy_db_readonly(db_path, Path(tmp))
@@ -108,6 +114,10 @@ def read_things_tasks(
         if area_filter is not None and area not in area_filter:
             continue
         if project_filter is not None and project not in project_filter:
+            continue
+        if area_exclude is not None and area in area_exclude:
+            continue
+        if project_exclude is not None and project in project_exclude:
             continue
         title = row["title"] or ""
         notes = row["notes"] or ""
