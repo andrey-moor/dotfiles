@@ -73,3 +73,16 @@ def test_sync_human_output(tmp_path, monkeypatch):
     r = _invoke(["--vault", str(v), "--db", str(db), "sync"], monkeypatch)
     assert r.exit_code == 0
     assert "added" in r.output.lower()
+
+
+def test_search_on_unsynced_db_returns_empty_without_crash(tmp_path, monkeypatch):
+    # Searching before ever syncing must not raise sqlite "no such table: chunks";
+    # the command initializes the schema first and returns zero hits cleanly.
+    v = _vault(tmp_path)
+    db = tmp_path / "fresh.db"  # never synced
+    r = _invoke(
+        ["--vault", str(v), "--db", str(db), "search", "memory", "--json"], monkeypatch
+    )
+    assert r.exit_code == 0
+    assert r.exception is None
+    assert json.loads(r.output) == {"hits": []}

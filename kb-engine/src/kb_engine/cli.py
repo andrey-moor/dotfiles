@@ -76,6 +76,7 @@ def search(cfg: Config, query: str, limit: int, as_json: bool) -> None:
     """Hybrid (semantic + keyword) search over Knowledge/."""
     store = Store(cfg.db_path)
     try:
+        store.init_schema()  # tolerate searching a never-synced DB (no tables yet)
         results = hybrid_search(store, _build_embedder(cfg), query, limit=limit)
         hits = [
             {
