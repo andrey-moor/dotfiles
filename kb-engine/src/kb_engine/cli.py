@@ -17,6 +17,7 @@ from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
 from kb_engine.topics.sticky import sticky_discover
+from kb_engine.topics.apply import apply_topic_tags
 from kb_engine.topics.render import render_topics
 from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
 
@@ -26,6 +27,7 @@ DEFAULT_ASSIGN_HIGH = 0.55
 DEFAULT_ASSIGN_LOW = 0.4
 _ASSIGNABLE_STATUSES = frozenset({"active", "proposed"})
 _TAXONOMY_RELPATH = Path("_system") / "_taxonomy.md"
+DEFAULT_APPLY_STATUS = "active"
 
 
 def _build_embedder(cfg: Config) -> Embedder:
@@ -382,6 +384,42 @@ def topics_render(cfg: Config, as_json: bool) -> None:
         as_json,
         f"Rendered {result.n_topics} topics, {result.n_areas} areas -> "
         f"{result.index_path}",
+    )
+
+
+@topics.command("apply")
+@click.option(
+    "--status",
+    default=DEFAULT_APPLY_STATUS,
+    show_default=True,
+    help="Only apply topics with this status (proposed topics stay unapplied).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_apply(cfg: Config, status: str, as_json: bool) -> None:
+    """Write ``topic/<slug>`` tags into member notes' frontmatter (gated, idempotent).
+
+    This is the only command that mutates notes; running it IS the gate. By
+    default only ``active`` topics apply, so discovered proposals stay proposed
+    until confirmed. Re-running is a no-op.
+    """
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        result = apply_topic_tags(store, cfg.vault_path, only_status=(status,))
+    finally:
+        store.close()
+    _emit(
+        {
+            "status": status,
+            "n_changed": result.n_changed,
+            "n_tags_added": result.n_tags_added,
+            "skipped_missing": result.skipped_missing,
+        },
+        as_json,
+        f"Applied status={status}: changed={result.n_changed} "
+        f"tags_added={result.n_tags_added} "
+        f"skipped_missing={len(result.skipped_missing)}",
     )
 
 

@@ -267,6 +267,38 @@ def test_topics_render_cli_writes_index(tmp_path, monkeypatch):
     assert (tmp_path / "_system" / "topics" / "index.md").exists()
 
 
+def test_topics_apply_cli_writes_tag_to_note(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    k = tmp_path / "Knowledge"
+    k.mkdir()
+    (k / "a.md").write_text("---\ntitle: A\ntags: [Dev/Rust]\n---\nrust body")
+    db = tmp_path / "t.db"
+    args = ["--vault", str(tmp_path), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    # an active manual topic with a.md as a member
+    CliRunner().invoke(
+        main,
+        args
+        + ["topics", "add", "rust", "--label", "Rust", "--description", "rust"],
+    )
+    s = Store(db)
+    from kb_engine.models import TopicMember
+
+    s.set_members(
+        "rust", [TopicMember(note_path="Knowledge/a.md", score=0.9, source="auto")]
+    )
+    s.close()
+    r = CliRunner().invoke(main, args + ["topics", "apply", "--json"])
+    assert r.exit_code == 0
+    out = json.loads(r.output)
+    assert out["status"] == "active"
+    assert out["n_changed"] == 1
+    import frontmatter
+
+    fm = frontmatter.load(k / "a.md")
+    assert "topic/rust" in fm["tags"]
+
+
 def test_search_on_unsynced_db_returns_empty_without_crash(tmp_path, monkeypatch):
     # Searching before ever syncing must not raise sqlite "no such table: chunks";
     # the command initializes the schema first and returns zero hits cleanly.
