@@ -115,6 +115,27 @@ def test_apply_skips_missing_note_files(tmp_path):
     assert "Knowledge/a.md" in res.skipped_missing
 
 
+def test_apply_skips_note_path_outside_vault(tmp_path):
+    # A member note_path that escapes the vault ("../outside.md") must be skipped:
+    # never write frontmatter outside the vault, and report it as skipped.
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("---\ntitle: Outside\n---\nsecret")
+    s = Store(vault / "t.db")
+    s.init_schema()
+    s.upsert_note(path="../outside.md", title="Outside", sha256="h", tags=[])
+    s.add_manual_topic("rust", "Rust", "rust", np.array([1, 0, 0], np.float32))
+    s.set_members(
+        "rust", [TopicMember(note_path="../outside.md", score=0.9, source="auto")]
+    )
+    res = apply_topic_tags(s, vault_path=vault, only_status=("active",))
+    # the outside file is untouched (no topic tag injected)
+    assert outside.read_text() == "---\ntitle: Outside\n---\nsecret"
+    assert res.n_changed == 0
+    assert "../outside.md" in res.skipped_outside_vault
+
+
 def test_apply_preserves_other_frontmatter(tmp_path):
     s = _store_with_active_topic(tmp_path)
     _note(

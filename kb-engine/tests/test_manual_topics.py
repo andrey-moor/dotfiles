@@ -76,6 +76,37 @@ def test_add_manual_topic_store_rejects_duplicate(tmp_path):
     assert raised
 
 
+def test_topics_add_rejects_traversal_slug_and_creates_no_topic(tmp_path, monkeypatch):
+    # A slug like "../evil" must be rejected at the CLI boundary (non-zero exit,
+    # clear message) and must NOT create a topic — it could otherwise escape
+    # _system/topics/ when rendered.
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    db = tmp_path / "t.db"
+    args = ["--vault", str(tmp_path), "--db", str(db)]
+    r = CliRunner().invoke(
+        main,
+        args + ["topics", "add", "../evil", "--label", "Evil", "--description", "x"],
+    )
+    assert r.exit_code != 0
+    assert "slug" in r.output.lower()
+    s = Store(db)
+    s.init_schema()
+    assert s.load_topics() == []  # no topic created
+
+
+def test_add_manual_topic_store_rejects_invalid_slug(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    for bad in ("../escape", "Foo", "has space", "-leading", "under_score", ""):
+        try:
+            s.add_manual_topic(bad, "Label", "desc", np.ones(4, np.float32))
+            raised = False
+        except ValueError:
+            raised = True
+        assert raised, f"expected ValueError for slug {bad!r}"
+    assert s.load_topics() == []  # nothing persisted
+
+
 def test_topics_list_reports_kind_and_size(tmp_path, monkeypatch):
     monkeypatch.setenv("KB_FAKE_EMBED", "1")
     db = tmp_path / "t.db"

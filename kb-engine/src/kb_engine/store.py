@@ -42,6 +42,17 @@ CREATE TABLE IF NOT EXISTS area_members (
 # lone word char still matches via the final alternative.
 _FTS_TOKEN_RE = re.compile(r"\w[\w\-]*\w|\w", re.UNICODE)
 
+# Topic slugs become filenames under _system/topics/, so they must be a single
+# safe path segment: lowercase alphanumerics + internal hyphens only. This
+# blocks path traversal (e.g. "../escape") at the input boundary.
+SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]*$"
+_SLUG_RE = re.compile(SLUG_PATTERN)
+
+
+def is_valid_slug(slug: str) -> bool:
+    """True if ``slug`` is a safe single path segment (see ``SLUG_PATTERN``)."""
+    return bool(_SLUG_RE.match(slug))
+
 
 def _to_blob(vector: np.ndarray) -> bytes:
     return np.asarray(vector, np.float32).tobytes()
@@ -237,8 +248,14 @@ class Store:
         """Insert a ``kind='manual', status='active'`` topic anchored by ``centroid``.
 
         The description is stored as the topic's single keyword for later
-        labeling context. Raises ``ValueError`` if the slug already exists.
+        labeling context. Raises ``ValueError`` if the slug is malformed (it
+        becomes a filename, so traversal-unsafe slugs are rejected) or already
+        exists.
         """
+        if not is_valid_slug(slug):
+            raise ValueError(
+                f"invalid topic slug {slug!r}: must match {SLUG_PATTERN}"
+            )
         if self._conn.execute(
             "SELECT 1 FROM topics WHERE slug=?", (slug,)
         ).fetchone():

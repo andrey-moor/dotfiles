@@ -9,7 +9,7 @@ from kb_engine.config import Config
 from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
 from kb_engine.models import TopicMember
 from kb_engine.search import hybrid_search
-from kb_engine.store import Store
+from kb_engine.store import SLUG_PATTERN, Store, is_valid_slug
 from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
 from kb_engine.topics.areas import build_areas
@@ -414,12 +414,14 @@ def topics_apply(cfg: Config, status: str, as_json: bool) -> None:
             "status": status,
             "n_changed": result.n_changed,
             "n_tags_added": result.n_tags_added,
-            "skipped_missing": result.skipped_missing,
+            "skipped_missing": list(result.skipped_missing),
+            "skipped_outside_vault": list(result.skipped_outside_vault),
         },
         as_json,
         f"Applied status={status}: changed={result.n_changed} "
         f"tags_added={result.n_tags_added} "
-        f"skipped_missing={len(result.skipped_missing)}",
+        f"skipped_missing={len(result.skipped_missing)} "
+        f"skipped_outside_vault={len(result.skipped_outside_vault)}",
     )
 
 
@@ -433,6 +435,12 @@ def topics_add(
     cfg: Config, slug: str, label: str, description: str, as_json: bool
 ) -> None:
     """Add a manual topic anchored by an embedding of its label + description."""
+    if not is_valid_slug(slug):
+        raise click.BadParameter(
+            f"slug {slug!r} must match {SLUG_PATTERN} "
+            "(lowercase letters/digits, internal hyphens — it becomes a filename)",
+            param_hint="SLUG",
+        )
     store = Store(cfg.db_path)
     try:
         store.init_schema()

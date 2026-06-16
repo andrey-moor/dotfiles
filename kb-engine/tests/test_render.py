@@ -154,6 +154,30 @@ def test_render_creates_taxonomy_if_missing(tmp_path):
     assert PROPOSALS_START in taxonomy.read_text()
 
 
+def test_render_skips_traversal_slug_never_writes_outside_topics_dir(tmp_path):
+    # Defense-in-depth: even if a malicious slug reaches the DB (bypassing input
+    # validation, e.g. a stale row), render must never write a MOC outside
+    # _system/topics/.
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    s = Store(vault / "t.db")
+    s.init_schema()
+    # craft a topic row directly so the slug bypasses add_manual_topic validation
+    s._conn.execute(
+        "INSERT INTO topics(slug, label, keywords, centroid, kind, status) "
+        "VALUES(?, ?, ?, ?, 'discovered', 'proposed')",
+        ("../../escape", "Escape", "[]", np.array([1, 0, 0], np.float32).tobytes()),
+    )
+    s._conn.commit()
+    out = render_topics(s, vault_path=vault)
+    # the escaping file must not exist anywhere outside the topics dir
+    assert not (tmp_path / "escape.md").exists()
+    assert not (vault.parent / "escape.md").exists()
+    assert not (vault / "escape.md").exists()
+    # and it must not appear in the reported topic paths
+    assert all("escape" not in p for p in out.topic_paths)
+
+
 def test_render_zero_topics(tmp_path):
     s = Store(tmp_path / "t.db")
     s.init_schema()

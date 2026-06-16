@@ -165,13 +165,18 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
 
     topics_dir = vault_path / _TOPICS_RELDIR
     topics_dir.mkdir(parents=True, exist_ok=True)
+    topics_dir_resolved = topics_dir.resolve()
 
     index_path = topics_dir / "index.md"
     index_path.write_text(_render_index(areas, topics, members_by_slug))
 
     topic_paths: list[str] = []
     for topic in topics:
-        moc_path = topics_dir / f"{topic.slug}.md"
+        moc_path = (topics_dir / f"{topic.slug}.md").resolve()
+        # Defense-in-depth: a malicious slug (bypassing input validation) must
+        # never write outside _system/topics/. Skip rather than write.
+        if not moc_path.is_relative_to(topics_dir_resolved):
+            continue
         moc_path.write_text(
             _render_topic_moc(topic, members_by_slug.get(topic.slug, []))
         )
