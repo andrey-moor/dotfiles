@@ -45,3 +45,10 @@ class TopicMember:
     note_path: str
     score: float  # cosine to centroid
     source: str  # "auto" | "seed" | "user"
+
+
+@dataclass(frozen=True)
+class Area:
+    slug: str
+    label: str
+    topic_slugs: tuple[str, ...]  # member topic slugs

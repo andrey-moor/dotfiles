@@ -6,7 +6,7 @@ from typing import Iterator
 
 import numpy as np
 
-from kb_engine.models import Topic, TopicMember
+from kb_engine.models import Area, Topic, TopicMember
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
@@ -26,6 +26,14 @@ CREATE TABLE IF NOT EXISTS topic_members (
   topic_slug TEXT NOT NULL, note_path TEXT NOT NULL, score REAL, source TEXT,
   PRIMARY KEY (topic_slug, note_path),
   FOREIGN KEY (topic_slug) REFERENCES topics(slug) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS areas (
+  slug TEXT PRIMARY KEY, label TEXT
+);
+CREATE TABLE IF NOT EXISTS area_members (
+  area_slug TEXT NOT NULL, topic_slug TEXT NOT NULL,
+  PRIMARY KEY (area_slug, topic_slug),
+  FOREIGN KEY (area_slug) REFERENCES areas(slug) ON DELETE CASCADE
 );
 """
 
@@ -221,6 +229,44 @@ class Store:
             TopicMember(note_path=note_path, score=score, source=source)
             for note_path, score, source in rows
         ]
+
+    def save_areas(self, areas: list[Area]) -> None:
+        """Replace all areas + their members in a single transaction.
+
+        Areas are a full re-grouping each run, so existing areas (and their
+        cascading members) are cleared before inserting the new set.
+        """
+        with self._conn:
+            self._conn.execute("DELETE FROM areas")
+            for area in areas:
+                self._conn.execute(
+                    "INSERT INTO areas(slug, label) VALUES(?, ?)",
+                    (area.slug, area.label),
+                )
+                for topic_slug in area.topic_slugs:
+                    self._conn.execute(
+                        "INSERT INTO area_members(area_slug, topic_slug) VALUES(?, ?)",
+                        (area.slug, topic_slug),
+                    )
+
+    def load_areas(self) -> list[Area]:
+        rows = self._conn.execute(
+            "SELECT slug, label FROM areas ORDER BY slug"
+        ).fetchall()
+        areas: list[Area] = []
+        for slug, label in rows:
+            member_rows = self._conn.execute(
+                "SELECT topic_slug FROM area_members WHERE area_slug=? ORDER BY topic_slug",
+                (slug,),
+            ).fetchall()
+            areas.append(
+                Area(
+                    slug=slug,
+                    label=label,
+                    topic_slugs=tuple(topic_slug for (topic_slug,) in member_rows),
+                )
+            )
+        return areas
 
     def keyword_search(self, query: str, limit: int = 20) -> list[tuple[str, float]]:
         match = _sanitize_fts_query(query)
