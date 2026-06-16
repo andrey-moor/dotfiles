@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 
 from kb_engine.config import Config
+from kb_engine.importing.digest import build_digest
 from kb_engine.importing.inbox import existing_urls, import_urls
 from kb_engine.importing.things import read_things_tasks
 from kb_engine.importing.urls import normalize_url
@@ -35,6 +36,28 @@ DEFAULT_APPLY_STATUS = "active"
 # Standard Things 3 SQLite location on macOS.
 _THINGS_DB_GLOB = "Library/Group Containers/*ThingsMac*/**/main.sqlite"
 _IMPORT_SAMPLE_SIZE = 5
+
+_INBOX_RELDIR = Path("Knowledge") / "inbox"
+_DIGEST_RELPATH = Path("_system") / "kb-digest.md"
+
+
+def _count_inbox(vault_path: Path) -> int:
+    """Number of markdown stubs in ``Knowledge/inbox/``."""
+    inbox = vault_path / _INBOX_RELDIR
+    if not inbox.is_dir():
+        return 0
+    return sum(1 for _ in inbox.glob("*.md"))
+
+
+def _unfiled_notes(store: Store) -> list[str]:
+    """Note paths in the store assigned to no topic, sorted."""
+    all_notes = set(store.all_note_shas())
+    filed = {
+        member.note_path
+        for topic in store.load_topics()
+        for member in store.topic_members(topic.slug)
+    }
+    return sorted(all_notes - filed)
 
 
 def _default_things_db() -> Path | None:
@@ -698,6 +721,56 @@ def import_things(
         f"Imported: written={result.written} "
         f"skipped_existing={result.skipped_existing} "
         f"skipped_dup_in_batch={result.skipped_dup_in_batch}",
+    )
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def digest(cfg: Config, as_json: bool) -> None:
+    """Write a deterministic KB state digest to ``_system/kb-digest.md``.
+
+    Reports inbox backlog, topic proposals awaiting review, topic/area counts,
+    and unfiled notes. Idempotent — the body has no timestamps, so re-running
+    rewrites an identical file.
+    """
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()  # tolerate a never-synced DB
+        inbox_count = _count_inbox(cfg.vault_path)
+        unfiled = _unfiled_notes(store)
+        text = build_digest(
+            store,
+            vault_path=cfg.vault_path,
+            inbox_count=inbox_count,
+            unfiled=unfiled,
+        )
+        topics = store.load_topics()
+        n_proposals = sum(
+            1 for t in topics if t.kind == "discovered" and t.status == "proposed"
+        )
+        n_topics = len(topics)
+        n_areas = len(store.load_areas())
+    finally:
+        store.close()
+
+    digest_path = cfg.vault_path / _DIGEST_RELPATH
+    digest_path.parent.mkdir(parents=True, exist_ok=True)
+    digest_path.write_text(text)
+    rel = _DIGEST_RELPATH.as_posix()
+
+    _emit(
+        {
+            "inbox": inbox_count,
+            "proposals": n_proposals,
+            "topics": n_topics,
+            "areas": n_areas,
+            "unfiled": len(unfiled),
+            "digest_path": rel,
+        },
+        as_json,
+        f"Digest: inbox={inbox_count} proposals={n_proposals} "
+        f"topics={n_topics} areas={n_areas} unfiled={len(unfiled)} -> {rel}",
     )
 
 

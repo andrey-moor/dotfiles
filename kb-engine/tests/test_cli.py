@@ -453,3 +453,54 @@ def test_import_things_human_output(tmp_path):
     )
     assert r.exit_code == 0, r.output
     assert "would write" in r.output.lower() or "would_write" in r.output.lower()
+
+
+# --- digest ------------------------------------------------------------------
+
+
+def test_digest_cli_writes_system_file_and_reports_json(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,-1")
+    v = _topics_vault(tmp_path)
+    # add an inbox stub so the backlog count is non-zero
+    (v / "Knowledge" / "inbox").mkdir(parents=True)
+    (v / "Knowledge" / "inbox" / "x.md").write_text(
+        "---\ntitle: X\nurl: https://e.com/x\nstatus: inbox\n---\n## Notes"
+    )
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    CliRunner().invoke(main, args + ["topics", "discover"])
+    r = CliRunner().invoke(main, args + ["digest", "--json"])
+    assert r.exit_code == 0, r.output
+    out = json.loads(r.output)
+    assert {"inbox", "proposals", "topics", "areas", "unfiled", "digest_path"} <= out.keys()
+    assert out["inbox"] == 1
+    assert out["digest_path"] == "_system/kb-digest.md"
+    digest_file = v / "_system" / "kb-digest.md"
+    assert digest_file.exists()
+    assert "Inbox" in digest_file.read_text()
+
+
+def test_digest_cli_idempotent_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    v = _vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    CliRunner().invoke(main, args + ["digest"])
+    first = (v / "_system" / "kb-digest.md").read_text()
+    CliRunner().invoke(main, args + ["digest"])
+    second = (v / "_system" / "kb-digest.md").read_text()
+    assert first == second
+
+
+def test_digest_cli_human_output(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    v = _vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    r = CliRunner().invoke(main, args + ["digest"])
+    assert r.exit_code == 0, r.output
+    assert "inbox" in r.output.lower()
