@@ -144,6 +144,77 @@ The engine stays **LLM-free**: labels here are deterministic keyword slugs.
 Pretty, human-readable topic names are produced later by the `kb` skill layer —
 this engine only provides the clustering, centroids, and keyword labels.
 
+### Governance: the topic lifecycle
+
+The engine does the deterministic compute and the vault file writes; **naming and
+judgment live in the `kb` skill layer** (Claude), and **note mutation is gated** behind
+an explicit `apply`. The full lifecycle:
+
+1. **`sync`** — index the vault so topics reflect current notes.
+2. **`topics discover --sticky`** — sticky re-discovery: notes scoring `>= --high`
+   (default `0.55`) against an existing **active** topic stay fixed as its members; only
+   the **residual** is clustered into new `discovered`/`proposed` topics. This preserves
+   approved structure across re-runs (plain `discover` replaces all discovered topics).
+   Manual topics (`topics add`) always survive.
+3. **`topics diff-taxonomy`** — compare discovered topic membership against the tags
+   declared in `_system/_taxonomy.md` using Jaccard set overlap over note paths. Emits
+   `{mapping, new_topics, orphan_tags, covered_topics}`: `new_topics` is structure the
+   data found that the taxonomy lacks; `orphan_tags` are declared tags no topic aligns
+   with. A missing taxonomy file is treated as greenfield (all topics are new).
+
+   ```bash
+   kb-engine --vault "<vault>" topics diff-taxonomy --json
+   ```
+
+4. **(skill) name + review** — Claude turns the keyword slugs into human labels, proposes
+   area names, and presents the restructure diff to the user for approval.
+5. **`topics render`** — render-not-append, idempotent. Writes the MOCs and splices a
+   proposals table into `_taxonomy.md` (see below). Safe to re-run.
+6. **`topics apply`** — the **only note-mutating command**; running it IS the gate (there
+   is no implicit apply elsewhere). Writes `topic/<slug>` tags into member notes (see
+   below).
+
+#### `_system/topics/` MOCs (render)
+
+`topics render` writes Maps of Content into `<vault>/_system/topics/`:
+
+- `_system/topics/index.md` — an **areas → topics** outline with
+  `[[_system/topics/<slug>]]` wikilinks, member counts, and `kind/status`.
+- `_system/topics/<slug>.md` — one MOC per topic: label, keywords, and a `## Notes` list
+  of member `[[Knowledge/...]]` wikilinks sorted by score.
+
+Both carry frontmatter `type: system, generated: true`. Bodies contain **no timestamps**
+and members are deterministically ordered, so re-rendering is byte-identical (idempotent).
+`_system/topics/` lives **outside `Knowledge/`**, so `sync` never embeds these MOCs — they
+are pure derived views, rebuildable from the cache at any time.
+
+`render` also updates `<vault>/_system/_taxonomy.md`: it splices a table of `proposed`
+discovered topics (slug, keywords, size) **between stable markers**
+`<!-- KB-PROPOSALS:START -->` … `<!-- KB-PROPOSALS:END -->`, creating the block if absent
+and preserving the rest of the file (render-not-append).
+
+```bash
+kb-engine --vault "<vault>" topics render --json
+```
+
+`--json` emits `{n_topics, n_areas, index_path, taxonomy_path}`.
+
+#### `topic/<slug>` tag convention (apply)
+
+`topics apply` writes membership back into notes as frontmatter tags namespaced under
+`topic/` — e.g. a note in topic `rust-async-tokio` gains the tag `topic/rust-async-tokio`.
+This namespace keeps machine-assigned topic tags distinct from the human taxonomy
+(`Dev/Rust`, `AI/RAG`, …). It defaults to `--status active`, so `proposed` topics stay
+proposed until promoted; only members of topics with the given status are tagged. Tags are
+de-duplicated, the note body and other frontmatter are preserved, and member files missing
+on disk are skipped and reported (`skipped_missing`). Re-running adds nothing new.
+
+```bash
+kb-engine --vault "<vault>" topics apply --status active --json
+```
+
+`--json` emits `{status, n_changed, n_tags_added, skipped_missing}`.
+
 ## Development & testing
 
 The bulk of the suite is torch-free: a deterministic `FakeEmbedder` plus temp
