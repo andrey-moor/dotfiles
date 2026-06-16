@@ -83,7 +83,7 @@ Two layers, with the Obsidian vault as the single source of truth.
 └───────────────────────────┬──────────────────────────────────┘
                             │ drives (CLI --json)
 ┌───────────────────────────▼──────────────────────────────────┐
-│  kb-engine  (NEW, small Python CLI — its own project)         │
+│  kb-engine  (NEW, small Python CLI — in-repo project)         │
 │  • jina-v3 embeddings (local) · SQLite vector cache           │
 │  • HDBSCAN/BERTopic topics  +  agglomerative AREAS layer      │
 │  • per-topic centroids → cheap incremental assignment         │
@@ -353,10 +353,14 @@ plan. Dependency-ordered:
 
 ## 10. Open decisions (resolve at plan time)
 
-1. **kb-engine repo location** — recommend a standalone repo (mirroring orrery-engine's home,
-   e.g. `~/Documents/Personal/forge/kb-engine`), installed via nix/uv; dotfiles just wires it up.
-   Heavy ML deps (torch/transformers/bertopic/umap/hdbscan, ~3GB) argue against vendoring into
-   dotfiles.
+1. **kb-engine location — DECIDED: lives in this dotfiles repo.** A self-contained uv project in
+   a top-level subdirectory (e.g. `kb-engine/`), version-controlled with the rest of the repo.
+   Only source + lockfile are committed; heavy ML deps (torch/transformers/bertopic/umap/hdbscan)
+   are resolved at build time, not vendored. Installed/wired via the repo's existing Nix tooling
+   (a `modules/home/dev/` module that exposes the CLI on `PATH`); the `kb` skill resolves the
+   binary from there. *Plan-time:* exact packaging mechanism — a Nix-built derivation
+   (poetry2nix/uv2nix) vs. a uv devshell + wrapper script. Runs where the vault is present
+   (behemoth/macOS); installed but idle on Linux hosts.
 2. **Clustering implementation** — hand-rolled HDBSCAN + agglomerative vs BERTopic's wrapper
    (built-in hierarchical reduction). Decide against measured cluster quality on the real corpus.
 3. **Scheduler mechanism** — launchd (declarative in nix-darwin) triggering `claude` headless,
