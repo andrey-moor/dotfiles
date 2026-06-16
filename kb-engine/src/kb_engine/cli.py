@@ -670,12 +670,14 @@ def import_things(
     if dry_run:
         existing = existing_urls(cfg.vault_path)
         seen: set[str] = set()
-        would_write = would_skip_existing = 0
+        would_write = would_skip_existing = would_skip_dup_in_batch = 0
         for url, _title in items:
             normalized = normalize_url(url)
             if normalized in existing:
                 would_skip_existing += 1
-            elif normalized not in seen:
+            elif normalized in seen:
+                would_skip_dup_in_batch += 1
+            else:
                 seen.add(normalized)
                 would_write += 1
         sample = [
@@ -691,11 +693,13 @@ def import_things(
                 "n_urls": len(items),
                 "would_write": would_write,
                 "would_skip_existing": would_skip_existing,
+                "would_skip_dup_in_batch": would_skip_dup_in_batch,
                 "sample": sample,
             },
             as_json,
             f"[dry-run] tasks={len(tasks)} urls={len(items)} "
-            f"would_write={would_write} would_skip_existing={would_skip_existing}",
+            f"would_write={would_write} would_skip_existing={would_skip_existing} "
+            f"would_skip_dup_in_batch={would_skip_dup_in_batch}",
         )
         return
 

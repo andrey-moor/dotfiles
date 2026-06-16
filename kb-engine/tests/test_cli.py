@@ -362,11 +362,45 @@ def test_import_things_dry_run_reports_and_writes_nothing(tmp_path):
     assert out["n_urls"] == 2
     assert out["would_write"] == 2
     assert out["would_skip_existing"] == 0
+    assert out["would_skip_dup_in_batch"] == 0
     assert "sample" in out
     # nothing written
     import glob
 
     assert glob.glob(str(v / "Knowledge" / "inbox" / "*.md")) == []
+
+
+def test_import_things_dry_run_counts_in_batch_dups(tmp_path):
+    # Two open tasks carry the SAME url; dry-run must predict one write and one
+    # in-batch dup skip, matching the real run's skipped_dup_in_batch.
+    db = tmp_path / "main.sqlite"
+    c = sqlite3.connect(db)
+    c.executescript(
+        """
+      CREATE TABLE TMArea(uuid TEXT, title TEXT);
+      CREATE TABLE TMTask(type INT, status INT, trashed INT, title TEXT,
+                          notes TEXT, area TEXT, project TEXT, uuid TEXT);
+      INSERT INTO TMTask VALUES(0,0,0,'First','https://dup.com/x',NULL,NULL,'t1');
+      INSERT INTO TMTask VALUES(0,0,0,'Second','https://dup.com/x',NULL,NULL,'t2');
+    """
+    )
+    c.commit()
+    c.close()
+    v = _import_vault(tmp_path / "vault")
+    r = CliRunner().invoke(
+        main,
+        [
+            "--vault", str(v),
+            "import-things", "--things-db", str(db),
+            "--dry-run", "--json",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    out = json.loads(r.output)
+    assert out["n_urls"] == 2
+    assert out["would_write"] == 1
+    assert out["would_skip_dup_in_batch"] == 1
+    assert out["would_skip_existing"] == 0
 
 
 def test_import_things_real_run_writes_stubs(tmp_path):

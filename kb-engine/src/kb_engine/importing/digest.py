@@ -12,7 +12,9 @@ from kb_engine.models import Topic
 from kb_engine.store import Store
 
 # Discovered topics in these statuses still need a human to name/approve them.
-_PROPOSAL_STATUSES = frozenset({"proposed", "discovered"})
+# (Valid statuses are proposed/active/deprecated — "discovered" is a kind, never
+# a status, so it has no place here.)
+_PROPOSAL_STATUSES = frozenset({"proposed"})
 _MAX_UNFILED_LISTED = 25
 
 
