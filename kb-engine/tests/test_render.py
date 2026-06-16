@@ -253,6 +253,26 @@ def test_render_skips_traversal_slug_never_writes_outside_topics_dir(tmp_path):
     assert all("escape" not in p for p in out.topic_paths)
 
 
+def test_render_result_paths_are_vault_relative(tmp_path):
+    # Phase 3 contract: RenderResult paths are vault-relative posix strings
+    # (consistent with note paths), not absolute filesystem paths.
+    s = _store_with_topics(tmp_path)
+    out = render_topics(s, vault_path=tmp_path)
+    assert out.index_path == "_system/topics/index.md"
+    assert out.taxonomy_path == "_system/_taxonomy.md"
+    assert "_system/topics/rust-macros.md" in out.topic_paths
+    # all paths relative (no leading slash, no tmp_path prefix)
+    for p in [out.index_path, out.taxonomy_path, *out.topic_paths]:
+        assert not p.startswith("/")
+        assert str(tmp_path) not in p
+
+
+def test_render_result_topic_paths_is_tuple(tmp_path):
+    s = _store_with_topics(tmp_path)
+    out = render_topics(s, vault_path=tmp_path)
+    assert isinstance(out.topic_paths, tuple)
+
+
 def test_render_zero_topics(tmp_path):
     s = Store(tmp_path / "t.db")
     s.init_schema()

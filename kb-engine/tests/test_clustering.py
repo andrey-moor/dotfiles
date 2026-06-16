@@ -36,3 +36,15 @@ def test_adaptive_min_cluster_size_honors_explicit_override():
 def test_adaptive_min_cluster_size_scales_with_corpus(n, expected):
     c = UmapHdbscanClusterer()  # no explicit override
     assert c._adaptive(n) == expected
+
+
+def test_min_cluster_size_one_is_rejected():
+    # HDBSCAN requires min_cluster_size >= 2; a provided 1 must raise, not be
+    # silently treated as "adaptive" (the old truthiness bug).
+    with pytest.raises(ValueError):
+        UmapHdbscanClusterer(min_cluster_size=1)
+
+
+def test_min_cluster_size_none_uses_adaptive():
+    c = UmapHdbscanClusterer(min_cluster_size=None)
+    assert c._adaptive(50) == 2  # falls through to the adaptive ladder

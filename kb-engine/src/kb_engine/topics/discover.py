@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from kb_engine.models import Topic, TopicMember
+from kb_engine.topics._math import cosine, frozen_centroid
 from kb_engine.topics.clustering import Clusterer
 from kb_engine.topics.labeling import slugify, top_keywords
 from kb_engine.store import Store
@@ -17,13 +18,6 @@ def _unit_normalize(vector: np.ndarray) -> np.ndarray:
     if norm == 0.0:
         return vector.astype(np.float32)
     return (vector / norm).astype(np.float32)
-
-
-def _cosine(a: np.ndarray, b: np.ndarray) -> float:
-    denom = float(np.linalg.norm(a)) * float(np.linalg.norm(b))
-    if denom == 0.0:
-        return 0.0
-    return float(np.dot(a, b) / denom)
 
 
 def build_topics(
@@ -72,7 +66,7 @@ def build_topics(
         member_indices = indices_by_label[label]
         keywords = keywords_by_cluster[label]
 
-        centroid = _unit_normalize(np.mean(vectors[member_indices], axis=0))
+        centroid = frozen_centroid(_unit_normalize(np.mean(vectors[member_indices], axis=0)))
         slug = _unique_slug(slugify(" ".join(keywords)), used_slugs)
         used_slugs.add(slug)
         topic_label = " ".join(keywords[:_LABEL_KEYWORDS]).title()
@@ -90,7 +84,7 @@ def build_topics(
         members_by_slug[slug] = [
             TopicMember(
                 note_path=paths[i],
-                score=_cosine(vectors[i], centroid),
+                score=cosine(vectors[i], centroid),
                 source="auto",
             )
             for i in member_indices
@@ -112,9 +106,9 @@ def _unique_slug(base: str, used: set[str]) -> str:
 
 @dataclass(frozen=True)
 class DiscoverResult:
-    topics: list[Topic]
+    topics: tuple[Topic, ...]
     members_by_slug: dict[str, list[TopicMember]]
-    unfiled: list[str]
+    unfiled: tuple[str, ...]
     n_topics: int
     n_unfiled: int
 
@@ -129,7 +123,7 @@ def discover_topics(store: Store, clusterer: Clusterer) -> DiscoverResult:
     note_vectors = list(store.note_vectors())
     if not note_vectors:
         return DiscoverResult(
-            topics=[], members_by_slug={}, unfiled=[], n_topics=0, n_unfiled=0
+            topics=(), members_by_slug={}, unfiled=(), n_topics=0, n_unfiled=0
         )
 
     paths = [path for path, _ in note_vectors]
@@ -143,9 +137,9 @@ def discover_topics(store: Store, clusterer: Clusterer) -> DiscoverResult:
     store.save_topics(topics, members_by_slug)
 
     return DiscoverResult(
-        topics=topics,
+        topics=tuple(topics),
         members_by_slug=members_by_slug,
-        unfiled=unfiled,
+        unfiled=tuple(unfiled),
         n_topics=len(topics),
         n_unfiled=len(unfiled),
     )

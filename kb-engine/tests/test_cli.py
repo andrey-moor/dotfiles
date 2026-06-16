@@ -265,6 +265,9 @@ def test_topics_render_cli_writes_index(tmp_path, monkeypatch):
     out = json.loads(r.output)
     assert out["n_topics"] == 1
     assert (tmp_path / "_system" / "topics" / "index.md").exists()
+    # Phase 3 contract: emitted paths are vault-relative, not absolute.
+    assert out["index_path"] == "_system/topics/index.md"
+    assert out["taxonomy_path"] == "_system/_taxonomy.md"
 
 
 def test_topics_apply_cli_writes_tag_to_note(tmp_path, monkeypatch):

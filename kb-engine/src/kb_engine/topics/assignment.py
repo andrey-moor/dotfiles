@@ -3,18 +3,12 @@ from typing import Mapping
 import numpy as np
 
 from kb_engine.models import Topic
+from kb_engine.topics._math import cosine
 
 # (path, (topic_slug, score)) pairs reported for human review.
 Borderline = list[tuple[str, tuple[str, float]]]
 # {path: (topic_slug, score)} for high-confidence auto-members.
 Assigned = dict[str, tuple[str, float]]
-
-
-def _cosine(a: np.ndarray, b: np.ndarray) -> float:
-    denom = float(np.linalg.norm(a)) * float(np.linalg.norm(b))
-    if denom == 0.0:
-        return 0.0
-    return float(np.dot(a, b) / denom)
 
 
 def _best_topic(vector: np.ndarray, topics: list[Topic]) -> tuple[str, float] | None:
@@ -27,7 +21,7 @@ def _best_topic(vector: np.ndarray, topics: list[Topic]) -> tuple[str, float] | 
     for topic in topics:
         if float(np.linalg.norm(topic.centroid)) == 0.0:
             continue
-        score = _cosine(vector, topic.centroid)
+        score = cosine(vector, topic.centroid)
         if best is None or (score, topic.slug) > (best[1], best[0]):
             best = (topic.slug, score)
     return best

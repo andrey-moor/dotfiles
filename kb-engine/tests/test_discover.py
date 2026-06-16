@@ -66,7 +66,7 @@ def test_discover_topics_stores_and_reports(tmp_path):
     result = discover_topics(s, FakeClusterer(labels=[0, 0, -1]))
     assert result.n_topics == 1 and result.n_unfiled == 1
     assert {t.slug for t in s.load_topics()} == {result.topics[0].slug}
-    assert result.unfiled == ["Knowledge/c.md"]
+    assert result.unfiled == ("Knowledge/c.md",)
 
 
 def test_discover_topics_all_noise_yields_no_topics(tmp_path):
@@ -90,4 +90,22 @@ def test_discover_topics_empty_corpus(tmp_path):
     s.init_schema()
     result = discover_topics(s, FakeClusterer(labels=[]))
     assert result.n_topics == 0 and result.n_unfiled == 0
-    assert result.topics == [] and result.unfiled == []
+    assert result.topics == () and result.unfiled == ()
+
+
+def test_build_topics_centroid_is_immutable():
+    paths = ["Knowledge/a.md", "Knowledge/b.md"]
+    vecs = np.array([[1, 0], [0.9, 0.1]], np.float32)
+    texts = {"Knowledge/a.md": "rust macros", "Knowledge/b.md": "rust borrow"}
+    topics, _members, _unfiled = build_topics(paths, vecs, texts, np.array([0, 0]))
+    with np.testing.assert_raises(ValueError):
+        topics[0].centroid[0] = 9.0
+
+
+def test_discover_result_collection_fields_are_tuples(tmp_path):
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    _seed(s, [("Knowledge/a.md", "rust"), ("Knowledge/b.md", "rust"), ("Knowledge/c.md", "x")])
+    result = discover_topics(s, FakeClusterer(labels=[0, 0, -1]))
+    assert isinstance(result.topics, tuple)
+    assert isinstance(result.unfiled, tuple)

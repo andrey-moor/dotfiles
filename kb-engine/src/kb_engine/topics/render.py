@@ -19,9 +19,9 @@ _TOPIC_LINK_PREFIX = "_system/topics"
 class RenderResult:
     n_topics: int
     n_areas: int
-    index_path: str
-    topic_paths: list[str]
-    taxonomy_path: str
+    index_path: str  # vault-relative posix
+    topic_paths: tuple[str, ...]  # vault-relative posix
+    taxonomy_path: str  # vault-relative posix
 
 
 def _topics_by_slug(topics: list[Topic]) -> dict[str, Topic]:
@@ -189,6 +189,7 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
         topic.slug: store.topic_members(topic.slug) for topic in topics
     }
 
+    vault_resolved = vault_path.resolve()
     topics_dir = vault_path / _TOPICS_RELDIR
     topics_dir.mkdir(parents=True, exist_ok=True)
     topics_dir_resolved = topics_dir.resolve()
@@ -206,7 +207,8 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
         moc_path.write_text(
             _render_topic_moc(topic, members_by_slug.get(topic.slug, []))
         )
-        topic_paths.append(str(moc_path))
+        # Vault-relative posix (Phase 3 contract: consistent with note paths).
+        topic_paths.append(moc_path.relative_to(vault_resolved).as_posix())
 
     taxonomy_path = vault_path / _TAXONOMY_RELPATH
     taxonomy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -215,7 +217,7 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
     return RenderResult(
         n_topics=len(topics),
         n_areas=len(areas),
-        index_path=str(index_path),
-        topic_paths=topic_paths,
-        taxonomy_path=str(taxonomy_path),
+        index_path=_TOPICS_RELDIR.joinpath("index.md").as_posix(),
+        topic_paths=tuple(topic_paths),
+        taxonomy_path=_TAXONOMY_RELPATH.as_posix(),
     )

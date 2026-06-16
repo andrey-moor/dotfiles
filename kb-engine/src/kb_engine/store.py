@@ -7,6 +7,7 @@ from typing import Iterator
 import numpy as np
 
 from kb_engine.models import Area, Topic, TopicMember
+from kb_engine.topics._math import frozen_centroid
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
@@ -257,7 +258,7 @@ class Store:
                 slug=slug,
                 label=label,
                 keywords=tuple(json.loads(keywords)),
-                centroid=_from_blob(centroid),
+                centroid=frozen_centroid(_from_blob(centroid)),
                 kind=kind,
                 status=status,
             )

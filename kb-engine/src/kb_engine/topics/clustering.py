@@ -47,11 +47,18 @@ class UmapHdbscanClusterer:
     def __init__(
         self, min_cluster_size: int | None = None, random_state: int = _RANDOM_STATE
     ) -> None:
+        # HDBSCAN requires min_cluster_size >= 2; validate at construction so a
+        # bad value fails fast rather than deep inside fit_predict. None means
+        # "use the adaptive ladder".
+        if min_cluster_size is not None and min_cluster_size < 2:
+            raise ValueError(
+                f"min_cluster_size must be >= 2 (got {min_cluster_size})"
+            )
         self.min_cluster_size = min_cluster_size
         self.random_state = random_state
 
     def _adaptive(self, n: int) -> int:
-        if self.min_cluster_size:
+        if self.min_cluster_size is not None:
             return self.min_cluster_size
         if n < _SMALL_CORPUS:
             return _MIN_CLUSTER_SMALL

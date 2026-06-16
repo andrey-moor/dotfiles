@@ -1,7 +1,31 @@
 import numpy as np
+import pytest
 
 from kb_engine.models import Topic, TopicMember
 from kb_engine.store import Store
+
+
+def test_loaded_topic_centroid_is_immutable(tmp_path):
+    # frozen=True does not protect the ndarray's contents; centroids decoded from
+    # the store must be read-only so a caller can't mutate shared state.
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.add_manual_topic("rust", "Rust", "rust", np.array([1, 0, 0], np.float32))
+    loaded = s.load_topics()[0]
+    with pytest.raises(ValueError):
+        loaded.centroid[0] = 9.0
+
+
+def test_added_manual_topic_centroid_does_not_alias_caller_array(tmp_path):
+    # Mutating the caller's array after add_manual_topic must not change what was
+    # stored (the decoded centroid is independent and frozen).
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    vec = np.array([1.0, 0.0, 0.0], np.float32)
+    s.add_manual_topic("rust", "Rust", "rust", vec)
+    vec[0] = 5.0
+    loaded = s.load_topics()[0]
+    assert loaded.centroid[0] == 1.0
 
 
 def test_note_vectors_mean_pools_chunks(tmp_path):
