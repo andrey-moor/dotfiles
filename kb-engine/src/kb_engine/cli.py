@@ -16,6 +16,7 @@ from kb_engine.topics.areas import build_areas
 from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
+from kb_engine.topics.sticky import sticky_discover
 
 DEFAULT_SEARCH_LIMIT = 10
 DEFAULT_AREA_THRESHOLD = 0.3
@@ -174,11 +175,48 @@ def topics() -> None:
 
 
 @topics.command("discover")
+@click.option(
+    "--sticky",
+    is_flag=True,
+    help="Assign notes to existing active topics first, cluster only the residual.",
+)
+@click.option(
+    "--high",
+    default=DEFAULT_ASSIGN_HIGH,
+    show_default=True,
+    type=float,
+    help="Cosine threshold for assigning a note to an existing topic (--sticky).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
-def topics_discover(cfg: Config, as_json: bool) -> None:
-    """Cluster note vectors into topics (UMAP→HDBSCAN) and persist them."""
+def topics_discover(cfg: Config, sticky: bool, high: float, as_json: bool) -> None:
+    """Cluster note vectors into topics (UMAP→HDBSCAN) and persist them.
+
+    With ``--sticky``, notes scoring ``>= --high`` against an existing active
+    topic are kept on that topic and only the residual is clustered into new
+    proposals.
+    """
     store = Store(cfg.db_path)
+    if sticky:
+        try:
+            store.init_schema()
+            sticky_result = sticky_discover(store, _build_clusterer(), high=high)
+        finally:
+            store.close()
+        payload = {
+            "sticky": True,
+            "n_assigned_existing": sticky_result.n_assigned_existing,
+            "n_new_topics": sticky_result.n_new_topics,
+            "n_unfiled": sticky_result.n_unfiled,
+        }
+        _emit(
+            payload,
+            as_json,
+            f"Sticky discover: assigned_existing={sticky_result.n_assigned_existing} "
+            f"new_topics={sticky_result.n_new_topics} "
+            f"unfiled={sticky_result.n_unfiled}",
+        )
+        return
     try:
         store.init_schema()  # tolerate discovering against a never-synced DB
         result = discover_topics(store, _build_clusterer())
