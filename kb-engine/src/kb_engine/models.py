@@ -1,6 +1,8 @@
 import types
 from dataclasses import dataclass
 
+import numpy as np
+
 
 @dataclass(frozen=True)
 class Note:
@@ -26,3 +28,20 @@ class SearchHit:
     title: str
     score: float
     snippet: str
+
+
+@dataclass(frozen=True)
+class Topic:
+    slug: str
+    label: str
+    keywords: tuple[str, ...]
+    centroid: np.ndarray  # float32, unit-normalized
+    kind: str  # "discovered" | "manual"
+    status: str  # "proposed" | "active" | "deprecated"
+
+
+@dataclass(frozen=True)
+class TopicMember:
+    note_path: str
+    score: float  # cosine to centroid
+    source: str  # "auto" | "seed" | "user"

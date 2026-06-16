@@ -6,6 +6,8 @@ from typing import Iterator
 
 import numpy as np
 
+from kb_engine.models import Topic, TopicMember
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
   path TEXT PRIMARY KEY, title TEXT, sha256 TEXT NOT NULL, tags TEXT
@@ -16,6 +18,15 @@ CREATE TABLE IF NOT EXISTS chunks (
   FOREIGN KEY(note_path) REFERENCES notes(path) ON DELETE CASCADE
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, note_path UNINDEXED);
+CREATE TABLE IF NOT EXISTS topics (
+  slug TEXT PRIMARY KEY, label TEXT, keywords TEXT, centroid BLOB NOT NULL,
+  kind TEXT NOT NULL, status TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS topic_members (
+  topic_slug TEXT NOT NULL, note_path TEXT NOT NULL, score REAL, source TEXT,
+  PRIMARY KEY (topic_slug, note_path),
+  FOREIGN KEY (topic_slug) REFERENCES topics(slug) ON DELETE CASCADE
+);
 """
 
 # FTS terms = unicode word runs that may contain mid-word hyphens (e.g.
@@ -105,6 +116,89 @@ class Store:
             "SELECT note_path, ordinal, vector FROM chunks ORDER BY note_path, ordinal"
         ):
             yield note_path, ordinal, _from_blob(blob)
+
+    def note_vectors(self) -> Iterator[tuple[str, np.ndarray]]:
+        """Yield one mean-pooled vector per note, ordered by note path.
+
+        Chunk vectors for a note are averaged into a single note-level vector.
+        """
+        current_path: str | None = None
+        acc: list[np.ndarray] = []
+        for note_path, _ordinal, vector in self.iter_vectors():
+            if note_path != current_path:
+                if current_path is not None:
+                    yield current_path, np.mean(acc, axis=0).astype(np.float32)
+                current_path = note_path
+                acc = []
+            acc.append(vector)
+        if current_path is not None:
+            yield current_path, np.mean(acc, axis=0).astype(np.float32)
+
+    def save_topics(
+        self,
+        topics: list[Topic],
+        members_by_slug: dict[str, list[TopicMember]],
+    ) -> None:
+        """Persist discovered topics + members in a single transaction.
+
+        Existing ``kind='discovered'`` topics are deleted first (cascading their
+        members) so a re-discover replaces stale proposals, while ``kind='manual'``
+        topics are left untouched.
+        """
+        with self._conn:
+            self._conn.execute("DELETE FROM topics WHERE kind='discovered'")
+            for topic in topics:
+                self._conn.execute(
+                    """
+                    INSERT INTO topics(slug, label, keywords, centroid, kind, status)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        topic.slug,
+                        topic.label,
+                        json.dumps(list(topic.keywords)),
+                        _to_blob(topic.centroid),
+                        topic.kind,
+                        topic.status,
+                    ),
+                )
+                for member in members_by_slug.get(topic.slug, []):
+                    self._conn.execute(
+                        """
+                        INSERT INTO topic_members(topic_slug, note_path, score, source)
+                        VALUES(?, ?, ?, ?)
+                        """,
+                        (topic.slug, member.note_path, member.score, member.source),
+                    )
+
+    def load_topics(self) -> list[Topic]:
+        rows = self._conn.execute(
+            "SELECT slug, label, keywords, centroid, kind, status FROM topics ORDER BY slug"
+        ).fetchall()
+        return [
+            Topic(
+                slug=slug,
+                label=label,
+                keywords=tuple(json.loads(keywords)),
+                centroid=_from_blob(centroid),
+                kind=kind,
+                status=status,
+            )
+            for slug, label, keywords, centroid, kind, status in rows
+        ]
+
+    def topic_members(self, slug: str) -> list[TopicMember]:
+        rows = self._conn.execute(
+            """
+            SELECT note_path, score, source FROM topic_members
+            WHERE topic_slug=? ORDER BY score DESC, note_path
+            """,
+            (slug,),
+        ).fetchall()
+        return [
+            TopicMember(note_path=note_path, score=score, source=source)
+            for note_path, score, source in rows
+        ]
 
     def keyword_search(self, query: str, limit: int = 20) -> list[tuple[str, float]]:
         match = _sanitize_fts_query(query)
