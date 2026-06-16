@@ -6,10 +6,11 @@ with lib;
 let
   cfg = config.modules.dev.kb-engine;
 
-  # Wrapper: run the in-repo uv project with the [ml] extra (jina-v3 model stack).
+  # Wrapper: run the in-repo uv project with the [ml] (jina-v3 embeddings) and
+  # [topics] (umap/hdbscan clustering) extras — both are needed for full function.
   kbEngine = pkgs.writeShellScriptBin "kb-engine" ''
     exec ${pkgs.uv}/bin/uv run --project ${config.modules.dotfilesDir}/kb-engine \
-      --extra ml kb-engine "$@"
+      --extra ml --extra topics kb-engine "$@"
   '';
 in {
   options.modules.dev.kb-engine = {
