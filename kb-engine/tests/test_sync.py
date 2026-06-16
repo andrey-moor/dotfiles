@@ -73,3 +73,19 @@ def test_rebuild_drops_then_resyncs(tmp_path):
     st = rebuild(cfg, store, FakeEmbedder(dim=16))
     assert st.added == 1 and st.deleted == 0
     assert store.note_sha("Knowledge/ghost.md") is None
+
+
+def test_sync_no_knowledge_dir_is_clean_noop(tmp_path):
+    # Vault with no Knowledge/ subdir at all → nothing to embed, no error.
+    cfg = Config(vault_path=tmp_path, db_path=tmp_path / "t.db")
+    st = sync(cfg, Store(cfg.db_path), FakeEmbedder(dim=16))
+    assert st.added == 0 and st.changed == 0 and st.deleted == 0
+
+
+def test_sync_skips_directory_named_like_markdown(tmp_path):
+    # rglob("*.md") also matches directories; a dir ending in .md must be skipped.
+    v = _vault(tmp_path)
+    (v / "Knowledge" / "weird.md").mkdir()  # a *directory* whose name ends in .md
+    cfg = Config(vault_path=v, db_path=tmp_path / "t.db")
+    # Only the real a.md file is embedded; the bogus directory is ignored.
+    assert sync(cfg, Store(cfg.db_path), FakeEmbedder(dim=16)).added == 1

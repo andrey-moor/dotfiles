@@ -18,3 +18,10 @@ def test_iter_notes_skips_non_md_and_returns_relative_paths(tmp_path):
     (tmp_path / "ignore.txt").write_text("nope")
     notes = list(iter_notes(tmp_path))
     assert [n.path for n in notes] == ["a.md"]
+
+
+def test_scalar_frontmatter_tag_is_coerced_to_single_tag(tmp_path):
+    # YAML `tags: AI/RAG` (a bare string, not a list) → one tag, not characters.
+    (tmp_path / "scalar.md").write_text("---\ntitle: S\ntags: AI/RAG\n---\nbody")
+    note = read_note(tmp_path / "scalar.md", base=tmp_path)
+    assert note.tags == ("AI/RAG",)

@@ -26,3 +26,10 @@ def test_long_note_splits_into_multiple_ordered_chunks():
     chunks = chunk_note(_note(body), max_tokens=256)
     assert len(chunks) > 1
     assert [c.ordinal for c in chunks] == list(range(len(chunks)))
+
+
+def test_empty_body_yields_single_title_only_chunk():
+    chunks = chunk_note(_note("   \n\t  "), max_tokens=512)
+    assert len(chunks) == 1
+    assert chunks[0].ordinal == 0
+    assert chunks[0].text == "X"  # just the title, no body
