@@ -209,6 +209,7 @@ with lib;
           bazel.enable = true;
           hunk.enable = true;
           copilot.enable = true;
+          kb-engine.enable = true;
         };
       };
     };
