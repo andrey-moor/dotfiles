@@ -8,8 +8,9 @@ description: >-
   (8) Capture answer ("capture this", "save this answer", "remember this"),
   (9) KB overview ("index", "what's in my KB"),
   (10) Topics ("discover topics", "restructure my taxonomy", "what topics emerged", "cluster my notes"),
-  (11) Review ("review my KB", "kb review", "do my weekly review", "process the digest", responding to the weekly digest nudge).
-  Requires Obsidian MCP server (mcpvault). Topics (10) and Review (11) additionally use the local `kb-engine` CLI.
+  (11) Review ("review my KB", "kb review", "do my weekly review", "process the digest", responding to the weekly digest nudge),
+  (12) Surface ("what do I have related to X", "surface notes for my current project", "what's relevant to what I'm working on now").
+  Requires Obsidian MCP server (mcpvault). Topics (10), Review (11), and Surface (12) additionally use the local `kb-engine` CLI.
 ---
 
 # Knowledge Base Manager
@@ -130,14 +131,30 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 
 ### 6. Synthesize
 
-**Triggers**: "synthesize", "compile wiki", "summarize topic", "create wiki article", `/kb:synthesize`
+**Triggers**: "synthesize", "compile wiki", "summarize topic", "create wiki article",
+"what should I synthesize", `/kb:synthesize`
+
+**Suggesting targets (no topic given):** run the engine to find topics that have
+enough material but no wiki article yet, then offer to compile them:
+
+```bash
+kb-engine synthesis-candidates --min 5 --json
+```
+
+Returns `{candidates:[{slug, label, size}]}` — discovered/manual topics with **≥5
+members** and **no** `Knowledge/wiki/<slug>.md`, biggest first. Present them and offer
+`/kb:synthesize <slug>` for each. This is in **addition** to the existing tag-based
+suggestion (any specific subtag with 5+ sources and no wiki, skipping cross-cutting tags
+like Tutorials/Reference/Inspiration/Tools).
+
+**Compiling a given topic:**
 
 1. Resolve topic — can be a taxonomy tag (`AI/RAG`) or freeform description (`Rust LLM tools`).
 2. Find source notes by tag match (tag-based) or content search (freeform).
 3. **Coherence check** — if notes cover distinct sub-topics, warn before synthesizing.
 4. Create or incrementally update wiki article in `Knowledge/wiki/` (see [references/wiki-schema.md](references/wiki-schema.md)).
 5. Update source notes with backlinks to wiki article.
-5. Update index.
+6. Update index.
 
 ### 7. Lint
 
@@ -295,6 +312,43 @@ Note: the launchd job refreshes the digest weekly, so the backlog can't silently
 the nudge keeps reminding you until the checklist is clear.
 
 See `/kb:review` for the command reference.
+
+### 12. Surface
+
+**Triggers**: "what do I have related to X", "surface notes for my current project",
+"what's relevant to <note>", "what's relevant to what I'm working on now", `/kb:surface`
+
+Proactive surfacing — given **what you're working on now** (a description, a project, or
+a specific note), return the most semantically relevant KB notes. This is **engine-driven
+and read-only**: the local `kb-engine` does the retrieval; you present and offer follow-ups.
+Assume `kb-engine` is on `PATH` (Nix wrapper) over the iCloud `Main` vault, and use
+`--json` so you can parse it.
+
+**Flow:**
+
+1. Decide the mode from what the user gave you:
+   - **A description / project / topic** → query mode:
+     ```bash
+     kb-engine related --query "<the context, e.g. long-term memory for agents>" --limit 10 --json
+     ```
+   - **A specific note** (a path or an obvious note reference) → note mode (surfaces its
+     nearest neighbors by mean-vector cosine, excluding the note itself):
+     ```bash
+     kb-engine related --to "Knowledge/<note>.md" --limit 10 --json
+     ```
+   Pass **exactly one** of `--query` / `--to` (the command errors otherwise).
+
+2. Both emit `{hits:[{note_path, title, score}]}`, ranked best-first. If `hits` is empty,
+   say nothing matched and stop.
+
+3. **Present** the ranked notes (title + path + score). Then offer follow-ups:
+   - open one in Obsidian / read it (`mcp__obsidian__read_note`),
+   - `/kb:synthesize` a wiki if several relevant notes cluster on one topic,
+   - refine the query.
+
+The engine never mutates the vault here — surfacing is purely read-only retrieval.
+
+See `/kb:surface` for the command reference.
 
 ## MCP Tool Reference
 

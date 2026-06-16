@@ -9,8 +9,24 @@ Topics can be taxonomy tags OR freeform descriptions:
 - `/kb:synthesize AI/RAG` — matches a specific tag
 - `/kb:synthesize "Rust LLM tools"` — freeform topic spanning Dev/Rust + AI/LLMs
 - `/kb:synthesize "indie app business"` — freeform topic spanning Business/SaaS + Business/Startups
+- `/kb:synthesize` (no topic) — suggest synthesis candidates from the engine (step 0)
 
 ## Instructions
+
+### 0. Suggest candidates (no topic given)
+
+If `$ARGUMENTS` has no topic (empty, or only `--full`), run the engine to find topics
+that have enough material but no wiki article yet:
+
+```bash
+kb-engine synthesis-candidates --min 5 --json
+```
+
+Returns `{candidates:[{slug, label, size}]}` — discovered/manual topics with **≥5
+members** and **no** `Knowledge/wiki/<slug>.md`, sorted biggest first. Present them and
+let the user pick one to synthesize (then continue at step 1 with that slug). If the list
+is empty, say so and stop. The engine assumes the iCloud `Main` vault and is on `PATH`
+(Nix wrapper); use `--json` so you can parse it.
 
 ### 1. Resolve topic
 
