@@ -32,6 +32,26 @@ def test_build_topics_centroids_labels_and_noise():
     assert all(0.0 <= m.score <= 1.0001 for m in members[t.slug])
 
 
+def test_build_topics_suffixes_duplicate_slugs():
+    # Two distinct clusters whose keyword labels slugify identically must get
+    # disambiguated slugs (the second gets a "-2" suffix).
+    paths = ["Knowledge/a.md", "Knowledge/b.md", "Knowledge/c.md", "Knowledge/d.md"]
+    vecs = np.array([[1, 0], [0.9, 0.1], [0, 1], [0.1, 0.9]], np.float32)
+    texts = {
+        "Knowledge/a.md": "rust borrow",
+        "Knowledge/b.md": "rust borrow",
+        "Knowledge/c.md": "rust borrow",
+        "Knowledge/d.md": "rust borrow",
+    }
+    labels = np.array([0, 0, 1, 1])  # two equal-size clusters, same keywords
+    topics, _members, unfiled = build_topics(paths, vecs, texts, labels)
+    slugs = [t.slug for t in topics]
+    assert len(topics) == 2
+    assert len(set(slugs)) == 2  # slugs disambiguated, not collided
+    assert any(s.endswith("-2") for s in slugs)
+    assert unfiled == []
+
+
 def test_discover_topics_stores_and_reports(tmp_path):
     s = Store(tmp_path / "t.db")
     s.init_schema()

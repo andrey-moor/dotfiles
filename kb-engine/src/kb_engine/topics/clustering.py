@@ -60,12 +60,13 @@ class UmapHdbscanClusterer:
         return _MIN_CLUSTER_LARGE
 
     def cluster(self, vectors: np.ndarray) -> np.ndarray:
-        import hdbscan
-        import umap
-
         n = len(vectors)
         if n < _MIN_NOTES:
             return np.full(n, -1, dtype=int)
+
+        import hdbscan
+        import umap
+
         n_components = min(_MAX_UMAP_COMPONENTS, n - 1)
         n_neighbors = min(_MAX_UMAP_NEIGHBORS, max(2, n - 1))
         reduced = umap.UMAP(

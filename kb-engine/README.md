@@ -68,6 +68,30 @@ The SQLite cache lives under `~/.local/state/kb-engine/` by default; override th
 path with `--db <path>`. Because it is derived purely from the vault, deleting it
 and running `sync` (or `rebuild`) reconstructs it exactly.
 
+## Topics
+
+`topics discover` clusters the synced note vectors into topics. Each note's
+chunk vectors are mean-pooled, reduced with **UMAP** (`metric="cosine"`), and
+clustered with **HDBSCAN**; unclustered notes are reported as an explicit
+**unfiled** residual. Per topic the engine computes a unit-normalized centroid
+and a keyword label (a simple c-TF-IDF over note titles + first chunks). Topics
+and their members persist in the SQLite cache; re-running `discover` replaces the
+previously discovered topics.
+
+```bash
+uv sync --extra topics        # installs umap-learn + hdbscan + scikit-learn
+
+# Discover topics over the current cache (sync first); --json for machine output
+kb-engine --vault "<vault>" topics discover
+kb-engine --vault "<vault>" topics discover --json
+```
+
+`--json` emits `{n_topics, n_unfiled, topics:[{slug, label, keywords, size}]}`.
+
+The engine stays **LLM-free**: labels here are deterministic keyword slugs.
+Pretty, human-readable topic names are produced later by the `kb` skill layer —
+this engine only provides the clustering, centroids, and keyword labels.
+
 ## Development & testing
 
 The bulk of the suite is torch-free: a deterministic `FakeEmbedder` plus temp
@@ -83,14 +107,24 @@ Environment toggles:
 - **`[ml]` extra** — installs `sentence-transformers` + `torch` + the pinned
   `transformers<5.0` / `einops` needed by jina-v3. Required to actually embed;
   not needed for the unit suite or `--help`.
+- **`[topics]` extra** — installs `umap-learn` + `hdbscan` + `scikit-learn` for
+  the real clusterer. Imported lazily inside `topics discover`; the unit suite
+  uses a deterministic `FakeClusterer` and needs none of it.
 - **`KB_FAKE_EMBED=1`** — the CLI uses the deterministic `FakeEmbedder` instead
   of the real model. Used by the CLI tests to exercise `sync`/`search` without
   downloading a model.
-- **`KB_RUN_INTEGRATION=1`** — opt in to the single real-model integration test
-  (`tests/test_integration_real_model.py`), which loads jina-v3 and asserts
-  semantic ranking on fixtures:
+- **`KB_FAKE_CLUSTER=0,0,-1`** — `topics discover` uses a `FakeClusterer` with
+  the given comma-separated labels (`-1` = noise) instead of UMAP→HDBSCAN. Used
+  by the CLI tests to exercise discovery deterministically without the ML stack.
+- **`KB_RUN_INTEGRATION=1`** — opt in to the real-model/clustering integration
+  tests, excluded from the default run:
 
   ```bash
+  # real jina-v3 semantic ranking
   uv sync --extra ml --extra dev
   KB_RUN_INTEGRATION=1 uv run pytest tests/test_integration_real_model.py -m integration -v
+
+  # real UMAP→HDBSCAN clustering on separated fixtures
+  uv sync --extra topics --extra dev
+  KB_RUN_INTEGRATION=1 uv run pytest tests/test_integration_clustering.py -m integration -v
   ```
