@@ -219,12 +219,16 @@ def related(
     cfg: Config, query: str | None, to_note: str | None, limit: int, as_json: bool
 ) -> None:
     """Surface KB notes relevant to a query (--query) or a note (--to)."""
-    if bool(query) == bool(to_note):
+    # Distinguish "not provided" (None) from an empty string so that
+    # `--query "" --to X` is rejected rather than silently running the --to branch.
+    if (query is None) == (to_note is None):
         raise click.UsageError("Pass exactly one of --query or --to.")
+    if query is not None and not query.strip():
+        raise click.UsageError("--query must not be empty.")
     store = Store(cfg.db_path)
     try:
         store.init_schema()  # tolerate a never-synced DB
-        if query:
+        if query is not None:
             results = related_to_query(store, _build_embedder(cfg), query, limit=limit)
         else:
             results = related_to_note(store, to_note, limit=limit)

@@ -666,3 +666,39 @@ def test_related_requires_exactly_one_of_query_or_to(tmp_path, monkeypatch):
     )
     assert r_both.exit_code != 0
     assert "exactly one" in r_both.output.lower()
+
+
+def test_related_empty_query_with_to_does_not_silently_run_to(tmp_path, monkeypatch):
+    # --query "" --to X must NOT fall through to the --to branch: an empty string
+    # was provided for --query, so exactly-one-of is satisfied and the empty
+    # query is rejected on its own merit.
+    v = _related_vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    _invoke(args + ["sync"], monkeypatch)
+    r = _invoke(
+        args + ["related", "--query", "", "--to", "Knowledge/mem.md"], monkeypatch
+    )
+    assert r.exit_code != 0
+    assert "exactly one" in r.output.lower()
+
+
+def test_related_whitespace_query_is_rejected(tmp_path, monkeypatch):
+    v = _related_vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    _invoke(args + ["sync"], monkeypatch)
+    r = _invoke(args + ["related", "--query", "  "], monkeypatch)
+    assert r.exit_code != 0
+    assert "must not be empty" in r.output.lower()
+
+
+def test_related_to_ghost_note_returns_empty(tmp_path, monkeypatch):
+    # --to a note that was never synced: exits 0 with no hits (the CLI empty path).
+    v = _related_vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    _invoke(args + ["sync"], monkeypatch)
+    r = _invoke(args + ["related", "--to", "Knowledge/ghost.md", "--json"], monkeypatch)
+    assert r.exit_code == 0, r.output
+    assert json.loads(r.output) == {"hits": []}

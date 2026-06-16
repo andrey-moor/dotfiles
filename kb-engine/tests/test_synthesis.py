@@ -64,6 +64,52 @@ def test_no_topics_yields_no_candidates(tmp_path):
     assert synthesis_candidates(s, tmp_path, min_members=5) == []
 
 
+def test_existing_wiki_excludes_candidate_case_insensitively(tmp_path):
+    # On case-insensitive macOS APFS this passed regardless; on ext4
+    # (rocinante/stargazer) an uppercase wiki/RAG.md must still exclude the
+    # lowercase slug "rag".
+    (tmp_path / "Knowledge" / "wiki").mkdir(parents=True)
+    (tmp_path / "Knowledge" / "wiki" / "RAG.md").write_text(
+        "---\ntype: wiki\n---\n# RAG"
+    )
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    big = Topic(
+        slug="rag",
+        label="RAG",
+        keywords=("rag",),
+        centroid=np.ones(4, np.float32),
+        kind="discovered",
+        status="proposed",
+    )
+    s.save_topics(
+        [big],
+        {"rag": [TopicMember(f"Knowledge/r{i}.md", 0.9, "auto") for i in range(6)]},
+    )
+    assert synthesis_candidates(s, tmp_path, min_members=5) == []
+
+
+def test_missing_wiki_dir_yields_all_over_threshold_topics(tmp_path):
+    # No Knowledge/wiki dir at all: every over-threshold topic is a candidate
+    # (nothing to exclude), and we must not crash on the missing directory.
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    big = Topic(
+        slug="rag",
+        label="RAG",
+        keywords=("rag",),
+        centroid=np.ones(4, np.float32),
+        kind="discovered",
+        status="proposed",
+    )
+    s.save_topics(
+        [big],
+        {"rag": [TopicMember(f"Knowledge/r{i}.md", 0.9, "auto") for i in range(6)]},
+    )
+    cands = synthesis_candidates(s, tmp_path, min_members=5)
+    assert [c.slug for c in cands] == ["rag"]
+
+
 def test_candidates_sorted_by_size_desc(tmp_path):
     (tmp_path / "Knowledge" / "wiki").mkdir(parents=True)
     s = Store(tmp_path / "t.db")
