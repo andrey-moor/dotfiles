@@ -619,3 +619,50 @@ def test_synthesis_candidates_cli_human_empty(tmp_path):
     )
     assert r.exit_code == 0, r.output
     assert "no synthesis candidates" in r.output.lower()
+
+
+def _related_vault(tmp_path):
+    k = tmp_path / "Knowledge"
+    k.mkdir()
+    (k / "mem.md").write_text("---\ntitle: Memory\n---\nlong term memory for agents")
+    (k / "rust.md").write_text("---\ntitle: Rust\n---\nrust macros and traits")
+    return tmp_path
+
+
+def test_related_query_cli_json(tmp_path, monkeypatch):
+    v = _related_vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    _invoke(args + ["sync"], monkeypatch)
+    r = _invoke(args + ["related", "--query", "memory for agents", "--json"], monkeypatch)
+    assert r.exit_code == 0, r.output
+    hits = json.loads(r.output)["hits"]
+    assert hits and hits[0]["note_path"] == "Knowledge/mem.md"
+    assert hits[0]["title"] == "Memory"
+
+
+def test_related_to_note_cli_json(tmp_path, monkeypatch):
+    v = _related_vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    _invoke(args + ["sync"], monkeypatch)
+    r = _invoke(args + ["related", "--to", "Knowledge/mem.md", "--json"], monkeypatch)
+    assert r.exit_code == 0, r.output
+    hits = json.loads(r.output)["hits"]
+    assert "Knowledge/mem.md" not in [h["note_path"] for h in hits]  # excludes self
+
+
+def test_related_requires_exactly_one_of_query_or_to(tmp_path, monkeypatch):
+    v = _related_vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    # Neither provided -> usage error.
+    r_none = _invoke(args + ["related"], monkeypatch)
+    assert r_none.exit_code != 0
+    assert "exactly one" in r_none.output.lower()
+    # Both provided -> usage error.
+    r_both = _invoke(
+        args + ["related", "--query", "x", "--to", "Knowledge/mem.md"], monkeypatch
+    )
+    assert r_both.exit_code != 0
+    assert "exactly one" in r_both.output.lower()

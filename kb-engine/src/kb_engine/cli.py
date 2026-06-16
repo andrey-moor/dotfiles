@@ -15,6 +15,7 @@ from kb_engine.models import TopicMember
 from kb_engine.pipeline import count_inbox, run_pipeline, unfiled_notes
 from kb_engine.search import hybrid_search
 from kb_engine.store import SLUG_PATTERN, Store, is_valid_slug
+from kb_engine.surface import related_to_note, related_to_query
 from kb_engine.synthesis import synthesis_candidates
 from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
@@ -201,6 +202,47 @@ def synthesis_candidates_cmd(cfg: Config, min_members: int, as_json: bool) -> No
         return
     for row in rows:
         click.echo(f"{row['slug']}  ({row['size']} notes)  {row['label']}")
+
+
+@main.command()
+@click.option("--query", "query", default=None, help="Free-text context to surface notes for.")
+@click.option(
+    "--to",
+    "to_note",
+    default=None,
+    help="Vault-relative note path to surface related notes for.",
+)
+@click.option("--limit", default=DEFAULT_SEARCH_LIMIT, show_default=True, type=int)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def related(
+    cfg: Config, query: str | None, to_note: str | None, limit: int, as_json: bool
+) -> None:
+    """Surface KB notes relevant to a query (--query) or a note (--to)."""
+    if bool(query) == bool(to_note):
+        raise click.UsageError("Pass exactly one of --query or --to.")
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()  # tolerate a never-synced DB
+        if query:
+            results = related_to_query(store, _build_embedder(cfg), query, limit=limit)
+        else:
+            results = related_to_note(store, to_note, limit=limit)
+        hits = [
+            {"note_path": h.note_path, "title": h.title, "score": round(h.score, 6)}
+            for h in results
+        ]
+    finally:
+        store.close()
+
+    if as_json:
+        click.echo(json.dumps({"hits": hits}))
+        return
+    if not hits:
+        click.echo("No related notes.")
+        return
+    for hit in hits:
+        click.echo(f"{hit['score']:.4f}  {hit['title']}  ({hit['note_path']})")
 
 
 @main.command()
