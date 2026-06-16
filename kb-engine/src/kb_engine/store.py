@@ -217,6 +217,27 @@ class Store:
             for slug, label, keywords, centroid, kind, status in rows
         ]
 
+    def add_manual_topic(
+        self, slug: str, label: str, description: str, centroid: np.ndarray
+    ) -> None:
+        """Insert a ``kind='manual', status='active'`` topic anchored by ``centroid``.
+
+        The description is stored as the topic's single keyword for later
+        labeling context. Raises ``ValueError`` if the slug already exists.
+        """
+        if self._conn.execute(
+            "SELECT 1 FROM topics WHERE slug=?", (slug,)
+        ).fetchone():
+            raise ValueError(f"topic slug already exists: {slug}")
+        self._conn.execute(
+            """
+            INSERT INTO topics(slug, label, keywords, centroid, kind, status)
+            VALUES(?, ?, ?, ?, 'manual', 'active')
+            """,
+            (slug, label, json.dumps([description]), _to_blob(centroid)),
+        )
+        self._conn.commit()
+
     def topic_members(self, slug: str) -> list[TopicMember]:
         rows = self._conn.execute(
             """

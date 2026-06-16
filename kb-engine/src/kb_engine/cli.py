@@ -244,5 +244,69 @@ def topics_areas(cfg: Config, threshold: float, as_json: bool) -> None:
         click.echo(f"{row['slug']}  ({len(row['topics'])} topics)  [{topics_list}]")
 
 
+@topics.command("add")
+@click.argument("slug")
+@click.option("--label", required=True, help="Human-readable topic label.")
+@click.option("--description", required=True, help="Description embedded as the anchor.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_add(
+    cfg: Config, slug: str, label: str, description: str, as_json: bool
+) -> None:
+    """Add a manual topic anchored by an embedding of its label + description."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        centroid = _build_embedder(cfg).embed_query(f"{label}. {description}")
+        try:
+            store.add_manual_topic(slug, label, description, centroid)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+    finally:
+        store.close()
+    _emit(
+        {"slug": slug, "label": label, "kind": "manual", "status": "active"},
+        as_json,
+        f"Added manual topic {slug} ({label}).",
+    )
+
+
+@topics.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_list(cfg: Config, as_json: bool) -> None:
+    """List all topics (manual first, then discovered) with member counts."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        # Manual topics first, then discovered; within each, by slug.
+        loaded = sorted(
+            store.load_topics(), key=lambda t: (t.kind != "manual", t.slug)
+        )
+        rows = [
+            {
+                "slug": topic.slug,
+                "label": topic.label,
+                "kind": topic.kind,
+                "status": topic.status,
+                "size": len(store.topic_members(topic.slug)),
+            }
+            for topic in loaded
+        ]
+    finally:
+        store.close()
+
+    if as_json:
+        click.echo(json.dumps({"topics": rows}))
+        return
+    if not rows:
+        click.echo("No topics.")
+        return
+    for row in rows:
+        click.echo(
+            f"{row['slug']}  [{row['kind']}/{row['status']}]  ({row['size']} notes)"
+        )
+
+
 if __name__ == "__main__":
     main()
