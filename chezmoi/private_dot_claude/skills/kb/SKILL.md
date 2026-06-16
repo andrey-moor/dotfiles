@@ -6,8 +6,9 @@ description: >-
   (4) Taxonomy ("show tags", "add tag"), (5) Retag ("fix tags", "rename tag"),
   (6) Synthesize wiki ("synthesize topic", "compile wiki"), (7) Health check ("lint", "check KB"),
   (8) Capture answer ("capture this", "save this answer", "remember this"),
-  (9) KB overview ("index", "what's in my KB").
-  Requires Obsidian MCP server (mcpvault).
+  (9) KB overview ("index", "what's in my KB"),
+  (10) Topics ("discover topics", "restructure my taxonomy", "what topics emerged", "cluster my notes").
+  Requires Obsidian MCP server (mcpvault). Topics (10) additionally use the local `kb-engine` CLI.
 ---
 
 # Knowledge Base Manager
@@ -163,6 +164,83 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 **Triggers**: "index", "KB overview", "what's in my KB", `/kb:index`
 
 Regenerate `_system/index.md` with: stats, recent additions, topics by size, wiki articles, graph health.
+
+### 10. Topics
+
+**Triggers**: "discover topics", "restructure my taxonomy", "what topics emerged", "cluster my notes", `/kb:topics`
+
+This operation is **engine-driven**: the local `kb-engine` CLI does the deterministic
+compute (embedding, clustering, diffing, file writes); **Claude supplies the naming
+and judgment** the engine deliberately omits. The engine is **LLM-free** — its topic
+labels are raw keyword slugs (e.g. `rust-async-tokio`); your job is to turn those into
+human-readable labels and area names, present the restructure as a reviewable diff, and
+gate the write-backs.
+
+Assume `kb-engine` is on `PATH` (Nix wrapper) and the vault is the iCloud `Main` dir.
+Use `--json` on every command so you can parse the output.
+
+**Flow:**
+
+1. **Sync** the cache so topics reflect the current vault:
+   ```bash
+   kb-engine sync
+   ```
+
+2. **Discover** topics. Use `--sticky` so existing approved (manual/active) topics keep
+   their members and only the residual is clustered into new proposals:
+   ```bash
+   kb-engine topics discover --sticky --json
+   ```
+   Optionally run `kb-engine topics areas --json` to group topics into broader areas.
+
+3. **Diff against the existing taxonomy** to see how discovered structure maps onto the
+   tags already in `_system/_taxonomy.md`:
+   ```bash
+   kb-engine topics diff-taxonomy --json
+   ```
+   Returns `{mapping, new_topics, orphan_tags, covered_topics}`:
+   - `mapping` — each existing tag → ranked aligned topics (Jaccard overlap)
+   - `new_topics` — discovered topics no tag covers (**structure the data found that the taxonomy lacks**)
+   - `orphan_tags` — tags no topic aligns with (candidates to deprecate/merge)
+   - `covered_topics` — topics that align with an existing tag
+
+4. **LLM-name (Claude's job):** read the keyword-slug topics + their member notes and
+   propose nice human labels and area names. The engine cannot do this — naming and
+   judgment are yours. Use `kb-engine topics list --json` to see slugs/members; you can
+   also `kb-engine topics add <slug> --label "<Nice Label>" --description "<…>"` to anchor
+   a manual topic.
+
+5. **Present the restructure diff + proposals to the user.** Show: new topics (with your
+   proposed labels), how they map to existing tags, orphan tags, and proposed area names.
+   **Do not write anything yet** — wait for approval.
+
+6. **On approval, render** the MOCs + taxonomy proposals (idempotent, render-not-append):
+   ```bash
+   kb-engine topics render --json
+   ```
+   Writes `<vault>/_system/topics/index.md` (areas→topics outline) + one MOC per topic at
+   `<vault>/_system/topics/<slug>.md`, and splices a proposals table into
+   `<vault>/_system/_taxonomy.md` between `<!-- KB-PROPOSALS:START -->` … `<!-- KB-PROPOSALS:END -->`
+   markers (preserving the rest of the file). `_system/topics/` is outside `Knowledge/`,
+   so `sync` never embeds these MOCs.
+
+7. **Gated apply** — only after explicit user confirmation, write `topic/<slug>` tags into
+   member notes' frontmatter. The command itself IS the gate; there is no implicit apply.
+   It defaults to `--status active`, so discovered proposals stay `proposed` until promoted:
+   ```bash
+   kb-engine topics apply --status active --json
+   ```
+   Idempotent; reports `{n_changed, n_tags_added, skipped_missing}`. Member files missing
+   on disk are skipped and reported — surface those to the user, never silently drop them.
+
+**Conventions:**
+- MOCs live in `_system/topics/` (regenerable; excluded from embedding).
+- Topic membership is recorded on notes via the `topic/<slug>` frontmatter tag (namespaced
+  under `topic/`, distinct from human taxonomy tags like `Dev/Rust`).
+- The engine is the source of compute + file writes; Claude is the source of naming + the
+  approval gate. Never run `topics apply` without the user's explicit go-ahead.
+
+See `/kb:topics` for the per-subcommand command reference.
 
 ## MCP Tool Reference
 
