@@ -1,3 +1,4 @@
+import types
 from dataclasses import dataclass
 
 
@@ -8,7 +9,7 @@ class Note:
     body: str
     tags: tuple[str, ...]
     wikilinks: tuple[str, ...]
-    frontmatter: dict
+    frontmatter: types.MappingProxyType  # read-only view; Phase 2 will consume it
     sha256: str
 
 

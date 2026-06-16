@@ -1,5 +1,6 @@
 import hashlib
 import re
+import types
 from pathlib import Path
 from typing import Iterator
 
@@ -56,7 +57,7 @@ def read_note(path: Path, base: Path) -> Note:
         body=body,
         tags=tags,
         wikilinks=wikilinks,
-        frontmatter=dict(metadata),
+        frontmatter=types.MappingProxyType(dict(metadata)),
         sha256=sha256,
     )
 

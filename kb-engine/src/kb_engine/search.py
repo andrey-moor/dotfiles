@@ -17,7 +17,8 @@ def semantic_search(
     scored: dict[str, float] = {}
     for note_path, _ordinal, vec in store.iter_vectors():
         s = float(q @ vec)  # both unit-normalized → cosine similarity
-        if s > scored.get(note_path, -1.0):
+        # -inf sentinel so a first chunk with cosine exactly -1.0 still registers.
+        if s > scored.get(note_path, float("-inf")):
             scored[note_path] = s  # keep the best chunk per note
     return sorted(scored.items(), key=lambda kv: kv[1], reverse=True)[:limit]
 

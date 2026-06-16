@@ -1,4 +1,7 @@
 from pathlib import Path
+
+import pytest
+
 from kb_engine.vault import read_note, iter_notes
 
 FIX = Path(__file__).parent / "fixtures" / "notes"
@@ -44,6 +47,15 @@ def test_iter_notes_excludes_named_top_level_dirs(tmp_path):
         for n in iter_notes(knowledge, base=tmp_path, exclude_dirs=("inbox",))
     ]
     assert paths == ["Knowledge/a.md", "Knowledge/wiki/topic.md"]
+
+
+def test_frontmatter_is_read_only(tmp_path):
+    # frontmatter is a MappingProxyType on a frozen Note; mutation must fail.
+    (tmp_path / "fm.md").write_text("---\ntitle: F\nfoo: bar\n---\nbody")
+    note = read_note(tmp_path / "fm.md", base=tmp_path)
+    assert note.frontmatter["foo"] == "bar"
+    with pytest.raises(TypeError):
+        note.frontmatter["x"] = 1  # type: ignore[index]
 
 
 def test_scalar_frontmatter_tag_is_coerced_to_single_tag(tmp_path):

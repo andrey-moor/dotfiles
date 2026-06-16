@@ -1,6 +1,9 @@
-from typing import Protocol
+from typing import Protocol, TYPE_CHECKING
 import hashlib
 import numpy as np
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 
 class Embedder(Protocol):
@@ -39,7 +42,7 @@ class LocalJinaEmbedder:
         self.dim = dim
         self._model = None
 
-    def _load(self):
+    def _load(self) -> "SentenceTransformer":
         if self._model is None:
             from sentence_transformers import SentenceTransformer  # lazy
 
