@@ -24,6 +24,7 @@ from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
 from kb_engine.topics.sticky import sticky_discover
+from kb_engine.filing import apply_dispositions
 from kb_engine.topics.apply import apply_topic_tags
 from kb_engine.topics.render import render_topics
 from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
@@ -898,6 +899,70 @@ def pipeline(cfg: Config, as_json: bool) -> None:
         f"Pipeline: synced={result.synced} applied={result.applied} "
         f"proposals={result.proposals} inbox={result.inbox} "
         f"unfiled={result.unfiled} -> {result.digest_path}",
+    )
+
+
+@main.command("file")
+@click.option(
+    "--from",
+    "from_path",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="JSON file with dispositions (default: read from stdin).",
+)
+@click.option(
+    "--apply",
+    "apply_changes",
+    is_flag=True,
+    help="Apply dispositions (default: dry-run, writes nothing).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def file_cmd(cfg: Config, from_path: Path | None, apply_changes: bool, as_json: bool) -> None:
+    """Apply inbox dispositions: move notes from inbox/ to Knowledge/.
+
+    Reads a JSON array of dispositions from ``--from <path>`` or stdin.
+    Each disposition: ``{"filename": str, "status": str, "tags": list, "summary": str}``.
+    Valid statuses: ``reference``, ``archived``.
+
+    Dry-run by default; pass ``--apply`` to actually move files.
+    """
+    import sys
+
+    if from_path is not None:
+        raw = from_path.read_text()
+    else:
+        raw = sys.stdin.read()
+
+    try:
+        dispositions = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(f"Invalid JSON: {exc}") from exc
+
+    if not isinstance(dispositions, list):
+        raise click.ClickException("Dispositions must be a JSON array.")
+
+    dry_run = not apply_changes
+    result = apply_dispositions(cfg.vault_path, dispositions, dry_run=dry_run)
+
+    _emit(
+        {
+            "filed": result.n_filed,
+            "archived": result.n_archived,
+            "skipped_missing": list(result.skipped_missing),
+            "skipped_collision": list(result.skipped_collision),
+            "skipped_invalid": list(result.skipped_invalid),
+            "dry_run": dry_run,
+        },
+        as_json,
+        (
+            f"[dry-run] " if dry_run else ""
+        ) + (
+            f"filed={result.n_filed} archived={result.n_archived} "
+            f"skipped_missing={len(result.skipped_missing)} "
+            f"skipped_collision={len(result.skipped_collision)} "
+            f"skipped_invalid={len(result.skipped_invalid)}"
+        ),
     )
 
 
