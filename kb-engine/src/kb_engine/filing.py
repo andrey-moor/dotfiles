@@ -24,8 +24,8 @@ def _is_valid_filename(filename: str) -> bool:
         return False
     if filename in (".", ".."):
         return False
-    # Reject absolute paths (platform-independent: leading slash covered by above,
-    # but also catch Windows-style "C:\..." — backslash already caught)
+    # Reject absolute paths: on POSIX the leading-slash check above covers "/etc/passwd";
+    # the backslash check is the real defense against "..\evil" traversal paths.
     p = Path(filename)
     if p.is_absolute():
         return False
@@ -66,10 +66,31 @@ def apply_dispositions(
     skipped_invalid: list[str] = []
 
     for disp in dispositions:
-        filename: str = disp.get("filename", "")
+        # Fix 1: Guard malformed disposition items (non-dict)
+        if not isinstance(disp, dict):
+            skipped_invalid.append(repr(disp))
+            continue
+
+        filename = disp.get("filename", "")
+        # Fix 1: Guard non-string filename
+        if not isinstance(filename, str):
+            skipped_invalid.append(str(filename))
+            continue
+
         status: str = disp.get("status", "")
-        tags: list[str] = list(disp.get("tags") or [])
-        summary: str = disp.get("summary", "")
+
+        # Fix 2: Type-guard tags
+        raw_tags = disp.get("tags") or []
+        if not isinstance(raw_tags, list):
+            skipped_invalid.append(filename)
+            continue
+        tags: list[str] = [str(t) for t in raw_tags]
+
+        # Fix 2: Type-guard summary
+        summary = disp.get("summary", "")
+        if not isinstance(summary, str):
+            skipped_invalid.append(filename)
+            continue
 
         # 1. Validate filename
         if not _is_valid_filename(filename):
@@ -94,6 +115,11 @@ def apply_dispositions(
             skipped_missing.append(filename)
             continue
 
+        # Fix 4: Reject a symlink at the destination (before collision check)
+        if dst.is_symlink():
+            skipped_invalid.append(filename)
+            continue
+
         # 5. Destination must not already exist
         if dst.exists():
             skipped_collision.append(filename)
@@ -109,17 +135,18 @@ def apply_dispositions(
         if not body or not body.strip() or _PLACEHOLDER_MARKER in body:
             post.content = f"## Notes\n\n{summary}"
 
-        # 7. Write or skip based on dry_run; only tally on actual writes
-        if dry_run:
-            continue
-
-        dst.write_text(frontmatter.dumps(post) + "\n")
-        src.unlink()
-
+        # Fix 3: Classify and tally in BOTH modes; gate only the two side-effects
         if status == "reference":
             n_filed += 1
         else:
             n_archived += 1
+
+        if dry_run:
+            continue
+
+        # Fix 5: Add encoding="utf-8" to write_text
+        dst.write_text(frontmatter.dumps(post) + "\n", encoding="utf-8")
+        src.unlink()
 
     return FileResult(
         n_filed=n_filed,

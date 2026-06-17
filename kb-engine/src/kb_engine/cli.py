@@ -1,4 +1,5 @@
 import json
+import sys
 import os
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -927,8 +928,6 @@ def file_cmd(cfg: Config, from_path: Path | None, apply_changes: bool, as_json: 
 
     Dry-run by default; pass ``--apply`` to actually move files.
     """
-    import sys
-
     if from_path is not None:
         raw = from_path.read_text()
     else:
