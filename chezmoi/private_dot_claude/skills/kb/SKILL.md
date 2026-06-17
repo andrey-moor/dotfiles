@@ -278,9 +278,12 @@ backlog, proposals awaiting naming/approval, and unfiled notes. Read it first.
 
 **Flow:**
 
-1. **Read the digest.** `mcp__obsidian__read_note` on `Main/_system/kb-digest.md`.
-   It is regenerated weekly by the launchd job; its "Needs review" checklist drives
-   the rest of this pass. If everything is `- [x] Nothing to review.`, say so and stop.
+1. **Refresh, then read the digest.** The digest is only as fresh as the last pipeline run
+   (weekly via launchd, or whenever last run by hand), so off-cycle reviews can show stale
+   counts. Refresh the live counts first — fast and LLM-free:
+   `kb-engine --vault "<Main>" digest --json`. Then `mcp__obsidian__read_note` on
+   `Main/_system/kb-digest.md`. Its "Needs review" checklist drives the rest of this pass.
+   If everything is `- [x] Nothing to review.`, say so and stop.
 
 2. **Process new inbox items** (digest "inbox backlog" > 0). Run the **Process**
    operation (op 2 / `/kb:process`) over `Knowledge/inbox/`: for each unprocessed note,

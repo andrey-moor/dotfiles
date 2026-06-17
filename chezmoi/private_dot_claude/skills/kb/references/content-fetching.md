@@ -40,41 +40,47 @@ Use `agent-browser` CLI to load the page in a headless browser.
 
 ### For Twitter/X URLs (`x.com`, `twitter.com`)
 
-Twitter requires authentication. Use the saved auth state:
+Twitter requires authentication. A logged-in Chrome profile is saved at
+`~/.agent-browser/twitter-profile`. Load it and use a named session so it does not collide
+with other browser work:
 
 ```bash
-agent-browser --state ~/.agent-browser/twitter-auth.json open "<url>"
-agent-browser wait 3000
+agent-browser open "<url>" --profile ~/.agent-browser/twitter-profile --session tw
+agent-browser wait article --session tw   # wait for the tweet to render (fast)
 ```
 
-Extract tweet thread content:
+(`--state ~/.agent-browser/twitter-auth.json` is an equivalent way to load the saved auth;
+both flags exist. Do NOT `wait` on `[data-testid="tweetText"]` — see below.)
+
+Extract tweet thread content. **Each tweet is an `<article>` element.** X removed the old
+`[data-testid="tweetText"]` selector, so waiting on or querying it now returns nothing (and
+times out after 25s). An `article`'s innerText includes the display name, @handle, tweet
+body, and timestamp:
+
 ```bash
-agent-browser eval --stdin <<'EVALEOF'
-Array.from(document.querySelectorAll('[data-testid="tweetText"]')).map(el => el.innerText).join("\n\n---\n\n")
+agent-browser eval --session tw --stdin <<'EVALEOF'
+Array.from(document.querySelectorAll('article')).map(el => el.innerText).join("\n\n---\n\n")
 EVALEOF
 ```
 
-Extract author:
+The first `article` is the focused tweet; the rest are the thread/replies. The first two
+lines of each are the author's display name and @handle.
+
+Always close the session when done:
 ```bash
-agent-browser eval --stdin <<'EVALEOF'
-document.querySelector('[data-testid="User-Name"] a')?.textContent || ""
-EVALEOF
+agent-browser close --session tw
 ```
 
-Always close when done:
-```bash
-agent-browser close
-```
-
-**Auth expired?** If the page shows "Log in" / "Sign up" instead of content:
-1. Do NOT silently fall back to partial content
-2. Tell the user:
+**Auth expired?** If the page shows a "Log in" / "Sign up" wall (a `loginButton` or an
+`a[href="/login"]`, and no `article` with tweet text) instead of content:
+1. Do NOT silently fall back to partial content.
+2. Tell the user to refresh the saved login (one-time, interactive):
    ```
-   ⚠ Twitter auth expired. Re-export by:
-   1. Open Chrome with remote debugging enabled (chrome://inspect/#remote-debugging)
-   2. Run: agent-browser --cdp "ws://127.0.0.1:9222/devtools/browser" state save ~/.agent-browser/twitter-auth.json
+   ⚠ Twitter auth expired. Refresh it by logging in once with the saved profile:
+     agent-browser open https://x.com/login --profile ~/.agent-browser/twitter-profile --headed
+   # log in in the window that opens; the session persists back into the profile dir
    ```
-3. Skip this note (leave in inbox) and continue processing others
+3. Skip this note (leave it in `inbox/`) and continue processing the others.
 
 ### For YouTube URLs
 

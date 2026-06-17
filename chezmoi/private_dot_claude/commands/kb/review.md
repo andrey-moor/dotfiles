@@ -20,9 +20,17 @@ the vault is the iCloud `Main` dir; pass `--json` to engine commands and parse t
 
 ## Instructions
 
-### 1. Read the digest
+### 1. Refresh, then read the digest
 
-`mcp__obsidian__read_note` on `Main/_system/kb-digest.md`. It reports:
+The digest is only as fresh as the last pipeline run (weekly via launchd, or whenever it
+was last run by hand). Starting a review off-cycle — e.g. right after a bulk import — can
+show stale counts, so refresh the live counts first. It is fast and LLM-free:
+
+```bash
+kb-engine --vault "<Main>" digest --json   # heavier full refresh: pipeline --json
+```
+
+Then `mcp__obsidian__read_note` on `Main/_system/kb-digest.md` (now current). It reports:
 - **Inbox backlog** — unprocessed `Knowledge/inbox/` stubs
 - **Topic proposals awaiting review** — discovered clusters needing a name/approval
 - **Unfiled notes** — notes in no topic
