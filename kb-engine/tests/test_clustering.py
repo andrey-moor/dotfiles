@@ -48,3 +48,20 @@ def test_min_cluster_size_one_is_rejected():
 def test_min_cluster_size_none_uses_adaptive():
     c = UmapHdbscanClusterer(min_cluster_size=None)
     assert c._adaptive(50) == 2  # falls through to the adaptive ladder
+
+
+def test_default_cluster_selection_method_is_leaf():
+    # Leaf yields finer, more homogeneous topics (avoids one giant blob) — the
+    # better default for navigating a diverse knowledge base.
+    c = UmapHdbscanClusterer()
+    assert c.cluster_selection_method == "leaf"
+
+
+def test_cluster_selection_method_override():
+    c = UmapHdbscanClusterer(cluster_selection_method="eom")
+    assert c.cluster_selection_method == "eom"
+
+
+def test_invalid_cluster_selection_method_rejected():
+    with pytest.raises(ValueError):
+        UmapHdbscanClusterer(cluster_selection_method="bogus")

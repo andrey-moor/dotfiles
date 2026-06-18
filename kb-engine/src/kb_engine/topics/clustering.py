@@ -34,6 +34,9 @@ _MIN_CLUSTER_LARGE = 5
 _MAX_UMAP_COMPONENTS = 5
 _MAX_UMAP_NEIGHBORS = 15
 _RANDOM_STATE = 42
+# HDBSCAN cluster-selection: "leaf" yields finer, homogeneous topics; "eom"
+# (excess of mass) yields fewer, broader clusters that can over-merge.
+_CLUSTER_SELECTION_METHODS = frozenset({"eom", "leaf"})
 
 
 class UmapHdbscanClusterer:
@@ -45,7 +48,10 @@ class UmapHdbscanClusterer:
     """
 
     def __init__(
-        self, min_cluster_size: int | None = None, random_state: int = _RANDOM_STATE
+        self,
+        min_cluster_size: int | None = None,
+        random_state: int = _RANDOM_STATE,
+        cluster_selection_method: str = "leaf",
     ) -> None:
         # HDBSCAN requires min_cluster_size >= 2; validate at construction so a
         # bad value fails fast rather than deep inside fit_predict. None means
@@ -54,8 +60,14 @@ class UmapHdbscanClusterer:
             raise ValueError(
                 f"min_cluster_size must be >= 2 (got {min_cluster_size})"
             )
+        if cluster_selection_method not in _CLUSTER_SELECTION_METHODS:
+            raise ValueError(
+                "cluster_selection_method must be one of "
+                f"{sorted(_CLUSTER_SELECTION_METHODS)} (got {cluster_selection_method!r})"
+            )
         self.min_cluster_size = min_cluster_size
         self.random_state = random_state
+        self.cluster_selection_method = cluster_selection_method
 
     def _adaptive(self, n: int) -> int:
         if self.min_cluster_size is not None:
@@ -86,6 +98,6 @@ class UmapHdbscanClusterer:
         labels = hdbscan.HDBSCAN(
             min_cluster_size=self._adaptive(n),
             metric="euclidean",
-            cluster_selection_method="eom",
+            cluster_selection_method=self.cluster_selection_method,
         ).fit_predict(reduced)
         return labels.astype(int)

@@ -85,17 +85,18 @@ def _build_embedder(cfg: Config) -> Embedder:
     return LocalJinaEmbedder(model_name=cfg.model_name, dim=cfg.embed_dim)
 
 
-def _build_clusterer() -> Clusterer:
+def _build_clusterer(cluster_selection_method: str = "leaf") -> Clusterer:
     """Use a deterministic FakeClusterer when KB_FAKE_CLUSTER is set, else real UMAP/HDBSCAN.
 
     KB_FAKE_CLUSTER is a comma-separated list of int labels (-1 = noise), e.g.
     "0,0,-1". An empty/unset value falls back to the real clusterer.
+    ``cluster_selection_method`` is "leaf" (finer topics) or "eom" (broader).
     """
     raw = os.environ.get("KB_FAKE_CLUSTER", "").strip()
     if raw:
         labels = [int(part) for part in raw.split(",")]
         return FakeClusterer(labels=labels)
-    return UmapHdbscanClusterer()
+    return UmapHdbscanClusterer(cluster_selection_method=cluster_selection_method)
 
 
 def _emit(payload: dict, as_json: bool, human: str) -> None:
@@ -316,20 +317,31 @@ def topics() -> None:
     type=float,
     help="Cosine threshold for assigning a note to an existing topic (--sticky).",
 )
+@click.option(
+    "--coarse",
+    is_flag=True,
+    help="Use excess-of-mass clustering (fewer, broader topics). Default is leaf (finer, more coherent).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
-def topics_discover(cfg: Config, sticky: bool, high: float, as_json: bool) -> None:
+def topics_discover(
+    cfg: Config, sticky: bool, high: float, coarse: bool, as_json: bool
+) -> None:
     """Cluster note vectors into topics (UMAP→HDBSCAN) and persist them.
 
     With ``--sticky``, notes scoring ``>= --high`` against an existing active
     topic are kept on that topic and only the residual is clustered into new
-    proposals.
+    proposals. Clustering uses leaf selection by default (finer topics); pass
+    ``--coarse`` for excess-of-mass (fewer, broader clusters).
     """
+    method = "eom" if coarse else "leaf"
     store = Store(cfg.db_path)
     if sticky:
         try:
             store.init_schema()
-            sticky_result = sticky_discover(store, _build_clusterer(), high=high)
+            sticky_result = sticky_discover(
+                store, _build_clusterer(method), high=high
+            )
         finally:
             store.close()
         payload = {
@@ -348,7 +360,7 @@ def topics_discover(cfg: Config, sticky: bool, high: float, as_json: bool) -> No
         return
     try:
         store.init_schema()  # tolerate discovering against a never-synced DB
-        result = discover_topics(store, _build_clusterer())
+        result = discover_topics(store, _build_clusterer(method))
         topic_rows = [
             {
                 "slug": topic.slug,
