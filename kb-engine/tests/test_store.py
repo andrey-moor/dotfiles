@@ -113,3 +113,19 @@ def test_init_schema_adds_summary_to_legacy_notes_table(tmp_path):
     cols = {r[1] for r in store._conn.execute("PRAGMA table_info(notes)")}
     assert "summary" in cols
     store.close()
+
+
+def test_note_texts_uses_title_and_summary_not_body(tmp_path):
+    import numpy as np
+    from kb_engine.store import Store
+    store = Store(tmp_path / "kb.db")
+    store.init_schema()
+    store.upsert_note("Knowledge/a.md", "Rust Macros", "x", ["Dev/Rust"],
+                      summary="Guide to declarative macros.")
+    # FTS chunk text is the full body — must NOT leak into label text.
+    store.replace_chunks(
+        "Knowledge/a.md",
+        [(0, "Rust Macros\n\nnoisy body text @handle", np.ones(8, np.float32))],
+    )
+    assert store.note_texts()["Knowledge/a.md"] == "Rust Macros Guide to declarative macros."
+    store.close()
