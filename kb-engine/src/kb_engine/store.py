@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS topics (
 );
 CREATE TABLE IF NOT EXISTS topic_members (
   topic_slug TEXT NOT NULL, note_path TEXT NOT NULL, score REAL, source TEXT,
+  is_primary INTEGER NOT NULL DEFAULT 1,
   PRIMARY KEY (topic_slug, note_path),
   FOREIGN KEY (topic_slug) REFERENCES topics(slug) ON DELETE CASCADE
 );
@@ -90,6 +91,8 @@ class Store:
         self._conn.executescript(_SCHEMA)
         # Backfill for databases created before summary was added to _SCHEMA.
         self._ensure_column("notes", "summary", "TEXT")
+        # Backfill for databases created before is_primary was added to _SCHEMA.
+        self._ensure_column("topic_members", "is_primary", "INTEGER NOT NULL DEFAULT 1")
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -247,10 +250,11 @@ class Store:
                 for member in members_by_slug.get(topic.slug, []):
                     self._conn.execute(
                         """
-                        INSERT INTO topic_members(topic_slug, note_path, score, source)
-                        VALUES(?, ?, ?, ?)
+                        INSERT INTO topic_members(topic_slug, note_path, score, source, is_primary)
+                        VALUES(?, ?, ?, ?, ?)
                         """,
-                        (slug, member.note_path, member.score, member.source),
+                        (slug, member.note_path, member.score, member.source,
+                         int(member.is_primary)),
                     )
 
     def load_topics(self) -> list[Topic]:
@@ -299,14 +303,14 @@ class Store:
     def topic_members(self, slug: str) -> list[TopicMember]:
         rows = self._conn.execute(
             """
-            SELECT note_path, score, source FROM topic_members
-            WHERE topic_slug=? ORDER BY score DESC, note_path
+            SELECT note_path, score, source, is_primary FROM topic_members
+            WHERE topic_slug=? ORDER BY is_primary DESC, score DESC, note_path
             """,
             (slug,),
         ).fetchall()
         return [
-            TopicMember(note_path=note_path, score=score, source=source)
-            for note_path, score, source in rows
+            TopicMember(note_path=p, score=s, source=src, is_primary=bool(ip))
+            for p, s, src, ip in rows
         ]
 
     def save_areas(self, areas: list[Area]) -> None:
@@ -359,10 +363,11 @@ class Store:
                 self._conn.execute(
                     """
                     INSERT OR REPLACE INTO topic_members(
-                        topic_slug, note_path, score, source
-                    ) VALUES(?, ?, ?, ?)
+                        topic_slug, note_path, score, source, is_primary
+                    ) VALUES(?, ?, ?, ?, ?)
                     """,
-                    (slug, member.note_path, member.score, member.source),
+                    (slug, member.note_path, member.score, member.source,
+                     int(member.is_primary)),
                 )
 
     def keyword_search(self, query: str, limit: int = 20) -> list[tuple[str, float]]:

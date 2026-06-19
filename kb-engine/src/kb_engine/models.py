@@ -45,6 +45,7 @@ class TopicMember:
     note_path: str
     score: float  # cosine to centroid
     source: str  # "auto" | "seed" | "user"
+    is_primary: bool = True  # primary (home) vs secondary (cross-link) membership
 
 
 @dataclass(frozen=True)

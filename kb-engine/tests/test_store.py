@@ -1,4 +1,5 @@
 import numpy as np
+from kb_engine.models import TopicMember
 from kb_engine.store import Store, _sanitize_fts_query
 
 
@@ -128,4 +129,47 @@ def test_note_texts_uses_title_and_summary_not_body(tmp_path):
         [(0, "Rust Macros\n\nnoisy body text @handle", np.ones(8, np.float32))],
     )
     assert store.note_texts()["Knowledge/a.md"] == "Rust Macros Guide to declarative macros."
+    store.close()
+
+
+def test_topic_member_is_primary_roundtrip(tmp_path):
+    store = Store(tmp_path / "kb.db"); store.init_schema()
+    store.add_manual_topic("rust", "Rust", "rust lang", np.ones(8, np.float32))
+    store.set_members("rust", [
+        TopicMember(note_path="Knowledge/a.md", score=0.9, source="auto", is_primary=True),
+        TopicMember(note_path="Knowledge/b.md", score=0.6, source="auto", is_primary=False),
+    ])
+    members = {m.note_path: m for m in store.topic_members("rust")}
+    assert members["Knowledge/a.md"].is_primary is True
+    assert members["Knowledge/b.md"].is_primary is False
+    store.close()
+
+
+def test_init_schema_adds_is_primary_to_legacy_topic_members(tmp_path):
+    import sqlite3
+    db = tmp_path / "legacy.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE topic_members (topic_slug TEXT NOT NULL, note_path TEXT NOT NULL, "
+        "score REAL, source TEXT, PRIMARY KEY (topic_slug, note_path))"
+    )
+    conn.commit(); conn.close()
+    store = Store(db)
+    store.init_schema()  # must not raise
+    cols = {r[1] for r in store._conn.execute("PRAGMA table_info(topic_members)")}
+    assert "is_primary" in cols
+    store.close()
+
+
+def test_topic_members_orders_primaries_before_higher_scoring_secondaries(tmp_path):
+    # The reader must return PRIMARY members first regardless of score, so a
+    # high-scoring secondary still sorts below a lower-scoring primary.
+    store = Store(tmp_path / "kb.db"); store.init_schema()
+    store.add_manual_topic("rust", "Rust", "rust lang", np.ones(8, np.float32))
+    store.set_members("rust", [
+        TopicMember(note_path="Knowledge/secondary.md", score=0.99, source="auto", is_primary=False),
+        TopicMember(note_path="Knowledge/primary.md", score=0.50, source="auto", is_primary=True),
+    ])
+    ordered = [m.note_path for m in store.topic_members("rust")]
+    assert ordered == ["Knowledge/primary.md", "Knowledge/secondary.md"]
     store.close()
