@@ -22,7 +22,7 @@ def _store_with_active_topic(tmp_path):
     )
     s.set_members(
         "rust-macros",
-        [TopicMember(note_path="Knowledge/a.md", score=0.9, source="auto")],
+        [TopicMember(note_path="Knowledge/a.md", score=0.9, source="auto", is_primary=True)],
     )
     return s
 
@@ -148,6 +148,46 @@ def test_apply_skips_note_path_outside_vault(tmp_path):
     assert "../outside.md" in res.skipped_outside_vault
 
 
+def test_apply_writes_all_topic_tags_and_primary_topic_field(tmp_path):
+    (tmp_path / "Knowledge").mkdir()
+    note = tmp_path / "Knowledge" / "n.md"
+    note.write_text("---\ntitle: N\ntags: [Dev/Rust]\n---\nbody\n")
+    store = Store(tmp_path / "kb.db")
+    store.init_schema()
+    store.add_manual_topic("rust", "Rust", "rust", np.ones(8, np.float32))
+    store.add_manual_topic("ai", "AI", "ai", np.ones(8, np.float32))
+    store.set_members("rust", [TopicMember("Knowledge/n.md", 0.9, "auto", is_primary=True)])
+    store.set_members("ai", [TopicMember("Knowledge/n.md", 0.6, "auto", is_primary=False)])
+    apply_topic_tags(store, vault_path=tmp_path, only_status=("active",))
+    post = frontmatter.load(note)
+    assert set(post["tags"]) >= {"Dev/Rust", "topic/rust", "topic/ai"}
+    assert post["primary_topic"] == "rust"
+    store.close()
+
+
+def test_apply_sets_primary_topic_even_when_tags_already_present(tmp_path):
+    # Note already carries its topic tag but no primary_topic field: apply must
+    # still set the field and count the note as changed (tags_added stays 0).
+    s = _store_with_active_topic(tmp_path)  # primary member a -> rust-macros
+    _note(tmp_path, "Knowledge/a.md",
+          "---\ntitle: A\ntags: [Dev/Rust, topic/rust-macros]\n---\nbody")
+    res = apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "a.md")
+    assert fm["primary_topic"] == "rust-macros"
+    assert res.n_changed == 1     # field newly set despite tag already present
+    assert res.n_tags_added == 0  # no NEW tags
+
+
+def test_apply_primary_topic_is_idempotent(tmp_path):
+    s = _store_with_active_topic(tmp_path)
+    _note(tmp_path, "Knowledge/a.md", "---\ntitle: A\ntags: [Dev/Rust]\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    res2 = apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "a.md")
+    assert fm["primary_topic"] == "rust-macros"
+    assert res2.n_changed == 0  # nothing to do on the second pass
+
+
 def test_apply_preserves_other_frontmatter(tmp_path):
     s = _store_with_active_topic(tmp_path)
     _note(
@@ -160,3 +200,20 @@ def test_apply_preserves_other_frontmatter(tmp_path):
     assert fm["title"] == "A"
     assert fm["source"] == "https://x.test"
     assert fm.content.strip() == "body text"
+
+
+def test_apply_secondary_member_gets_tag_but_no_primary_topic_field(tmp_path):
+    # A note that is only a secondary (is_primary=False) member gets the topic tag
+    # but must NOT receive a primary_topic field.
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.add_manual_topic("ml", "ML", "ml", np.array([1, 0, 0], np.float32))
+    s.set_members(
+        "ml",
+        [TopicMember(note_path="Knowledge/b.md", score=0.7, source="auto", is_primary=False)],
+    )
+    _note(tmp_path, "Knowledge/b.md", "---\ntitle: B\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
+    assert "topic/ml" in fm["tags"]
+    assert "primary_topic" not in fm.metadata
