@@ -68,10 +68,15 @@ def _render_index(
     return frontmatter.dumps(post) + "\n"
 
 
-def _render_topic_moc(
-    topic: Topic, members: list[TopicMember]
-) -> str:
-    """Render one topic MOC. Members sorted by score desc, then path."""
+def _render_topic_moc(topic: Topic, members: list[TopicMember]) -> str:
+    """Render one topic MOC, splitting primary (home) from secondary members.
+
+    Primary members are listed under ``## Notes``; secondary (cross-link) members
+    under ``## Also relevant``. A section is omitted when it has no members, so an
+    all-secondary topic shows no empty ``## Notes`` placeholder; a topic with no
+    members at all still gets a ``## Notes`` section. Each section is sorted by
+    score desc, then path, for deterministic output.
+    """
     keywords = ", ".join(topic.keywords)
     lines = [
         f"# {topic.label}",
@@ -80,15 +85,26 @@ def _render_topic_moc(
         f"- kind/status: {topic.kind}/{topic.status}",
         f"- keywords: {keywords}",
         "",
-        "## Notes",
-        "",
     ]
-    ordered = sorted(members, key=lambda m: (-m.score, m.note_path))
-    if ordered:
-        for member in ordered:
-            lines.append(f"- [[{member.note_path}]] ({member.score:.2f})")
-    else:
-        lines.append("_No member notes._")
+
+    def block(header: str, items: list[TopicMember]) -> None:
+        lines.extend([header, ""])
+        ordered = sorted(items, key=lambda m: (-m.score, m.note_path))
+        if ordered:
+            lines.extend(f"- [[{m.note_path}]] ({m.score:.2f})" for m in ordered)
+        else:
+            lines.append("_None._")
+        lines.append("")
+
+    primary = [m for m in members if m.is_primary]
+    secondary = [m for m in members if not m.is_primary]
+    if primary:
+        block("## Notes", primary)
+    if secondary:
+        block("## Also relevant", secondary)
+    if not primary and not secondary:
+        # A topic with no members at all still gets a Notes section placeholder.
+        block("## Notes", [])
 
     body = "\n".join(lines).rstrip() + "\n"
     post = frontmatter.Post(body, type="system", generated=True)

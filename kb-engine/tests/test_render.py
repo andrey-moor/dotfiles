@@ -6,6 +6,7 @@ from kb_engine.topics.render import (
     PROPOSALS_END,
     PROPOSALS_START,
     RenderResult,
+    _render_topic_moc,
     _splice_proposals,
     render_topics,
 )
@@ -280,3 +281,41 @@ def test_render_zero_topics(tmp_path):
     assert out.n_topics == 0
     index = tmp_path / "_system" / "topics" / "index.md"
     assert index.exists()  # an empty index is still written
+
+
+def test_topic_moc_splits_primary_and_secondary():
+    topic = Topic(slug="rust", label="Rust", keywords=("rust",),
+                  centroid=np.ones(8, np.float32), kind="manual", status="active")
+    members = [
+        TopicMember("Knowledge/p.md", 0.9, "auto", is_primary=True),
+        TopicMember("Knowledge/s.md", 0.6, "auto", is_primary=False),
+    ]
+    out = _render_topic_moc(topic, members)
+    assert "## Notes" in out and "## Also relevant" in out
+    notes_block, also_block = out.split("## Also relevant", 1)
+    assert "[[Knowledge/p.md]]" in notes_block and "[[Knowledge/p.md]]" not in also_block
+    assert "[[Knowledge/s.md]]" in also_block and "[[Knowledge/s.md]]" not in notes_block
+
+
+def test_topic_moc_omits_also_relevant_when_no_secondaries():
+    topic = Topic(slug="rust", label="Rust", keywords=("rust",),
+                  centroid=np.ones(8, np.float32), kind="manual", status="active")
+    members = [TopicMember("Knowledge/p.md", 0.9, "auto", is_primary=True)]
+    out = _render_topic_moc(topic, members)
+    assert "## Notes" in out
+    assert "## Also relevant" not in out  # no secondary members → section omitted
+
+
+def test_topic_moc_all_secondary_omits_empty_notes_section():
+    # A topic whose every member is secondary (each note's home is elsewhere)
+    # must not render a misleading empty "## Notes" beside real cross-links.
+    topic = Topic(slug="rust", label="Rust", keywords=("rust",),
+                  centroid=np.ones(8, np.float32), kind="manual", status="active")
+    members = [
+        TopicMember("Knowledge/s1.md", 0.8, "auto", is_primary=False),
+        TopicMember("Knowledge/s2.md", 0.6, "auto", is_primary=False),
+    ]
+    out = _render_topic_moc(topic, members)
+    assert "## Also relevant" in out
+    assert "[[Knowledge/s1.md]]" in out and "[[Knowledge/s2.md]]" in out
+    assert "## Notes" not in out  # no primary members → no Notes section at all
