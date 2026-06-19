@@ -5,7 +5,7 @@ from kb_engine.models import Chunk, Note
 _BODY_FALLBACK_CHARS = 280
 
 
-def _summary_of(note: Note) -> str:
+def summary_of(note: Note) -> str:
     value = note.frontmatter.get("summary") if note.frontmatter else None
     if not isinstance(value, str):
         return ""
@@ -18,7 +18,7 @@ def embedding_text(note: Note) -> str:
     Falls back to the first ``_BODY_FALLBACK_CHARS`` of the body when there is no
     summary, and to the title alone when both are empty.
     """
-    summary = _summary_of(note)
+    summary = summary_of(note)
     if not summary:
         summary = note.body.strip()[:_BODY_FALLBACK_CHARS]
     title = note.title.strip()

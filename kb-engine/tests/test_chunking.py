@@ -1,6 +1,6 @@
 import types
 
-from kb_engine.chunking import chunk_note, embedding_text, fts_text
+from kb_engine.chunking import chunk_note, embedding_text, fts_text, summary_of
 from kb_engine.models import Note
 
 
@@ -77,3 +77,18 @@ def test_embedding_text_title_only_when_empty_body_and_summary():
 def test_fts_text_is_title_plus_full_body():
     n = _note_with_summary("T", "the whole body here", "short gist")
     assert fts_text(n) == "T\n\nthe whole body here"
+
+
+def test_summary_of_returns_empty_string_for_non_string_value():
+    # A YAML list (e.g. summary: [a, b]) must not be stringified; guard returns "".
+    fm = types.MappingProxyType({"summary": ["a", "b"]})
+    n = Note(
+        path="Knowledge/x.md",
+        title="X",
+        body="body",
+        tags=(),
+        wikilinks=(),
+        frontmatter=fm,
+        sha256="0" * 64,
+    )
+    assert summary_of(n) == ""

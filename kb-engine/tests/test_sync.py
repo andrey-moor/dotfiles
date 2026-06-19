@@ -1,7 +1,13 @@
+import types
+
+import numpy as np
+
+from kb_engine.chunking import embedding_text
 from kb_engine.config import Config
 from kb_engine.embeddings import FakeEmbedder
+from kb_engine.models import Note
 from kb_engine.store import Store
-from kb_engine.sync import SyncStats, rebuild, sync
+from kb_engine.sync import SyncStats, _index_note, rebuild, sync
 
 
 def _vault(tmp_path):
@@ -92,14 +98,6 @@ def test_sync_skips_directory_named_like_markdown(tmp_path):
 
 
 def test_index_note_embeds_summary_and_ftss_full_body(tmp_path):
-    import types
-    import numpy as np
-    from kb_engine.store import Store
-    from kb_engine.embeddings import FakeEmbedder
-    from kb_engine.models import Note
-    from kb_engine.sync import _index_note
-    from kb_engine.chunking import embedding_text
-
     store = Store(tmp_path / "kb.db")
     store.init_schema()
     emb = FakeEmbedder(dim=64)
@@ -119,4 +117,3 @@ def test_index_note_embeds_summary_and_ftss_full_body(tmp_path):
     expected = emb.embed_passages([embedding_text(note)])[0]
     assert np.allclose(vecs[0][1], expected)
     assert store.keyword_search("body")          # body word still in FTS
-    store.close()
