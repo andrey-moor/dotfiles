@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from kb_engine.chunking import chunk_note
+from kb_engine.chunking import embedding_text, fts_text
 from kb_engine.config import Config
 from kb_engine.embeddings import Embedder
 from kb_engine.models import Note
@@ -32,16 +32,15 @@ def _disk_notes(cfg: Config) -> dict[str, Note]:
     }
 
 
-def _index_note(store: Store, note: Note, embedder: Embedder, max_tokens: int) -> None:
-    chunks = chunk_note(note, max_tokens=max_tokens)
-    vectors = embedder.embed_passages([c.text for c in chunks])
+def _index_note(store: Store, note: Note, embedder: Embedder) -> None:
+    # Semantic vector = title + summary (one clean vector). FTS = full body.
+    vector = embedder.embed_passages([embedding_text(note)])[0]
+    summary = note.frontmatter.get("summary") if note.frontmatter else None
     store.upsert_note(
-        path=note.path, title=note.title, sha256=note.sha256, tags=list(note.tags)
+        path=note.path, title=note.title, sha256=note.sha256,
+        tags=list(note.tags), summary=str(summary or "").strip(),
     )
-    store.replace_chunks(
-        note.path,
-        [(c.ordinal, c.text, vec) for c, vec in zip(chunks, vectors)],
-    )
+    store.replace_chunks(note.path, [(0, fts_text(note), vector)])
 
 
 def sync(cfg: Config, store: Store, embedder: Embedder) -> SyncStats:
@@ -54,10 +53,10 @@ def sync(cfg: Config, store: Store, embedder: Embedder) -> SyncStats:
 
     for path, note in disk.items():
         if path not in db_shas:
-            _index_note(store, note, embedder, cfg.chunk_tokens)
+            _index_note(store, note, embedder)
             added += 1
         elif db_shas[path] != note.sha256:
-            _index_note(store, note, embedder, cfg.chunk_tokens)
+            _index_note(store, note, embedder)
             changed += 1
 
     for path in db_shas:

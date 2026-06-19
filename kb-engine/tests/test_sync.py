@@ -89,3 +89,34 @@ def test_sync_skips_directory_named_like_markdown(tmp_path):
     cfg = Config(vault_path=v, db_path=tmp_path / "t.db")
     # Only the real a.md file is embedded; the bogus directory is ignored.
     assert sync(cfg, Store(cfg.db_path), FakeEmbedder(dim=16)).added == 1
+
+
+def test_index_note_embeds_summary_and_ftss_full_body(tmp_path):
+    import types
+    import numpy as np
+    from kb_engine.store import Store
+    from kb_engine.embeddings import FakeEmbedder
+    from kb_engine.models import Note
+    from kb_engine.sync import _index_note
+    from kb_engine.chunking import embedding_text
+
+    store = Store(tmp_path / "kb.db")
+    store.init_schema()
+    emb = FakeEmbedder(dim=64)
+    note = Note(
+        path="Knowledge/a.md",
+        title="Rust Macros",
+        body="A very long body. " * 200,
+        tags=("Dev/Rust",),
+        wikilinks=(),
+        frontmatter=types.MappingProxyType({"summary": "Declarative macros guide."}),
+        sha256="x",
+    )
+    _index_note(store, note, emb)
+
+    vecs = list(store.note_vectors())
+    assert len(vecs) == 1                       # one vector, no dilution
+    expected = emb.embed_passages([embedding_text(note)])[0]
+    assert np.allclose(vecs[0][1], expected)
+    assert store.keyword_search("body")          # body word still in FTS
+    store.close()
