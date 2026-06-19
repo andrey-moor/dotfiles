@@ -173,3 +173,28 @@ def test_topic_members_orders_primaries_before_higher_scoring_secondaries(tmp_pa
     ordered = [m.note_path for m in store.topic_members("rust")]
     assert ordered == ["Knowledge/primary.md", "Knowledge/secondary.md"]
     store.close()
+
+
+def test_notes_without_topic_returns_tags(tmp_path):
+    store = Store(tmp_path / "kb.db")
+    store.init_schema()
+    store.upsert_note(path="Knowledge/a.md", title="A", sha256="x", tags=["Dev/Rust", "Reference"])
+    store.upsert_note(path="Knowledge/b.md", title="B", sha256="x", tags=["AI/Agents"])
+    store.add_manual_topic("rust", "Rust", "rust", np.ones(8, np.float32))
+    store.set_members("rust", [TopicMember("Knowledge/a.md", 0.9, "auto", True)])
+    # a is in a topic; b is not
+    assert store.notes_without_topic() == {"Knowledge/b.md": ["AI/Agents"]}
+    store.close()
+
+
+def test_notes_without_topic_excludes_secondary_members(tmp_path):
+    store = Store(tmp_path / "kb.db")
+    store.init_schema()
+    store.upsert_note(path="Knowledge/sec.md", title="S", sha256="x", tags=["Dev/Rust"])
+    store.upsert_note(path="Knowledge/unfiled.md", title="U", sha256="x", tags=["AI"])
+    store.add_manual_topic("rust", "Rust", "rust", np.ones(8, np.float32))
+    store.set_members("rust", [TopicMember("Knowledge/sec.md", 0.6, "auto", is_primary=False)])
+    result = store.notes_without_topic()
+    assert "Knowledge/sec.md" not in result  # secondary membership still counts as filed
+    assert "Knowledge/unfiled.md" in result
+    store.close()

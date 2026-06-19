@@ -7,6 +7,7 @@ from kb_engine.topics.render import (
     PROPOSALS_START,
     RenderResult,
     _render_topic_moc,
+    _render_unfiled_by_category,
     _splice_proposals,
     render_topics,
 )
@@ -262,8 +263,9 @@ def test_render_result_paths_are_vault_relative(tmp_path):
     assert out.index_path == "_system/topics/index.md"
     assert out.taxonomy_path == "_system/_taxonomy.md"
     assert "_system/topics/rust-macros.md" in out.topic_paths
+    assert out.unfiled_path == "_system/topics/_unfiled-by-category.md"
     # all paths relative (no leading slash, no tmp_path prefix)
-    for p in [out.index_path, out.taxonomy_path, *out.topic_paths]:
+    for p in [out.index_path, out.taxonomy_path, out.unfiled_path, *out.topic_paths]:
         assert not p.startswith("/")
         assert str(tmp_path) not in p
 
@@ -319,3 +321,37 @@ def test_topic_moc_all_secondary_omits_empty_notes_section():
     assert "## Also relevant" in out
     assert "[[Knowledge/s1.md]]" in out and "[[Knowledge/s2.md]]" in out
     assert "## Notes" not in out  # no primary members → no Notes section at all
+
+
+def test_unfiled_by_category_groups_by_taxonomy_tag():
+    out = _render_unfiled_by_category({
+        "Knowledge/b.md": ["AI/Agents"],
+        "Knowledge/c.md": ["AI/Agents", "Dev/Tools"],
+    })
+    assert "## AI/Agents" in out and "## Dev/Tools" in out
+    assert "[[Knowledge/b.md]]" in out and "[[Knowledge/c.md]]" in out
+    # the multi-tag note appears under BOTH of its tag sections
+    ai_section = out.split("## AI/Agents")[1].split("##")[0]
+    tools_section = out.split("## Dev/Tools")[1].split("##")[0]
+    assert "[[Knowledge/c.md]]" in ai_section
+    assert "[[Knowledge/c.md]]" in tools_section
+
+
+def test_unfiled_by_category_untagged_fallback():
+    out = _render_unfiled_by_category({"Knowledge/orphan.md": []})
+    assert "## (untagged)" in out
+    assert "[[Knowledge/orphan.md]]" in out
+
+
+def test_render_writes_unfiled_by_category_file(tmp_path):
+    # render_topics must emit the by-category index file (deterministic/idempotent).
+    s = _store_with_topics(tmp_path)  # existing helper; its notes are all filed
+    s.upsert_note(path="Knowledge/lonely.md", title="Lonely", sha256="h", tags=["Personal/Cooking"])
+    render_topics(s, vault_path=tmp_path)
+    by_cat = tmp_path / "_system" / "topics" / "_unfiled-by-category.md"
+    assert by_cat.exists()
+    text = by_cat.read_text()
+    assert "## Personal/Cooking" in text and "[[Knowledge/lonely.md]]" in text
+    before = by_cat.read_text()
+    render_topics(s, vault_path=tmp_path)
+    assert by_cat.read_text() == before  # idempotent

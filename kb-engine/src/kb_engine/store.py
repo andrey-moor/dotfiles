@@ -165,6 +165,30 @@ class Store:
                 by_tag.setdefault(tag, set()).add(path)
         return by_tag
 
+    def notes_without_topic(self) -> dict[str, list[str]]:
+        """Return ``{note_path: [taxonomy tags]}`` for notes in NO topic_members row.
+
+        Membership is the source of truth for "filed"; a note with any topic
+        membership (primary or secondary) is excluded. ``topic/...`` tags are
+        stripped from the returned list so only coarse taxonomy tags remain.
+        """
+        in_topic = {
+            p for (p,) in self._conn.execute(
+                "SELECT DISTINCT note_path FROM topic_members"
+            )
+        }
+        out: dict[str, list[str]] = {}
+        for path, tags_json in self._conn.execute("SELECT path, tags FROM notes"):
+            if path in in_topic:
+                continue
+            tags = [
+                t
+                for t in (json.loads(tags_json) if tags_json else [])
+                if not t.startswith("topic/")
+            ]
+            out[path] = tags
+        return out
+
     def note_title(self, note_path: str) -> str | None:
         row = self._conn.execute(
             "SELECT title FROM notes WHERE path=?", (note_path,)

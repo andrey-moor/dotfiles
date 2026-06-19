@@ -22,6 +22,7 @@ class RenderResult:
     index_path: str  # vault-relative posix
     topic_paths: tuple[str, ...]  # vault-relative posix
     taxonomy_path: str  # vault-relative posix
+    unfiled_path: str  # vault-relative posix
 
 
 def _topics_by_slug(topics: list[Topic]) -> dict[str, Topic]:
@@ -109,6 +110,27 @@ def _render_topic_moc(topic: Topic, members: list[TopicMember]) -> str:
     body = "\n".join(lines).rstrip() + "\n"
     post = frontmatter.Post(body, type="system", generated=True)
     return frontmatter.dumps(post) + "\n"
+
+
+def _render_unfiled_by_category(by_note: dict[str, list[str]]) -> str:
+    """Group topicless notes under each taxonomy tag (a note may appear under several)."""
+    by_tag: dict[str, list[str]] = {}
+    for note_path, tags in by_note.items():
+        for tag in (tags or ["(untagged)"]):
+            by_tag.setdefault(tag, []).append(note_path)
+    lines = [
+        "# Unfiled by Category",
+        "",
+        "_Notes in no topic, grouped by taxonomy tag._",
+        "",
+    ]
+    for tag in sorted(by_tag):
+        lines.append(f"## {tag}")
+        for note_path in sorted(by_tag[tag]):
+            lines.append(f"- [[{note_path}]]")
+        lines.append("")
+    body = "\n".join(lines).rstrip() + "\n"
+    return frontmatter.dumps(frontmatter.Post(body, type="system", generated=True)) + "\n"
 
 
 def _render_proposals_block(
@@ -226,6 +248,11 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
         # Vault-relative posix (Phase 3 contract: consistent with note paths).
         topic_paths.append(moc_path.relative_to(vault_resolved).as_posix())
 
+    unfiled_relpath = _TOPICS_RELDIR / "_unfiled-by-category.md"
+    (topics_dir / "_unfiled-by-category.md").write_text(
+        _render_unfiled_by_category(store.notes_without_topic())
+    )
+
     taxonomy_path = vault_path / _TAXONOMY_RELPATH
     taxonomy_path.parent.mkdir(parents=True, exist_ok=True)
     _write_proposals(taxonomy_path, topics, members_by_slug)
@@ -236,4 +263,5 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
         index_path=_TOPICS_RELDIR.joinpath("index.md").as_posix(),
         topic_paths=tuple(topic_paths),
         taxonomy_path=_TAXONOMY_RELPATH.as_posix(),
+        unfiled_path=unfiled_relpath.as_posix(),
     )
