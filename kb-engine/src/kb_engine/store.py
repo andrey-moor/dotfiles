@@ -11,7 +11,7 @@ from kb_engine.topics._math import frozen_centroid
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
-  path TEXT PRIMARY KEY, title TEXT, sha256 TEXT NOT NULL, tags TEXT
+  path TEXT PRIMARY KEY, title TEXT, sha256 TEXT NOT NULL, tags TEXT, summary TEXT
 );
 CREATE TABLE IF NOT EXISTS chunks (
   id INTEGER PRIMARY KEY, note_path TEXT NOT NULL, ordinal INTEGER NOT NULL,
@@ -88,20 +88,33 @@ class Store:
 
     def init_schema(self) -> None:
         self._conn.executescript(_SCHEMA)
+        # Backfill for databases created before summary was added to _SCHEMA.
+        self._ensure_column("notes", "summary", "TEXT")
         self._conn.commit()
 
+    def _ensure_column(self, table: str, column: str, decl: str) -> None:
+        cols = {row[1] for row in self._conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
     def upsert_note(
-        self, path: str, title: str, sha256: str, tags: list[str]
+        self, path: str, title: str, sha256: str, tags: list[str], summary: str = ""
     ) -> None:
         self._conn.execute(
             """
-            INSERT INTO notes(path, title, sha256, tags) VALUES(?, ?, ?, ?)
+            INSERT INTO notes(path, title, sha256, tags, summary) VALUES(?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET title=excluded.title,
-                sha256=excluded.sha256, tags=excluded.tags
+                sha256=excluded.sha256, tags=excluded.tags, summary=excluded.summary
             """,
-            (path, title, sha256, json.dumps(list(tags))),
+            (path, title, sha256, json.dumps(list(tags)), summary),
         )
         self._conn.commit()
+
+    def note_summary(self, note_path: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT summary FROM notes WHERE path=?", (note_path,)
+        ).fetchone()
+        return row[0] if row else None
 
     def replace_chunks(
         self, note_path: str, chunks: list[tuple[int, str, np.ndarray]]

@@ -82,3 +82,34 @@ def test_notes_by_tag_empty_store(tmp_path):
     s = Store(tmp_path / "t.db")
     s.init_schema()
     assert s.notes_by_tag() == {}
+
+
+def test_upsert_note_stores_summary(tmp_path):
+    store = Store(tmp_path / "kb.db")
+    store.init_schema()
+    store.upsert_note(path="Knowledge/a.md", title="A", summary="A short gist.",
+                      sha256="x", tags=["AI/Agents"])
+    assert store.note_summary("Knowledge/a.md") == "A short gist."
+    store.close()
+
+
+def test_upsert_note_updates_summary_on_conflict(tmp_path):
+    store = Store(tmp_path / "kb.db")
+    store.init_schema()
+    store.upsert_note(path="Knowledge/a.md", title="A", sha256="x", tags=[], summary="old")
+    store.upsert_note(path="Knowledge/a.md", title="A", sha256="x", tags=[], summary="new")
+    assert store.note_summary("Knowledge/a.md") == "new"
+    store.close()
+
+
+def test_init_schema_adds_summary_to_legacy_notes_table(tmp_path):
+    import sqlite3
+    db = tmp_path / "legacy.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE notes (path TEXT PRIMARY KEY, title TEXT, sha256 TEXT NOT NULL, tags TEXT)")
+    conn.commit(); conn.close()
+    store = Store(db)
+    store.init_schema()  # must not raise
+    cols = {r[1] for r in store._conn.execute("PRAGMA table_info(notes)")}
+    assert "summary" in cols
+    store.close()
