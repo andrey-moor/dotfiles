@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Mapping
 
 import numpy as np
@@ -5,49 +6,62 @@ import numpy as np
 from kb_engine.models import Topic
 from kb_engine.topics._math import cosine
 
+_MAX_SECONDARIES = 2
+
+
+@dataclass(frozen=True)
+class Assignment:
+    slug: str
+    score: float
+    is_primary: bool
+
+
+# {path: [Assignment, ...]} — first element is the primary, rest are secondaries.
+Assigned = dict[str, list[Assignment]]
 # (path, (topic_slug, score)) pairs reported for human review.
 Borderline = list[tuple[str, tuple[str, float]]]
-# {path: (topic_slug, score)} for high-confidence auto-members.
-Assigned = dict[str, tuple[str, float]]
 
 
-def _best_topic(vector: np.ndarray, topics: list[Topic]) -> tuple[str, float] | None:
-    """Return the (slug, score) of the topic with the highest cosine, or None.
-
-    Topics with a zero-norm centroid are skipped. Ties are broken by slug so the
-    result is deterministic regardless of topic ordering.
-    """
-    best: tuple[str, float] | None = None
-    for topic in topics:
-        if float(np.linalg.norm(topic.centroid)) == 0.0:
-            continue
-        score = cosine(vector, topic.centroid)
-        if best is None or (score, topic.slug) > (best[1], best[0]):
-            best = (topic.slug, score)
-    return best
+def _ranked(vector: np.ndarray, topics: list[Topic]) -> list[tuple[str, float]]:
+    """(slug, score) for every non-degenerate topic, best first (ties by slug)."""
+    scored = [
+        (topic.slug, cosine(vector, topic.centroid))
+        for topic in topics
+        if float(np.linalg.norm(topic.centroid)) != 0.0
+    ]
+    return sorted(scored, key=lambda sc: (-sc[1], sc[0]))
 
 
 def assign_notes(
     note_vectors: Mapping[str, np.ndarray],
     topics: list[Topic],
     high: float,
+    secondary: float,
     low: float,
 ) -> tuple[Assigned, Borderline]:
-    """Assign each note to its nearest topic centroid by cosine similarity.
+    """Assign each note a primary topic (nearest, score >= high) plus up to two
+    secondary topics (other topics with score >= secondary).
 
-    ``score >= high`` → auto-member (``assigned``); ``low <= score < high`` →
-    reported for review (``borderline``); ``score < low`` → unassigned. Notes
-    are processed in sorted-path order for deterministic output.
+    Notes whose nearest topic is in ``[low, high)`` are reported borderline;
+    ``< low`` is unassigned. Deterministic (sorted paths; ranked ties by slug).
     """
+    if secondary > high:
+        raise ValueError(f"secondary ({secondary}) must be <= high ({high})")
     assigned: Assigned = {}
     borderline: Borderline = []
     for path in sorted(note_vectors):
-        best = _best_topic(note_vectors[path], topics)
-        if best is None:
+        ranked = _ranked(note_vectors[path], topics)
+        if not ranked:
             continue
-        slug, score = best
-        if score >= high:
-            assigned[path] = (slug, score)
-        elif score >= low:
-            borderline.append((path, (slug, score)))
+        top_slug, top_score = ranked[0]
+        if top_score < high:
+            if top_score >= low:
+                borderline.append((path, (top_slug, top_score)))
+            continue
+        members = [Assignment(top_slug, top_score, True)]
+        for slug, score in ranked[1:]:
+            if len(members) - 1 >= _MAX_SECONDARIES or score < secondary:
+                break
+            members.append(Assignment(slug, score, False))
+        assigned[path] = members
     return assigned, borderline

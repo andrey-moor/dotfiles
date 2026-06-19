@@ -46,12 +46,17 @@ def sticky_discover(
         return StickyResult(n_assigned_existing=0, n_new_topics=0, n_unfiled=0)
 
     existing = _existing_sticky_topics(store)
-    assigned, _borderline = assign_notes(note_vectors, existing, high=high, low=high)
+    # secondary=high suppresses cross-links: sticky keeps each note on its single
+    # home (primary) topic only, so we set the secondary bar as high as the primary.
+    assigned, _borderline = assign_notes(
+        note_vectors, existing, high=high, secondary=high, low=high
+    )
 
     members_by_existing: dict[str, list[TopicMember]] = {}
-    for note_path, (slug, score) in assigned.items():
-        members_by_existing.setdefault(slug, []).append(
-            TopicMember(note_path=note_path, score=score, source="auto")
+    for note_path, members in assigned.items():
+        primary = next(member for member in members if member.is_primary)
+        members_by_existing.setdefault(primary.slug, []).append(
+            TopicMember(note_path=note_path, score=primary.score, source="auto")
         )
     for slug, members in members_by_existing.items():
         store.set_members(slug, members)

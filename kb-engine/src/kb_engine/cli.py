@@ -34,6 +34,7 @@ DEFAULT_SEARCH_LIMIT = 10
 DEFAULT_SYNTHESIS_MIN = 5
 DEFAULT_AREA_THRESHOLD = 0.3
 DEFAULT_ASSIGN_HIGH = 0.55
+DEFAULT_ASSIGN_SECONDARY = 0.45  # min cosine for a secondary (cross-link) topic
 DEFAULT_ASSIGN_LOW = 0.4
 _ASSIGNABLE_STATUSES = frozenset({"active", "proposed"})
 _TAXONOMY_RELPATH = Path("_system") / "_taxonomy.md"
@@ -633,6 +634,13 @@ def topics_list(cfg: Config, as_json: bool) -> None:
 
 @topics.command("assign")
 @click.option("--high", default=DEFAULT_ASSIGN_HIGH, show_default=True, type=float)
+@click.option(
+    "--secondary",
+    default=DEFAULT_ASSIGN_SECONDARY,
+    show_default=True,
+    type=float,
+    help="Min cosine for a SECONDARY (cross-link) topic.",
+)
 @click.option("--low", default=DEFAULT_ASSIGN_LOW, show_default=True, type=float)
 @click.option(
     "--apply",
@@ -643,9 +651,18 @@ def topics_list(cfg: Config, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
 def topics_assign(
-    cfg: Config, high: float, low: float, apply_changes: bool, as_json: bool
+    cfg: Config,
+    high: float,
+    secondary: float,
+    low: float,
+    apply_changes: bool,
+    as_json: bool,
 ) -> None:
-    """Assign notes to nearest topic by cosine; dry-run unless ``--apply``."""
+    """Assign notes to a primary topic + up to 2 secondaries; dry-run unless ``--apply``."""
+    # Validate the threshold ordering at the CLI boundary so a bad flag combo
+    # surfaces as a clean usage error, not the library ValueError's traceback.
+    if secondary > high:
+        raise click.UsageError(f"--secondary ({secondary}) must be <= --high ({high})")
     store = Store(cfg.db_path)
     try:
         store.init_schema()
@@ -655,18 +672,32 @@ def topics_assign(
             for topic in store.load_topics()
             if topic.status in _ASSIGNABLE_STATUSES
         ]
-        assigned, borderline = assign_notes(note_vectors, assignable, high, low)
+        assigned, borderline = assign_notes(
+            note_vectors, assignable, high, secondary, low
+        )
         if apply_changes:
             members_by_slug: dict[str, list[TopicMember]] = {}
-            for note_path, (slug, score) in assigned.items():
-                members_by_slug.setdefault(slug, []).append(
-                    TopicMember(note_path=note_path, score=score, source="auto")
-                )
+            for note_path, members in assigned.items():
+                for member in members:
+                    members_by_slug.setdefault(member.slug, []).append(
+                        TopicMember(
+                            note_path=note_path,
+                            score=member.score,
+                            source="auto",
+                            is_primary=member.is_primary,
+                        )
+                    )
             for slug, members in members_by_slug.items():
                 store.set_members(slug, members)
         assigned_rows = [
-            {"note": note_path, "topic": slug, "score": round(score, 6)}
-            for note_path, (slug, score) in sorted(assigned.items())
+            {
+                "note": note_path,
+                "topic": member.slug,
+                "score": round(member.score, 6),
+                "is_primary": member.is_primary,
+            }
+            for note_path, members in sorted(assigned.items())
+            for member in members
         ]
         borderline_rows = [
             {"note": note_path, "topic": slug, "score": round(score, 6)}
@@ -689,7 +720,7 @@ def topics_assign(
         )
         return
     click.echo(
-        f"assigned={len(assigned_rows)} borderline={len(borderline_rows)} "
+        f"assigned={len(assigned)} borderline={len(borderline_rows)} "
         f"unassigned={n_unassigned} applied={apply_changes}"
     )
 
