@@ -25,6 +25,7 @@ from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
 from kb_engine.topics.sticky import sticky_discover
+from kb_engine.topics.suggest import suggest_from_residual
 from kb_engine.filing import apply_dispositions
 from kb_engine.topics.apply import apply_topic_tags
 from kb_engine.topics.render import render_topics
@@ -36,6 +37,7 @@ DEFAULT_AREA_THRESHOLD = 0.3
 DEFAULT_ASSIGN_HIGH = 0.55
 DEFAULT_ASSIGN_SECONDARY = 0.45  # min cosine for a secondary (cross-link) topic
 DEFAULT_ASSIGN_LOW = 0.4
+_SUGGEST_MIN_CLUSTER_SIZE = 2  # surface two-note mini-themes below the adaptive floor
 _ASSIGNABLE_STATUSES = frozenset({"active", "proposed"})
 _TAXONOMY_RELPATH = Path("_system") / "_taxonomy.md"
 DEFAULT_APPLY_STATUS = "active"
@@ -86,18 +88,24 @@ def _build_embedder(cfg: Config) -> Embedder:
     return LocalJinaEmbedder(model_name=cfg.model_name, dim=cfg.embed_dim)
 
 
-def _build_clusterer(cluster_selection_method: str = "leaf") -> Clusterer:
+def _build_clusterer(
+    cluster_selection_method: str = "leaf", min_cluster_size: int | None = None
+) -> Clusterer:
     """Use a deterministic FakeClusterer when KB_FAKE_CLUSTER is set, else real UMAP/HDBSCAN.
 
     KB_FAKE_CLUSTER is a comma-separated list of int labels (-1 = noise), e.g.
     "0,0,-1". An empty/unset value falls back to the real clusterer.
     ``cluster_selection_method`` is "leaf" (finer topics) or "eom" (broader).
+    ``min_cluster_size`` overrides the adaptive ladder when set (must be >= 2).
     """
     raw = os.environ.get("KB_FAKE_CLUSTER", "").strip()
     if raw:
         labels = [int(part) for part in raw.split(",")]
         return FakeClusterer(labels=labels)
-    return UmapHdbscanClusterer(cluster_selection_method=cluster_selection_method)
+    return UmapHdbscanClusterer(
+        cluster_selection_method=cluster_selection_method,
+        min_cluster_size=min_cluster_size,
+    )
 
 
 def _emit(payload: dict, as_json: bool, human: str) -> None:
@@ -723,6 +731,66 @@ def topics_assign(
         f"assigned={len(assigned)} borderline={len(borderline_rows)} "
         f"unassigned={n_unassigned} applied={apply_changes}"
     )
+
+
+@topics.command("suggest")
+@click.option(
+    "--apply",
+    "apply_changes",
+    is_flag=True,
+    help="Persist suggestions as proposed topics (dry-run reports only by default).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_suggest(cfg: Config, apply_changes: bool, as_json: bool) -> None:
+    """Cluster the unfiled residual (min_cluster_size=2) into latent topic proposals.
+
+    Re-clusters only notes that are in NO topic, surfacing coherent mini-themes
+    below the normal cluster floor. Dry-run by default; ``--apply`` persists them
+    as ``proposed`` discovered topics (which replaces any existing discovered
+    proposals — promote ones you want to keep to active first).
+    """
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        note_vectors = dict(store.note_vectors())
+        # notes_without_topic() (one query) is the unfiled set; in_topic is its
+        # complement among notes that have vectors.
+        in_topic = set(note_vectors) - set(store.notes_without_topic())
+        texts_by_path = store.note_texts()
+        result = suggest_from_residual(
+            note_vectors, in_topic,
+            _build_clusterer(min_cluster_size=_SUGGEST_MIN_CLUSTER_SIZE), texts_by_path,
+        )
+        if apply_changes:
+            store.save_topics(list(result.topics), result.members_by_slug)
+        rows = [
+            {
+                "slug": topic.slug,
+                "label": topic.label,
+                "keywords": list(topic.keywords),
+                "size": len(result.members_by_slug.get(topic.slug, [])),
+            }
+            for topic in result.topics
+        ]
+    finally:
+        store.close()
+
+    if as_json:
+        click.echo(json.dumps({
+            "n_topics": result.n_topics,
+            "n_unfiled": result.n_unfiled,
+            "topics": rows,
+            "applied": apply_changes,
+        }))
+        return
+    if not rows:
+        click.echo(f"No latent topics. unfiled={result.n_unfiled} applied={apply_changes}")
+        return
+    for row in rows:
+        keywords = ", ".join(row["keywords"])
+        click.echo(f"{row['slug']}  ({row['size']} notes)  [{keywords}]")
+    click.echo(f"unfiled={result.n_unfiled} applied={apply_changes}")
 
 
 @main.command("import-things")
