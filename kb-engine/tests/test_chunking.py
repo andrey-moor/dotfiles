@@ -40,7 +40,7 @@ def test_empty_body_yields_single_title_only_chunk():
 # --- embedding_text / fts_text ---
 
 
-def _note_with_summary(title: str, body: str, summary: str) -> Note:
+def _note_with_summary(title: str, body: str, summary: str | None) -> Note:
     fm = types.MappingProxyType({"summary": summary} if summary is not None else {})
     return Note(
         path="Knowledge/a.md",
@@ -49,7 +49,7 @@ def _note_with_summary(title: str, body: str, summary: str) -> Note:
         tags=(),
         wikilinks=(),
         frontmatter=fm,
-        sha256="x",
+        sha256="0" * 64,
     )
 
 
@@ -61,7 +61,13 @@ def test_embedding_text_uses_title_and_summary():
 def test_embedding_text_falls_back_to_body_when_no_summary():
     n = _note_with_summary("T", "B" * 500, "")
     out = embedding_text(n)
-    assert out.startswith("T\n\n") and len(out) <= 3 + 280 + len("T")
+    assert out == f"T\n\n{'B' * 280}"
+
+
+def test_embedding_text_falls_back_when_summary_key_absent():
+    n = _note_with_summary("T", "B" * 500, None)  # no "summary" key in frontmatter
+    out = embedding_text(n)
+    assert out.startswith("T\n\n")
 
 
 def test_embedding_text_title_only_when_empty_body_and_summary():
