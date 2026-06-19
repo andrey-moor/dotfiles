@@ -7,7 +7,9 @@ _BODY_FALLBACK_CHARS = 280
 
 def _summary_of(note: Note) -> str:
     value = note.frontmatter.get("summary") if note.frontmatter else None
-    return str(value).strip() if value else ""
+    if not isinstance(value, str):
+        return ""
+    return value.strip()
 
 
 def embedding_text(note: Note) -> str:
