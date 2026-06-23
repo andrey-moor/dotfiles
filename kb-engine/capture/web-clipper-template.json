@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "0.1.0",
+  "name": "KB Inbox",
+  "behavior": "create",
+  "noteNameFormat": "{{title|safe_name}}",
+  "path": "Knowledge/inbox",
+  "noteContentFormat": "{{content|markdown}}",
+  "properties": [
+    {"name": "title", "value": "{{title}}", "type": "text"},
+    {"name": "url", "value": "{{url}}", "type": "text"},
+    {"name": "source", "value": "article", "type": "text"},
+    {"name": "date_added", "value": "{{date:YYYY-MM-DD}}", "type": "date"},
+    {"name": "summary", "value": "", "type": "text"},
+    {"name": "status", "value": "inbox", "type": "text"},
+    {"name": "context", "value": "Web Clipper", "type": "text"},
+    {"name": "tags", "value": "", "type": "multitext"},
+    {"name": "why", "value": "{{\"Why are you saving this?\"}}", "type": "text"},
+    {"name": "project", "value": "", "type": "text"}
+  ]
+}
