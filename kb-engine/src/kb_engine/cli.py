@@ -27,6 +27,7 @@ from kb_engine.topics.discover import discover_topics
 from kb_engine.topics.sticky import sticky_discover
 from kb_engine.topics.suggest import suggest_from_residual
 from kb_engine.filing import apply_dispositions
+from kb_engine.inbox_check import check_inbox
 from kb_engine.topics.apply import apply_topic_tags
 from kb_engine.topics.render import render_topics
 from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
@@ -288,6 +289,29 @@ def status(cfg: Config, as_json: bool) -> None:
         },
         as_json,
         f"notes={notes} chunks={chunks} db={cfg.db_path} last_sync={last_sync}",
+    )
+
+
+@main.command("inbox-check")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def inbox_check(cfg: Config, as_json: bool) -> None:
+    """Validate Knowledge/inbox/ clips against the schema (report-only, no writes)."""
+    report = check_inbox(cfg.vault_path)
+    payload = {
+        "n_notes": report.n_notes,
+        "schema_ok": len(report.schema_ok),
+        "schema_bad": [{"note": p, "missing": list(m)} for p, m in report.schema_bad],
+        "missing_why": list(report.missing_why),
+        "dup_in_inbox": [{"url": u, "notes": list(p)} for u, p in report.dup_in_inbox],
+        "dup_vs_knowledge": [{"note": n, "url": u} for n, u in report.dup_vs_knowledge],
+    }
+    _emit(
+        payload,
+        as_json,
+        f"inbox: {report.n_notes} notes | schema_ok={len(report.schema_ok)} "
+        f"schema_bad={len(report.schema_bad)} missing_why={len(report.missing_why)} "
+        f"dup_in_inbox={len(report.dup_in_inbox)} dup_vs_knowledge={len(report.dup_vs_knowledge)}",
     )
 
 
