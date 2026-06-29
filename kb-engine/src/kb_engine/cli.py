@@ -293,11 +293,16 @@ def status(cfg: Config, as_json: bool) -> None:
 
 
 @main.command("inbox-check")
+@click.option(
+    "--check-filed",
+    is_flag=True,
+    help="Also flag inbox urls already filed elsewhere (slow: scans all of Knowledge/).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
-def inbox_check(cfg: Config, as_json: bool) -> None:
+def inbox_check(cfg: Config, check_filed: bool, as_json: bool) -> None:
     """Validate Knowledge/inbox/ clips against the schema (report-only, no writes)."""
-    report = check_inbox(cfg.vault_path)
+    report = check_inbox(cfg.vault_path, check_filed=check_filed)
     payload = {
         "n_notes": report.n_notes,
         "schema_ok": len(report.schema_ok),

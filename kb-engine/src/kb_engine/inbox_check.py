@@ -41,7 +41,10 @@ def _present(fm, key: str) -> bool:
     return True
 
 
-def check_inbox(vault: Path) -> InboxReport:
+def check_inbox(vault: Path, check_filed: bool = False) -> InboxReport:
+    """Validate inbox clips. ``check_filed`` additionally scans ALL of
+    ``Knowledge/`` to flag inbox urls already filed elsewhere — accurate but slow
+    on a large/iCloud vault (it reads every note), so it is opt-in."""
     vault = Path(vault)
     inbox_dir = vault / _INBOX_RELDIR
     schema_ok: list[str] = []
@@ -67,19 +70,22 @@ def check_inbox(vault: Path) -> InboxReport:
         (url, tuple(sorted(paths))) for url, paths in sorted(by_url.items()) if len(paths) > 1
     )
 
-    # Already filed = a matching url on a note OUTSIDE the inbox.
-    filed: set[str] = set()
-    knowledge = vault / "Knowledge"
-    if knowledge.is_dir():
-        for other in iter_notes(knowledge, base=vault):
-            if other.path.startswith(_INBOX_RELDIR + "/"):
-                continue
-            other_url = other.frontmatter.get("url")
-            if other_url:
-                filed.add(normalize_url(str(other_url)))
-    dup_vs_knowledge = tuple(
-        (paths[0], url) for url, paths in sorted(by_url.items()) if url in filed
-    )
+    # Already filed = a matching url on a note OUTSIDE the inbox. Opt-in: this
+    # reads every note under Knowledge/ (slow on a large/iCloud vault).
+    dup_vs_knowledge: tuple[tuple[str, str], ...] = ()
+    if check_filed and by_url:
+        filed: set[str] = set()
+        knowledge = vault / "Knowledge"
+        if knowledge.is_dir():
+            for other in iter_notes(knowledge, base=vault):
+                if other.path.startswith(_INBOX_RELDIR + "/"):
+                    continue
+                other_url = other.frontmatter.get("url")
+                if other_url:
+                    filed.add(normalize_url(str(other_url)))
+        dup_vs_knowledge = tuple(
+            (paths[0], url) for url, paths in sorted(by_url.items()) if url in filed
+        )
 
     return InboxReport(
         n_notes=len(notes),

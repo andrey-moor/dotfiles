@@ -54,8 +54,17 @@ def test_duplicate_urls_within_inbox_are_reported(tmp_path):
     )
 
 
-def test_inbox_url_already_filed_is_reported(tmp_path):
+def test_inbox_url_already_filed_is_reported_when_check_filed(tmp_path):
     _write(tmp_path, "Knowledge/articles/filed.md", **_good_fm(url="https://example.com/y", status="reference"))
     _write(tmp_path, "Knowledge/inbox/f.md", **_good_fm(url="https://example.com/y"))
-    report = check_inbox(tmp_path)
+    report = check_inbox(tmp_path, check_filed=True)
     assert report.dup_vs_knowledge == (("Knowledge/inbox/f.md", "https://example.com/y"),)
+
+
+def test_filed_check_is_off_by_default(tmp_path):
+    # The Knowledge-wide scan is slow on a large vault, so it must be opt-in:
+    # without check_filed the same filed dup is NOT reported.
+    _write(tmp_path, "Knowledge/articles/filed.md", **_good_fm(url="https://example.com/y", status="reference"))
+    _write(tmp_path, "Knowledge/inbox/f.md", **_good_fm(url="https://example.com/y"))
+    report = check_inbox(tmp_path)  # default: check_filed=False
+    assert report.dup_vs_knowledge == ()
