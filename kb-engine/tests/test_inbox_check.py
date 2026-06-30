@@ -68,3 +68,14 @@ def test_filed_check_is_off_by_default(tmp_path):
     _write(tmp_path, "Knowledge/inbox/f.md", **_good_fm(url="https://example.com/y"))
     report = check_inbox(tmp_path)  # default: check_filed=False
     assert report.dup_vs_knowledge == ()
+
+
+def test_tags_not_required_at_capture(tmp_path):
+    # The Web Clipper omits an empty multitext, so a fresh clip has no tags key;
+    # tags is applied later by topic-tagging, so its absence is NOT a failure.
+    fm = _good_fm()
+    del fm["tags"]
+    _write(tmp_path, "Knowledge/inbox/t.md", **fm)
+    report = check_inbox(tmp_path)
+    assert report.schema_ok == ("Knowledge/inbox/t.md",)
+    assert report.schema_bad == ()

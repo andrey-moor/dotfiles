@@ -12,9 +12,10 @@ from pathlib import Path
 from kb_engine.importing.urls import normalize_url
 from kb_engine.vault import iter_notes
 
-# Keys every inbox note must carry (the clip schema, minus summary/context/why
-# which may be empty/absent at capture time).
-_REQUIRED_KEYS = ("title", "url", "source", "date_added", "status", "tags")
+# Keys every inbox CLIP must carry. tags/summary/why are NOT required: tags is
+# applied later by topic-tagging (and the Web Clipper omits an empty multitext
+# entirely), summary is filled at process time, and why is reported separately.
+_REQUIRED_KEYS = ("title", "url", "source", "date_added", "status")
 _INBOX_RELDIR = "Knowledge/inbox"
 
 
