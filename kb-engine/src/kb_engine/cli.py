@@ -9,6 +9,8 @@ import click
 from kb_engine.config import Config
 from kb_engine.importing.digest import build_digest
 from kb_engine.importing.inbox import existing_urls, import_urls
+from kb_engine.importing.mail import connect, fetch_labeled
+from kb_engine.importing.mail_notes import import_mail
 from kb_engine.importing.things import read_things_tasks
 from kb_engine.importing.urls import normalize_url
 from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
@@ -38,6 +40,8 @@ DEFAULT_AREA_THRESHOLD = 0.3
 DEFAULT_ASSIGN_HIGH = 0.55
 DEFAULT_ASSIGN_SECONDARY = 0.45  # min cosine for a secondary (cross-link) topic
 DEFAULT_ASSIGN_LOW = 0.4
+DEFAULT_KB_LABEL = "Knowledge Base"
+DEFAULT_MAIL_LIMIT = 50
 _SUGGEST_MIN_CLUSTER_SIZE = 2  # surface two-note mini-themes below the adaptive floor
 _ASSIGNABLE_STATUSES = frozenset({"active", "proposed"})
 _TAXONOMY_RELPATH = Path("_system") / "_taxonomy.md"
@@ -820,6 +824,35 @@ def topics_suggest(cfg: Config, apply_changes: bool, as_json: bool) -> None:
         keywords = ", ".join(row["keywords"])
         click.echo(f"{row['slug']}  ({row['size']} notes)  [{keywords}]")
     click.echo(f"unfiled={result.n_unfiled} applied={apply_changes}")
+
+
+@main.command("import-mail")
+@click.option("--label", default=DEFAULT_KB_LABEL, show_default=True, help="Fastmail label to ingest.")
+@click.option("--limit", default=DEFAULT_MAIL_LIMIT, show_default=True, type=int)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def import_mail_cmd(cfg: Config, label: str, limit: int, as_json: bool) -> None:
+    """Ingest `<label>`-tagged newsletters from Fastmail (JMAP) into the inbox."""
+    token = os.environ.get("FASTMAIL_API_TOKEN")
+    if not token:
+        raise click.UsageError("FASTMAIL_API_TOKEN is not set (store it in 1Password/Nix, export for the run).")
+    try:
+        account_id, call = connect(token)
+        messages = fetch_labeled(call, account_id, label, limit)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    result = import_mail(cfg.vault_path, messages, date_added=date.today().isoformat())
+    payload = {
+        "fetched": len(messages),
+        "written": result.written,
+        "skipped_existing_url": result.skipped_existing_url,
+        "skipped_existing_msgid": result.skipped_existing_msgid,
+        "skipped_dup_in_batch": result.skipped_dup_in_batch,
+    }
+    _emit(payload, as_json,
+          f"mail: fetched {len(messages)} | wrote {result.written} | "
+          f"skipped url={result.skipped_existing_url} msgid={result.skipped_existing_msgid} "
+          f"batch={result.skipped_dup_in_batch}")
 
 
 @main.command("import-things")
