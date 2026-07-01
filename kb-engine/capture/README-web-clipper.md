@@ -23,12 +23,13 @@ land in the same vault the engine reads.
 ## 2. Import the template
 
 Import `web-clipper-template.json` (this folder) into the clipper's *Templates*.
-If import fails or your version's schema differs, recreate a template named
-**"KB Inbox"** with:
+If import fails or your version's schema differs, recreate the **"Default"**
+template (empty triggers, so every clip uses it) with:
 
 - **Note location / path:** `Knowledge/inbox`
-- **Note name:** the page title (safe filename)
-- **Note content:** the page content as Markdown (readability extraction)
+- **Note name:** the page title (`{{title}}`) — a page with no title lands as
+  `Untitled.md`; processing applies a title fallback later
+- **Note content:** the page content (`{{content}}`, readability extraction)
 - **Properties (frontmatter):**
 
   | property | value | notes |
@@ -36,25 +37,28 @@ If import fails or your version's schema differs, recreate a template named
   | `title` | the page title | |
   | `url` | the page URL | engine normalizes on read (dedup) |
   | `source` | `article` | literal; engine re-infers (github/tweet/…) at process time |
-  | `date_added` | clip date `YYYY-MM-DD` | |
+  | `date_added` | clip date (`{{date}}`) | ISO timestamp; presence-checked, normalized downstream |
   | `summary` | *(empty)* | filled at process time |
   | `status` | `inbox` | **must be exactly `inbox`** |
   | `context` | `Web Clipper` | provenance |
-  | `tags` | *(empty list)* | applied later by topic tagging |
-  | `why` | **prompt: "Why are you saving this?"** | your intent — the key new signal |
+  | `tags` | *(empty list)* | omitted by the clipper when empty; applied later by topic tagging |
+  | `why` | *(empty text — you fill it in the clip popup)* | your intent — the key new signal; **don't** use the Interpreter `{{"…?"}}` syntax (it makes the LLM guess) |
   | `project` | *(empty, optional)* | name a project if you already know it |
 
-## 3. Verify the "why" prompt (pivotal)
+## 3. Fill "why" at clip time (pivotal)
 
-The whole design leans on capturing *why* at clip time. After importing,
-**do a test clip and confirm the clipper prompts you for "Why are you saving
-this?"** and writes it to the `why` frontmatter.
+The whole design leans on capturing *why* at clip time. `why` is an empty
+**text** property, so it shows as a blank field in the clip popup — type your
+reason there (e.g. "pixel-art reference for the game"). The clipper does **not**
+modally prompt, so it's easy to forget (in testing it was missed on most clips).
 
-- **If it prompts:** great — capture stays one step.
-- **If your version can't prompt for free text** (especially on iOS): set `why`
-  to empty in the template and use the **degraded path** — you'll add "why" in a
-  5-second triage step during `/kb:review`. The design still holds; note this in
-  the test checklist results.
+That's expected, not a failure: a clip with no `why` still lands and stays
+searchable. `kb-engine inbox-check` reports it under `missing_why`, and the
+**`/kb:review` triage step backfills it in ~5 seconds** — your safety net.
+
+Do **not** set `why` to the Interpreter prompt syntax (`{{"Why are you saving
+this?"}}`): that hands the question to Web Clipper's LLM, which would *guess*
+your intent — the opposite of capturing it. Keep it empty and human-filled.
 
 ## 4. Field intent (why each exists)
 
