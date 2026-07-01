@@ -27,7 +27,7 @@ In Claude Desktop / Cowork, add a local MCP server (Cowork sidebar → **Customi
     "kb-engine-probe": {
       "command": "/ABS/PATH/TO/uv",
       "args": [
-        "run", "--extra", "mcp",
+        "run", "--extra", "mcp", "--extra", "ml",
         "--project", "/Users/andreym/Documents/dotfiles/kb-engine",
         "python", "-m", "kb_engine.mcp.probe"
       ],
@@ -38,6 +38,11 @@ In Claude Desktop / Cowork, add a local MCP server (Cowork sidebar → **Customi
   }
 }
 ```
+
+`--extra ml` pulls in torch for `kb_search`'s local embeddings. It's lazy-loaded
+(the server imports torch-free, so startup stays fast) — torch only loads on the
+*first* `kb_search` call. `kb_status` needs neither. If you've run `kb-engine`
+before, torch is already cached, so the first launch just verifies it.
 
 Restart Cowork so it picks up the server. It should list `kb-engine-probe` with
 two tools: `kb_status` and `kb_search`.
@@ -54,8 +59,10 @@ If both return real data → **connectivity confirmed**.
 
 Troubleshooting: if the server won't start, run the exact command from the config
 in a terminal (with `KB_VAULT` set) and check the error; the most common cause is
-a wrong `uv` path or `--extra mcp` not yet installed (run it once in the terminal
-to warm the install).
+a wrong `uv` path or the extras not yet installed (run it once in the terminal to
+warm the install). If `kb_status` works but `kb_search` errors, the env is missing
+torch — confirm `--extra ml` is in the args. Verified on this machine:
+`kb_status` → `{notes: 585, chunks: 585}`.
 
 ## 4. Live-Artifact refresh test
 
