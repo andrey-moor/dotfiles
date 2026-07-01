@@ -9,19 +9,17 @@ so the logic stays deterministic.
 
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import frontmatter
 
+from kb_engine.importing.notes import next_free_path, slug_for
 from kb_engine.importing.urls import infer_source, normalize_url
-from kb_engine.topics.labeling import slugify
 from kb_engine.vault import iter_notes
 
 _KNOWLEDGE = "Knowledge"
 _INBOX = "inbox"
 _STUB_BODY = "## Notes\n\nPending processing."
 _IMPORT_CONTEXT = "Imported from Things"
-_FALLBACK_SLUG = "untitled"
 
 
 @dataclass(frozen=True)
@@ -42,39 +40,6 @@ def existing_urls(vault: Path) -> set[str]:
         if url:
             urls.add(normalize_url(str(url)))
     return urls
-
-
-def _slug_from_url(url: str) -> str:
-    """Slug derived from the URL path, falling back to the host."""
-    parts = urlsplit(url)
-    return slugify(parts.path.strip("/")) or slugify(parts.hostname or "")
-
-
-def _slug_for(title: str, url: str) -> str:
-    """Slug from the title; fall back to the URL path, then a constant.
-
-    A title that is itself a URL carries no naming signal (it would slugify the
-    scheme/host), so it is treated as absent and the URL path is used instead.
-    """
-    slug = "" if title.strip().lower().startswith(("http://", "https://")) else slugify(title)
-    if not slug:
-        slug = _slug_from_url(url)
-    return slug or _FALLBACK_SLUG
-
-
-def _next_free_path(inbox_dir: Path, slug: str, taken: set[str]) -> Path:
-    """Return ``<slug>.md`` if free, else ``<slug>-2.md``, ``<slug>-3.md``, …."""
-    candidate = slug
-    if candidate in taken or (inbox_dir / f"{candidate}.md").exists():
-        suffix = 2
-        while (
-            f"{slug}-{suffix}" in taken
-            or (inbox_dir / f"{slug}-{suffix}.md").exists()
-        ):
-            suffix += 1
-        candidate = f"{slug}-{suffix}"
-    taken.add(candidate)
-    return inbox_dir / f"{candidate}.md"
 
 
 def _write_stub(path: Path, title: str, url: str, date_added: str) -> None:
@@ -123,8 +88,8 @@ def import_urls(
             skipped_dup_in_batch += 1
             continue
         seen_batch.add(normalized)
-        slug = _slug_for(title, normalized)
-        path = _next_free_path(inbox_dir, slug, taken_slugs)
+        slug = slug_for(title, normalized)
+        path = next_free_path(inbox_dir, slug, taken_slugs)
         _write_stub(path, title, normalized, stamp)
         written += 1
 
