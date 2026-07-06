@@ -10,6 +10,8 @@ from kb_engine.pipeline import PipelineResult, run_pipeline
 from kb_engine.store import Store
 from kb_engine.topics.clustering import FakeClusterer
 
+_WEEKLY_STEPS = ["sync", "import-mail", "apply-topics", "discover", "eval"]
+
 
 def _vault(tmp_path):
     """A vault with two Knowledge notes (synced) and one inbox stub."""
@@ -25,8 +27,9 @@ def _vault(tmp_path):
     return tmp_path
 
 
-def test_pipeline_runs_steps_and_summarizes(tmp_path):
-    # Two notes both clustered into one topic (labels 0,0); inbox has one stub.
+def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
+    # Two notes both clustered into one topic (labels 0,0); default weekly tier.
+    monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)  # import-mail skips
     cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     embedder = FakeEmbedder(dim=cfg.embed_dim)
@@ -37,16 +40,22 @@ def test_pipeline_runs_steps_and_summarizes(tmp_path):
         store.close()
 
     assert isinstance(res, PipelineResult)
-    assert res.synced == 2  # both notes embedded
-    assert res.applied == 0  # no active topics yet -> no note mutation
-    assert res.proposals == 1  # one discovered proposal from the cluster
-    assert res.inbox == 1  # the one inbox stub awaits processing
+    assert res.tier == "weekly"
+    assert res.ok is True  # skips (mail/eval) count as ok, no step raised
+    assert [o.name for o in res.outcomes] == _WEEKLY_STEPS
+    by_name = {o.name: o for o in res.outcomes}
+    assert "2 added" in by_name["sync"].detail  # both notes embedded
+    assert "skipped: no FASTMAIL_API_TOKEN" == by_name["import-mail"].detail
+    assert by_name["apply-topics"].detail.startswith("0 changed")  # no active topics
+    assert "1 new topic(s)" in by_name["discover"].detail  # one proposal from the cluster
+    assert "skipped: no probes.yaml" == by_name["eval"].detail
+    assert res.digest_path is not None and res.digest_path.name == "kb-digest.md"
     assert (cfg.vault_path / "_system" / "kb-digest.md").exists()
-    assert res.digest_path == "_system/kb-digest.md"
 
 
-def test_pipeline_only_applies_active_topics_no_mutation(tmp_path):
+def test_pipeline_only_applies_active_topics_no_mutation(tmp_path, monkeypatch):
     # Discovered proposals stay `proposed`, so no topic/ tag is written to notes.
+    monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
     cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     try:
@@ -60,8 +69,9 @@ def test_pipeline_only_applies_active_topics_no_mutation(tmp_path):
     assert "topic/" not in body_b
 
 
-def test_pipeline_applies_active_manual_topic(tmp_path):
+def test_pipeline_applies_active_manual_topic(tmp_path, monkeypatch):
     # An active manual topic with a member note IS applied (the only mutation path).
+    monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
     cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     embedder = FakeEmbedder(dim=cfg.embed_dim)
@@ -76,12 +86,15 @@ def test_pipeline_applies_active_manual_topic(tmp_path):
     finally:
         store.close()
 
-    assert res.applied >= 1
+    by_name = {o.name: o for o in res.outcomes}
+    assert by_name["apply-topics"].ok
+    assert by_name["apply-topics"].detail.startswith("1 changed")
     assert "topic/rust" in (cfg.vault_path / "Knowledge" / "a.md").read_text()
 
 
-def test_pipeline_empty_vault(tmp_path):
-    # No Knowledge dir at all: nothing synced/applied/proposed, digest still written.
+def test_pipeline_empty_vault(tmp_path, monkeypatch):
+    # No Knowledge dir at all: every step is a clean no-op, digest still written.
+    monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
     cfg = Config(vault_path=tmp_path, db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     try:
@@ -89,17 +102,31 @@ def test_pipeline_empty_vault(tmp_path):
     finally:
         store.close()
 
-    assert res.synced == 0
-    assert res.applied == 0
-    assert res.proposals == 0
-    assert res.inbox == 0
-    assert res.unfiled == 0
+    assert res.ok is True
+    assert [o.name for o in res.outcomes] == _WEEKLY_STEPS
+    by_name = {o.name: o for o in res.outcomes}
+    assert by_name["sync"].detail.startswith("0 added")
     assert (cfg.vault_path / "_system" / "kb-digest.md").exists()
+
+
+def test_pipeline_daily_tier_cli_skips_topic_steps(tmp_path, monkeypatch):
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
+    v = _vault(tmp_path)
+    db = tmp_path / "t.db"
+    r = CliRunner().invoke(
+        main, ["--vault", str(v), "--db", str(db), "pipeline", "--tier", "daily", "--json"]
+    )
+    assert r.exit_code == 0, r.output
+    out = json.loads(r.output)
+    assert out["tier"] == "daily"
+    assert [o["name"] for o in out["outcomes"]] == ["sync", "import-mail"]
 
 
 def test_pipeline_cli_json(tmp_path, monkeypatch):
     monkeypatch.setenv("KB_FAKE_EMBED", "1")
     monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0")
+    monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
     v = _vault(tmp_path)
     db = tmp_path / "t.db"
     r = CliRunner().invoke(
@@ -107,19 +134,21 @@ def test_pipeline_cli_json(tmp_path, monkeypatch):
     )
     assert r.exit_code == 0, r.output
     out = json.loads(r.output)
-    assert {"synced", "applied", "proposals", "inbox", "unfiled", "digest_path"} <= out.keys()
-    assert out["synced"] == 2
-    assert out["applied"] == 0  # no active topics -> no mutation
-    assert out["inbox"] == 1  # one inbox stub -> matches the nudge expression
-    assert out["digest_path"] == "_system/kb-digest.md"
+    assert {"tier", "ok", "outcomes", "digest_path"} <= out.keys()
+    assert out["tier"] == "weekly"  # default tier
+    assert out["ok"] is True
+    assert [o["name"] for o in out["outcomes"]] == _WEEKLY_STEPS
+    assert out["digest_path"].endswith("_system/kb-digest.md")
     assert (v / "_system" / "kb-digest.md").exists()
 
 
 def test_pipeline_cli_human_output(tmp_path, monkeypatch):
     monkeypatch.setenv("KB_FAKE_EMBED", "1")
     monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0")
+    monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
     v = _vault(tmp_path)
     db = tmp_path / "t.db"
     r = CliRunner().invoke(main, ["--vault", str(v), "--db", str(db), "pipeline"])
     assert r.exit_code == 0, r.output
-    assert "pipeline" in r.output.lower()
+    assert "pipeline" in r.output.lower()  # the trailing summary line
+    assert "✅ sync —" in r.output  # one marked line per step outcome

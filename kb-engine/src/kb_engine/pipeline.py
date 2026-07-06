@@ -1,25 +1,28 @@
-"""Deterministic, LLM-free maintenance pipeline.
+"""Deterministic maintenance pipeline: tiered steps, tolerant, digest-always.
 
-Composes the already-tested engine steps into one unattended run:
+Composes the already-tested engine steps into one unattended run. Each step is
+isolated so one failure never kills the run; the review digest is written even
+when steps fail (in a ``finally``), and every run is recorded in the ``runs``
+table.
 
-1. ``sync`` — embed new/changed notes, drop deleted (cache follows the vault).
-2. ``apply_topic_tags(only_status=("active",))`` — write ``topic/<slug>`` tags,
-   but only for *approved* (active) topics. Discovered proposals stay
-   ``proposed``, so a scheduled run never silently mis-tags notes.
-3. ``sticky_discover`` — cluster the residual into new ``proposed`` topics.
-4. ``build_digest`` — render ``<vault>/_system/kb-digest.md`` (the review entry
-   point). Regenerable; no note mutation.
+Tiers:
+- ``daily``:  sync → import-mail → digest
+- ``weekly``: sync → import-mail → apply-topics → discover → eval → digest
 
-This is what the weekly launchd agent runs. It is pure compute + a regenerable
-digest, safe to run unattended.
+Note mutation happens only for ``active`` topics (the gated apply); everything
+else is engine-cache plus a regenerable ``_system/kb-digest.md``. Safe to run
+unattended (LLM-free).
 """
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from kb_engine.config import Config
 from kb_engine.embeddings import Embedder
-from kb_engine.importing.digest import build_digest
+from kb_engine.importing.digest import DigestStatus, write_digest
+from kb_engine.importing.mail_notes import run_import_mail
 from kb_engine.store import Store
 from kb_engine.sync import sync
 from kb_engine.topics.apply import apply_topic_tags
@@ -27,20 +30,24 @@ from kb_engine.topics.clustering import Clusterer
 from kb_engine.topics.sticky import sticky_discover
 
 _INBOX_RELDIR = Path("Knowledge") / "inbox"
-_DIGEST_RELPATH = Path("_system") / "kb-digest.md"
 
 # Unattended runs apply only approved topics; proposals stay proposed.
 _ACTIVE_ONLY = ("active",)
 
 
 @dataclass(frozen=True)
+class StepOutcome:
+    name: str
+    ok: bool
+    detail: str
+
+
+@dataclass(frozen=True)
 class PipelineResult:
-    synced: int  # notes added or changed this run
-    applied: int  # notes that gained a topic/ tag (active topics only)
-    proposals: int  # new discovered topics from the residual
-    inbox: int  # inbox stubs awaiting processing (Knowledge/inbox/)
-    unfiled: int  # notes assigned to no topic
-    digest_path: str  # vault-relative path of the written digest
+    tier: str
+    ok: bool
+    outcomes: tuple[StepOutcome, ...]
+    digest_path: Path | None
 
 
 def count_inbox(vault_path: Path) -> int:
@@ -62,37 +69,98 @@ def unfiled_notes(store: Store) -> list[str]:
     return sorted(all_notes - filed)
 
 
-def run_pipeline(
-    cfg: Config, store: Store, embedder: Embedder, clusterer: Clusterer
-) -> PipelineResult:
-    """Run the full deterministic maintenance pipeline; return a summary.
+def _sync_step(cfg: Config, store: Store, embedder: Embedder) -> str:
+    s = sync(cfg, store, embedder)
+    return (
+        f"{s.added} added · {s.changed} changed · {s.deleted} deleted · "
+        f"{s.unchanged} unchanged · {s.evicted} evicted · {len(s.failures)} unreadable"
+    )
 
-    Mutates notes only for ``active`` topics (the gated apply); everything else
-    is engine-cache plus a regenerable ``_system/kb-digest.md``.
+
+def _import_mail_step(cfg: Config, store: Store) -> str:
+    token = os.environ.get("FASTMAIL_API_TOKEN")
+    if not token:
+        return "skipped: no FASTMAIL_API_TOKEN"
+    fetched, result = run_import_mail(cfg.vault_path, store, token)
+    return f"{result.written} newsletter note(s) written ({fetched} fetched)"
+
+
+def _apply_step(cfg: Config, store: Store) -> str:
+    r = apply_topic_tags(store, cfg.vault_path, only_status=_ACTIVE_ONLY)
+    return (
+        f"{r.n_changed} changed · {r.n_tags_added} tags added · "
+        f"{len(r.skipped_missing)} missing · {len(r.skipped_outside_vault)} outside-vault"
+    )
+
+
+def _discover_step(cfg: Config, store: Store, clusterer: Clusterer) -> str:
+    r = sticky_discover(store, clusterer)
+    return (
+        f"{r.n_assigned_existing} assigned · {r.n_new_topics} new topic(s) · "
+        f"{r.n_unfiled} unfiled"
+    )
+
+
+def _eval_step(cfg: Config, store: Store, embedder: Embedder) -> str:
+    from kb_engine.evaluation import evaluate, load_probes
+    from kb_engine.search import hybrid_search
+
+    probes_path = cfg.vault_path / "_system" / "probes.yaml"
+    if not probes_path.is_file():
+        return "skipped: no probes.yaml"
+    probes = load_probes(probes_path)
+    ranked = [
+        [p for p, _ in hybrid_search(store, embedder, probe.query, limit=5)]
+        for probe in probes
+    ]
+    report = evaluate(ranked, probes, k=5)
+    hits = sum(1 for o in report.outcomes if o.hit_rank is not None)
+    return f"recall@5 {report.recall:.2f} ({hits}/{len(report.outcomes)}) · MRR {report.mrr:.2f}"
+
+
+def _run_step(name: str, fn: Callable[[], str], outcomes: list[StepOutcome]) -> None:
+    try:
+        outcomes.append(StepOutcome(name, True, fn()))
+    except Exception as exc:  # noqa: BLE001 — one step must never kill the run
+        outcomes.append(StepOutcome(name, False, f"{type(exc).__name__}: {exc}"))
+
+
+def run_pipeline(
+    cfg: Config,
+    store: Store,
+    embedder: Embedder,
+    clusterer: Clusterer,
+    tier: str = "weekly",
+) -> PipelineResult:
+    """Run the tiered maintenance pipeline; write the digest even on failure.
+
+    Every step is wrapped (a failure is captured as a ``StepOutcome`` and never
+    aborts the run). The digest is written in a ``finally`` so a review entry
+    always exists, and the run is recorded in the ``runs`` table regardless.
     """
     store.init_schema()
+    run_id = store.start_run("pipeline", tier=tier)
+    outcomes: list[StepOutcome] = []
 
-    sync_stats = sync(cfg, store, embedder)
-    synced = sync_stats.added + sync_stats.changed
+    _run_step("sync", lambda: _sync_step(cfg, store, embedder), outcomes)
+    _run_step("import-mail", lambda: _import_mail_step(cfg, store), outcomes)
+    if tier == "weekly":
+        _run_step("apply-topics", lambda: _apply_step(cfg, store), outcomes)
+        _run_step("discover", lambda: _discover_step(cfg, store, clusterer), outcomes)
+        _run_step("eval", lambda: _eval_step(cfg, store, embedder), outcomes)
 
-    apply_result = apply_topic_tags(store, cfg.vault_path, only_status=_ACTIVE_ONLY)
-
-    sticky_result = sticky_discover(store, clusterer)
-
-    inbox_count = count_inbox(cfg.vault_path)
-    unfiled = unfiled_notes(store)
-    text = build_digest(
-        store, vault_path=cfg.vault_path, inbox_count=inbox_count, unfiled=unfiled
-    )
-    digest_path = cfg.vault_path / _DIGEST_RELPATH
-    digest_path.parent.mkdir(parents=True, exist_ok=True)
-    digest_path.write_text(text)
-
+    ok = all(o.ok for o in outcomes)
+    digest_path: Path | None = None
+    try:
+        status = DigestStatus(tier=tier, ok=ok, outcomes=tuple(outcomes))
+        digest_path = write_digest(cfg, store, status=status)
+    finally:
+        store.finish_run(
+            run_id,
+            ok=ok and digest_path is not None,
+            counts={o.name: o.detail for o in outcomes},
+            errors=[f"{o.name}: {o.detail}" for o in outcomes if not o.ok],
+        )
     return PipelineResult(
-        synced=synced,
-        applied=apply_result.n_changed,
-        proposals=sticky_result.n_new_topics,
-        inbox=inbox_count,
-        unfiled=len(unfiled),
-        digest_path=_DIGEST_RELPATH.as_posix(),
+        tier=tier, ok=ok, outcomes=tuple(outcomes), digest_path=digest_path
     )

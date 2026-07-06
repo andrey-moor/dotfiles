@@ -1,7 +1,8 @@
 import numpy as np
 
-from kb_engine.importing.digest import build_digest, count_proposals
+from kb_engine.importing.digest import DigestStatus, build_digest, count_proposals
 from kb_engine.models import Area, Topic, TopicMember
+from kb_engine.pipeline import StepOutcome
 from kb_engine.store import Store
 
 
@@ -41,11 +42,46 @@ def test_build_digest_reports_state(tmp_path):
 
 def test_build_digest_is_idempotent_no_timestamps(tmp_path):
     store = _seeded_store(tmp_path)
-    a = build_digest(store, vault_path=tmp_path, inbox_count=3, unfiled=[])
-    b = build_digest(store, vault_path=tmp_path, inbox_count=3, unfiled=[])
-    assert a == b
-    # no obvious date stamp leaked into the body
-    assert "2026-" not in a
+    status = DigestStatus(
+        tier="weekly", ok=True, outcomes=(StepOutcome("sync", True, "0 added"),)
+    )
+    a = build_digest(store, vault_path=tmp_path, inbox_count=3, unfiled=[], status=status)
+    b = build_digest(store, vault_path=tmp_path, inbox_count=3, unfiled=[], status=status)
+    # The Status header carries a render-time timestamp; the body below
+    # ## Summary stays deterministic — that is the idempotency contract now.
+    body_a = a.split("## Summary", 1)[1]
+    body_b = b.split("## Summary", 1)[1]
+    assert body_a == body_b
+    # no obvious date stamp leaked into the deterministic body
+    assert "2026-" not in body_a
+
+
+def test_build_digest_status_header_renders_failed_run(tmp_path):
+    store = _seeded_store(tmp_path)
+    status = DigestStatus(
+        tier="daily",
+        ok=False,
+        outcomes=(
+            StepOutcome("sync", False, "OSError: boom"),
+            StepOutcome("import-mail", True, "skipped: no FASTMAIL_API_TOKEN"),
+        ),
+    )
+    text = build_digest(store, vault_path=tmp_path, inbox_count=0, unfiled=[], status=status)
+    assert text.startswith("# KB Digest")
+    assert "## Status" in text
+    assert "tier: daily" in text and "FAILED" in text
+    assert "- sync: OSError: boom" in text
+    assert "- import-mail: skipped: no FASTMAIL_API_TOKEN" in text
+    # the Status section precedes the deterministic Summary body
+    assert text.index("## Status") < text.index("## Summary")
+
+
+def test_build_digest_without_status_has_no_status_header(tmp_path):
+    # The standalone `digest` command passes no status: no header, no timestamp.
+    store = _seeded_store(tmp_path)
+    text = build_digest(store, vault_path=tmp_path, inbox_count=0, unfiled=[])
+    assert "## Status" not in text
+    assert text.startswith("# KB Digest\n\n## Summary")
 
 
 def test_build_digest_empty_state(tmp_path):

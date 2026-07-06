@@ -1,18 +1,35 @@
 """Write Knowledge/inbox/ body-notes for fetched mail, deduped by normalized
 URL (inbox-only scan + caller-supplied extras) and by Message-ID."""
 
+import logging
+import sqlite3
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 import frontmatter
 
-from kb_engine.importing.mail import MailMessage, body_markdown, canonical_url
+from kb_engine.importing.mail import (
+    MailMessage,
+    body_markdown,
+    canonical_url,
+    connect,
+    fetch_labeled,
+)
 from kb_engine.importing.notes import next_free_path, slug_for
 from kb_engine.importing.urls import normalize_url
+from kb_engine.store import Store
 from kb_engine.vault import iter_notes
+
+logger = logging.getLogger(__name__)
 
 _KNOWLEDGE = "Knowledge"
 _INBOX = "inbox"
+
+# Single source of the mail-channel defaults, surfaced by the import-mail CLI
+# flags and used unattended by the pipeline.
+DEFAULT_KB_LABEL = "Knowledge Base"
+DEFAULT_MAIL_LIMIT = 50
 
 
 @dataclass(frozen=True)
@@ -105,3 +122,37 @@ def import_mail(
         written += 1
 
     return MailImportResult(written, skip_url, skip_msgid, skip_batch)
+
+
+def run_import_mail(
+    vault: Path,
+    store: Store,
+    token: str,
+    label: str = DEFAULT_KB_LABEL,
+    limit: int = DEFAULT_MAIL_LIMIT,
+) -> tuple[int, MailImportResult]:
+    """Fetch ``<label>`` mail over JMAP, dedup against cache + inbox, write inbox notes.
+
+    The one function both the ``import-mail`` CLI command and the maintenance
+    pipeline call (DRY). ``connect``/``fetch_labeled`` may raise ``ValueError``
+    (missing label / JMAP error) — callers decide how to surface it. Cache reads
+    degrade to inbox-only dedup if the cache is unavailable. Returns
+    ``(fetched_count, result)``.
+    """
+    account_id, call = connect(token)
+    messages = fetch_labeled(call, account_id, label, limit)
+    try:
+        store.init_schema()
+        extra_urls = frozenset(store.existing_urls())
+        extra_msgids = frozenset(store.existing_message_ids())
+    except (sqlite3.Error, OSError):
+        logger.warning("cache unavailable; deduping against inbox only")
+        extra_urls = extra_msgids = frozenset()
+    result = import_mail(
+        vault,
+        messages,
+        date_added=date.today().isoformat(),
+        extra_seen_urls=extra_urls,
+        extra_seen_msgids=extra_msgids,
+    )
+    return len(messages), result

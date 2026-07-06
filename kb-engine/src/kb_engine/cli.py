@@ -1,5 +1,4 @@
 import json
-import sqlite3
 import sys
 import os
 from datetime import date, datetime, timezone
@@ -10,8 +9,11 @@ import click
 from kb_engine.config import Config
 from kb_engine.importing.digest import build_digest
 from kb_engine.importing.inbox import existing_urls, import_urls
-from kb_engine.importing.mail import connect, fetch_labeled
-from kb_engine.importing.mail_notes import import_mail
+from kb_engine.importing.mail_notes import (
+    DEFAULT_KB_LABEL,
+    DEFAULT_MAIL_LIMIT,
+    run_import_mail,
+)
 from kb_engine.importing.things import read_things_tasks
 from kb_engine.importing.urls import normalize_url
 from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
@@ -42,8 +44,8 @@ DEFAULT_AREA_THRESHOLD = 0.3
 DEFAULT_ASSIGN_HIGH = 0.55
 DEFAULT_ASSIGN_SECONDARY = 0.45  # min cosine for a secondary (cross-link) topic
 DEFAULT_ASSIGN_LOW = 0.4
-DEFAULT_KB_LABEL = "Knowledge Base"
-DEFAULT_MAIL_LIMIT = 50
+# DEFAULT_KB_LABEL / DEFAULT_MAIL_LIMIT live in kb_engine.importing.mail_notes
+# (imported above) so the import-mail flags and the pipeline share one default.
 _SUGGEST_MIN_CLUSTER_SIZE = 2  # surface two-note mini-themes below the adaptive floor
 _ASSIGNABLE_STATUSES = frozenset({"active", "proposed"})
 _TAXONOMY_RELPATH = Path("_system") / "_taxonomy.md"
@@ -920,34 +922,22 @@ def import_mail_cmd(cfg: Config, label: str, limit: int, as_json: bool) -> None:
     token = os.environ.get("FASTMAIL_API_TOKEN")
     if not token:
         raise click.UsageError("FASTMAIL_API_TOKEN is not set (store it in 1Password/Nix, export for the run).")
+    store = Store(cfg.db_path)
     try:
-        account_id, call = connect(token)
-        messages = fetch_labeled(call, account_id, label, limit)
+        fetched, result = run_import_mail(cfg.vault_path, store, token, label, limit)
     except ValueError as e:
         raise click.ClickException(str(e))
-    extra_urls: frozenset[str] = frozenset()
-    extra_msgids: frozenset[str] = frozenset()
-    try:
-        store = Store(cfg.db_path)
-        try:
-            store.init_schema()
-            extra_urls = frozenset(store.existing_urls())
-            extra_msgids = frozenset(store.existing_message_ids())
-        finally:
-            store.close()
-    except (sqlite3.Error, OSError) as e:
-        click.echo(f"warning: cache unavailable ({e}); deduping against inbox only", err=True)
-    result = import_mail(cfg.vault_path, messages, date_added=date.today().isoformat(),
-                         extra_seen_urls=extra_urls, extra_seen_msgids=extra_msgids)
+    finally:
+        store.close()
     payload = {
-        "fetched": len(messages),
+        "fetched": fetched,
         "written": result.written,
         "skipped_existing_url": result.skipped_existing_url,
         "skipped_existing_msgid": result.skipped_existing_msgid,
         "skipped_dup_in_batch": result.skipped_dup_in_batch,
     }
     _emit(payload, as_json,
-          f"mail: fetched {len(messages)} | wrote {result.written} | "
+          f"mail: fetched {fetched} | wrote {result.written} | "
           f"skipped url={result.skipped_existing_url} msgid={result.skipped_existing_msgid} "
           f"batch={result.skipped_dup_in_batch}")
 
@@ -1140,37 +1130,56 @@ def digest(cfg: Config, as_json: bool) -> None:
 
 
 @main.command()
+@click.option(
+    "--tier",
+    type=click.Choice(["daily", "weekly"]),
+    default="weekly",
+    show_default=True,
+    help="daily = sync + import-mail + digest; weekly adds apply/discover + eval.",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
-def pipeline(cfg: Config, as_json: bool) -> None:
-    """Run the deterministic maintenance pipeline (sync → apply → discover → digest).
+def pipeline(cfg: Config, tier: str, as_json: bool) -> None:
+    """Run the tolerant tiered maintenance pipeline; the digest is always written.
 
-    LLM-free and safe to run unattended: it embeds new/changed notes, applies
-    ``topic/<slug>`` tags for *active* topics only (proposals stay proposed, so
-    nothing is silently mis-tagged), clusters the residual into new proposals,
-    and writes ``_system/kb-digest.md``. This is what the weekly launchd agent runs.
+    Each step is isolated so one failure never aborts the run; the review digest
+    (``_system/kb-digest.md``, with a status header) is written even on failure
+    and every run is recorded. ``--tier daily`` runs sync → import-mail → digest;
+    ``--tier weekly`` also applies *active* topics, clusters the residual into
+    proposals, and runs a retrieval eval. LLM-free and safe to run unattended.
     """
     store = Store(cfg.db_path)
     try:
         result = run_pipeline(
-            cfg, store, _build_embedder(cfg), _build_clusterer()
+            cfg, store, _build_embedder(cfg), _build_clusterer(), tier=tier
         )
     finally:
         store.close()
-    _emit(
-        {
-            "synced": result.synced,
-            "applied": result.applied,
-            "proposals": result.proposals,
-            "inbox": result.inbox,
-            "unfiled": result.unfiled,
-            "digest_path": result.digest_path,
-        },
-        as_json,
-        f"Pipeline: synced={result.synced} applied={result.applied} "
-        f"proposals={result.proposals} inbox={result.inbox} "
-        f"unfiled={result.unfiled} -> {result.digest_path}",
-    )
+
+    if as_json:
+        click.echo(
+            json.dumps(
+                {
+                    "tier": result.tier,
+                    "ok": result.ok,
+                    "outcomes": [
+                        {"name": o.name, "ok": o.ok, "detail": o.detail}
+                        for o in result.outcomes
+                    ],
+                    "digest_path": (
+                        str(result.digest_path) if result.digest_path else None
+                    ),
+                }
+            )
+        )
+        return
+
+    for o in result.outcomes:
+        mark = "✅" if o.ok else "⚠️"
+        click.echo(f"{mark} {o.name} — {o.detail}")
+    state = "ok" if result.ok else "FAILED"
+    digest = result.digest_path if result.digest_path is not None else "(none)"
+    click.echo(f"pipeline[{result.tier}]: {state} — digest {digest}")
 
 
 @main.command("file")
