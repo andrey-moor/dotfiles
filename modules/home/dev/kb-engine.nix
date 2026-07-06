@@ -34,6 +34,16 @@ let
     fi
     /usr/bin/osascript -e "display notification \"$msg\" with title \"kb-engine\""
   '';
+
+  # Nightly vault autosnapshot: stage everything, then commit only when the
+  # index actually changed so quiet nights are no-ops. The vault git repo is
+  # local-only — plain versioning/diffability atop iCloud + Time Machine.
+  autocommitRunner = pkgs.writeShellScript "kb-vault-autocommit" ''
+    set -euo pipefail
+    cd "${cfg.vaultPath}"
+    ${pkgs.git}/bin/git add -A
+    ${pkgs.git}/bin/git diff --cached --quiet || ${pkgs.git}/bin/git commit -m "auto: $(date +%F)"
+  '';
 in {
   options.modules.dev.kb-engine = {
     enable = mkEnableOption "kb-engine local KB embedding + hybrid search";
@@ -70,6 +80,15 @@ in {
           StartCalendarInterval = cfg.schedule.calendar;
           StandardOutPath = "${logDir}/kb-engine-pipeline.log";
           StandardErrorPath = "${logDir}/kb-engine-pipeline.err";
+        };
+      };
+      launchd.agents.kb-vault-autocommit = {
+        enable = true;
+        config = {
+          ProgramArguments = [ "${autocommitRunner}" ];
+          StartCalendarInterval = { Hour = 21; Minute = 30; };
+          StandardOutPath = "${logDir}/kb-vault-autocommit.log";
+          StandardErrorPath = "${logDir}/kb-vault-autocommit.err";
         };
       };
     })
