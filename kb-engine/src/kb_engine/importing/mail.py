@@ -80,13 +80,18 @@ def body_markdown(msg: MailMessage) -> str:
     """The email body as clean Markdown. Newsletter emails are table-based with
     tracking pixels + boilerplate, so extract the main content with trafilatura
     (lazy, optional [mail] extra); fall back to the plain-text part, then to raw
-    markdownify of the HTML."""
+    markdownify of the HTML.
+
+    Tables are excluded (include_tables=False) because newsletter layouts use
+    single-cell wrapper tables that trafilatura would otherwise render as a
+    degenerate Markdown table wrapping the whole article body."""
     if msg.html_body:
         try:
             import trafilatura  # lazy (optional [mail] extra)
 
             extracted = trafilatura.extract(
-                msg.html_body, output_format="markdown", include_links=True, include_images=False
+                msg.html_body, output_format="markdown", include_links=True,
+                include_images=False, include_tables=False,
             )
             if extracted and extracted.strip():
                 return extracted.strip()

@@ -42,3 +42,21 @@ def test_body_markdown_strips_email_table_chrome():
     assert "real article paragraph" in md
     assert "|" not in md            # no leftover Markdown tables
     assert "pixel.gif" not in md    # tracking pixel stripped
+
+
+def test_body_markdown_unwraps_table_wrapped_article():
+    pytest.importorskip("trafilatura")
+    html = (
+        "<html><body><table role='presentation'><tr><td>"
+        "<h1>Multi-Region Architecture</h1>"
+        "<p>When an application grows geographically, it is logical to start serving it "
+        "from a second region to improve latency and availability. However, adding a second "
+        "region can make it slower and less reliable than it was with one region alone.</p>"
+        "<p>Going global is better understood as a progression than as a single decision. "
+        "Each step buys something concrete: lower latency, higher availability, or the ability "
+        "to keep data inside a country border.</p>"
+        "</td></tr></table></body></html>"
+    )
+    md = body_markdown(MailMessage("m@x", "S", "a@b.com", None, "2026-07-01T00:00:00Z", "", html))
+    assert "grows geographically" in md    # article prose preserved
+    assert "|" not in md                    # not wrapped in a Markdown table
