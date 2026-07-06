@@ -1,9 +1,9 @@
 """Health checks: the KB must never look healthier than it is."""
 
-import os
 import sqlite3
 import subprocess
 import time
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,8 +32,13 @@ def check_digest_fresh(vault_path: Path, now: float) -> Check:
     age = now - digest.stat().st_mtime
     if age > DIGEST_MAX_AGE_S:
         return Check("digest-fresh", False, "hard", f"digest is {age / 86400:.1f} days old")
-    head = digest.read_text()[:600]
-    if "FAILED" in head:
+    try:
+        head = digest.read_text(encoding="utf-8")[:600]
+    except OSError as exc:
+        return Check("digest-fresh", False, "hard", f"unreadable: {exc}")
+    # Match the Status header's failure marker exactly; a step detail merely
+    # mentioning the word FAILED on an otherwise-ok run must not trip this.
+    if "⚠️ FAILED" in head:
         return Check("digest-fresh", False, "hard", "last pipeline run FAILED")
     return Check("digest-fresh", True, "hard", "fresh and ok")
 
@@ -51,10 +56,10 @@ def _check_db(db_path: Path) -> Check:
     try:
         # NOT mode=ro: the DB is in WAL mode (Phase 0) and read-only URI opens
         # fail with SQLITE_CANTOPEN(14) when the -wal/-shm sidecars need creating.
-        conn = sqlite3.connect(db_path)
-        conn.execute("PRAGMA query_only=ON")
-        row = conn.execute("PRAGMA integrity_check").fetchone()
-        conn.close()
+        # closing() releases the handle even when a PRAGMA raises.
+        with closing(sqlite3.connect(db_path)) as conn:
+            conn.execute("PRAGMA query_only=ON")
+            row = conn.execute("PRAGMA integrity_check").fetchone()
     except sqlite3.Error as exc:
         return Check("db", False, "hard", str(exc))
     return Check("db", row[0] == "ok", "hard", str(row[0]))
@@ -82,7 +87,10 @@ def _check_vault_git(vault_path: Path, now: float) -> Check:
 
 def _check_model_cache() -> Check:
     hub = Path.home() / ".cache" / "huggingface" / "hub"
-    hit = hub.is_dir() and any("jina" in p.name for p in hub.iterdir())
+    try:
+        hit = hub.is_dir() and any("jina" in p.name for p in hub.iterdir())
+    except OSError as exc:
+        return Check("model-cache", False, "warn", f"unreadable: {exc}")
     return Check("model-cache", bool(hit), "warn", str(hub))
 
 
