@@ -77,7 +77,7 @@ def sync(cfg: Config, store: Store, embedder: Embedder) -> SyncStats:
             note = read_note(stat.abs_path, base=cfg.vault_path)
         except OSError as exc:
             logger.warning("skipping unreadable note %s: %s", stat.abs_path, exc)
-            failures.append(stat.abs_path.name)
+            failures.append(path)  # vault-relative, matching the rest of sync
             continue
         if known is None:
             _index_note(store, note, embedder)

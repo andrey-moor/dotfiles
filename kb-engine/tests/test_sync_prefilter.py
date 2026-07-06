@@ -86,6 +86,25 @@ def test_evicted_note_paths_maps_placeholder_names(tmp_path):
     assert evicted_note_paths(k, base=tmp_path) == frozenset({"Knowledge/some note.md"})
 
 
+def test_unreadable_but_stat_unchanged_note_is_never_opened(tmp_path):
+    # Locks the no-read invariant: a stat-unchanged file must not even be
+    # opened — if sync tried, the 0o000 perms would raise and land in failures.
+    cfg = _vault(tmp_path)
+    p = _note(cfg, "a.md")
+    store = Store(cfg.db_path)
+    emb = CountingEmbedder()
+    sync(cfg, store, emb)
+    first_calls = emb.passage_calls
+    os.chmod(p, 0o000)  # unreadable, but mtime/size untouched
+    try:
+        stats = sync(cfg, store, emb)
+    finally:
+        os.chmod(p, 0o644)
+    assert stats.unchanged == 1
+    assert stats.failures == ()
+    assert emb.passage_calls == first_calls
+
+
 def test_unreadable_existing_note_is_kept_and_reported(tmp_path):
     cfg = _vault(tmp_path)
     p = _note(cfg, "a.md")
@@ -99,5 +118,5 @@ def test_unreadable_existing_note_is_kept_and_reported(tmp_path):
     finally:
         os.chmod(p, 0o644)
     assert stats.deleted == 0
-    assert stats.failures == ("a.md",)
+    assert stats.failures == ("Knowledge/a.md",)
     assert "Knowledge/a.md" in store.all_note_stats()
