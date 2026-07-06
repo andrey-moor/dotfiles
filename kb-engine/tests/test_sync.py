@@ -97,6 +97,32 @@ def test_sync_skips_directory_named_like_markdown(tmp_path):
     assert sync(cfg, Store(cfg.db_path), FakeEmbedder(dim=16)).added == 1
 
 
+def test_sync_backfills_url_message_id_for_unchanged_note(tmp_path):
+    """sha-unchanged notes must still refresh url/message_id so cache-based dedup works."""
+    v = tmp_path
+    k = v / "Knowledge"
+    k.mkdir()
+    (k / "x.md").write_text(
+        "---\ntitle: X\nurl: https://example.com/p/1\nmessage_id: msg@x\n---\nbody"
+    )
+    cfg = Config(vault_path=v, db_path=tmp_path / "t.db")
+    store = Store(cfg.db_path)
+
+    # First sync: note is indexed with url + message_id.
+    sync(cfg, store, FakeEmbedder(dim=16))
+
+    # Simulate a pre-migration DB where those columns were NULL.
+    store.set_note_metadata("Knowledge/x.md", None, None)
+    assert not store.existing_urls(), "precondition: url wiped"
+    assert not store.existing_message_ids(), "precondition: message_id wiped"
+
+    # Second sync: sha is unchanged so no re-embed, but metadata must backfill.
+    sync(cfg, store, FakeEmbedder(dim=16))
+
+    assert store.existing_urls(), "url must be repopulated after sha-unchanged sync"
+    assert store.existing_message_ids(), "message_id must be repopulated after sha-unchanged sync"
+
+
 def test_index_note_embeds_summary_and_ftss_full_body(tmp_path):
     store = Store(tmp_path / "kb.db")
     store.init_schema()

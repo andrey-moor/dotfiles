@@ -32,12 +32,25 @@ def _disk_notes(cfg: Config) -> dict[str, Note]:
     }
 
 
+def _url_msgid(note: Note) -> tuple[str | None, str | None]:
+    """Extract url and message_id from note frontmatter as (url, message_id)."""
+    url = note.frontmatter.get("url") or None
+    message_id = note.frontmatter.get("message_id") or None
+    return (
+        str(url) if url is not None else None,
+        str(message_id) if message_id is not None else None,
+    )
+
+
 def _index_note(store: Store, note: Note, embedder: Embedder) -> None:
     # Semantic vector = title + summary (one clean vector). FTS = full body.
     vector = embedder.embed_passages([embedding_text(note)])[0]
+    url, message_id = _url_msgid(note)
     store.upsert_note(
         path=note.path, title=note.title, sha256=note.sha256,
         tags=list(note.tags), summary=summary_of(note),
+        url=url,
+        message_id=message_id,
     )
     store.replace_chunks(note.path, [(0, fts_text(note), vector)])
 
@@ -57,6 +70,10 @@ def sync(cfg: Config, store: Store, embedder: Embedder) -> SyncStats:
         elif db_shas[path] != note.sha256:
             _index_note(store, note, embedder)
             changed += 1
+        else:
+            # sha unchanged: skip the expensive re-embed, but keep url/message_id
+            # current so cache-based dedup covers already-filed notes.
+            store.set_note_metadata(path, *_url_msgid(note))
 
     for path in db_shas:
         if path not in disk:

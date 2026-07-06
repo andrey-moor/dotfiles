@@ -77,13 +77,31 @@ def canonical_url(msg: MailMessage) -> str | None:
 
 
 def body_markdown(msg: MailMessage) -> str:
-    """The email body as Markdown: HTML->md via markdownify when an HTML part
-    exists (fuller + structured), else the plain-text part verbatim."""
+    """The email body as clean Markdown. Newsletter emails are table-based with
+    tracking pixels + boilerplate, so extract the main content with trafilatura
+    (lazy, optional [mail] extra); fall back to the plain-text part, then to raw
+    markdownify of the HTML."""
     if msg.html_body:
-        from markdownify import markdownify  # lazy (optional [mail] extra)
+        try:
+            import trafilatura  # lazy (optional [mail] extra)
+
+            extracted = trafilatura.extract(
+                msg.html_body, output_format="markdown", include_links=True, include_images=False
+            )
+            if extracted and extracted.strip():
+                return extracted.strip()
+        except ImportError:
+            pass  # [mail] extra not installed; use the text/markdownify fallbacks
+        except Exception:
+            import logging
+            logging.getLogger(__name__).debug("trafilatura extract failed; falling back", exc_info=True)
+    if msg.text_body.strip():
+        return msg.text_body.strip()
+    if msg.html_body:
+        from markdownify import markdownify
 
         return markdownify(msg.html_body, heading_style="ATX").strip()
-    return msg.text_body.strip()
+    return ""
 
 
 def _to_message(email: dict) -> MailMessage:

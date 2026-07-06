@@ -1,5 +1,5 @@
 """Write Knowledge/inbox/ body-notes for fetched mail, deduped by normalized
-URL (vault-wide) and by Message-ID (email notes carry a message_id field)."""
+URL (inbox-only scan + caller-supplied extras) and by Message-ID."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,26 +23,14 @@ class MailImportResult:
     skipped_dup_in_batch: int
 
 
-def existing_message_ids(vault: Path) -> set[str]:
-    knowledge = Path(vault) / _KNOWLEDGE
-    if not knowledge.is_dir():
-        return set()
-    ids: set[str] = set()
-    for note in iter_notes(knowledge, base=vault):
-        mid = note.frontmatter.get("message_id")
-        if mid:
-            ids.add(str(mid))
-    return ids
-
-
-def existing_urls_and_msgids(vault: Path) -> tuple[set[str], set[str]]:
-    """One walk of Knowledge/ collecting both normalized urls and message_ids."""
-    knowledge = Path(vault) / _KNOWLEDGE
+def inbox_urls_and_msgids(vault: Path) -> tuple[set[str], set[str]]:
+    """Walk only Knowledge/inbox/ collecting normalized URLs and message_ids."""
+    inbox = Path(vault) / _KNOWLEDGE / _INBOX
     urls: set[str] = set()
     ids: set[str] = set()
-    if not knowledge.is_dir():
+    if not inbox.is_dir():
         return urls, ids
-    for note in iter_notes(knowledge, base=vault):
+    for note in iter_notes(inbox, base=vault):
         url = note.frontmatter.get("url")
         if url:
             urls.add(normalize_url(str(url)))
@@ -64,13 +52,21 @@ def _url_for(msg: MailMessage) -> str:
     return f"mail:{msg.received_at}:{slugify(msg.subject)}"  # last-resort unique-ish key
 
 
-def import_mail(vault: Path, messages: list[MailMessage], date_added: str | None = None) -> MailImportResult:
+def import_mail(
+    vault: Path,
+    messages: list[MailMessage],
+    date_added: str | None = None,
+    extra_seen_urls: frozenset[str] = frozenset(),
+    extra_seen_msgids: frozenset[str] = frozenset(),
+) -> MailImportResult:
     vault = Path(vault)
     inbox_dir = vault / _KNOWLEDGE / _INBOX
     inbox_dir.mkdir(parents=True, exist_ok=True)
     stamp = date_added or ""
 
-    seen_urls, seen_msgids = existing_urls_and_msgids(vault)
+    inbox_urls, inbox_msgids = inbox_urls_and_msgids(vault)
+    seen_urls: set[str] = inbox_urls | extra_seen_urls
+    seen_msgids: set[str] = inbox_msgids | extra_seen_msgids
     batch_urls: set[str] = set()
     taken: set[str] = set()
     written = skip_url = skip_msgid = skip_batch = 0

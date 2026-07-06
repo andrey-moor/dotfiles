@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import sys
 import os
 from datetime import date, datetime, timezone
@@ -841,7 +842,20 @@ def import_mail_cmd(cfg: Config, label: str, limit: int, as_json: bool) -> None:
         messages = fetch_labeled(call, account_id, label, limit)
     except ValueError as e:
         raise click.ClickException(str(e))
-    result = import_mail(cfg.vault_path, messages, date_added=date.today().isoformat())
+    extra_urls: frozenset[str] = frozenset()
+    extra_msgids: frozenset[str] = frozenset()
+    try:
+        store = Store(cfg.db_path)
+        try:
+            store.init_schema()
+            extra_urls = frozenset(store.existing_urls())
+            extra_msgids = frozenset(store.existing_message_ids())
+        finally:
+            store.close()
+    except (sqlite3.Error, OSError) as e:
+        click.echo(f"warning: cache unavailable ({e}); deduping against inbox only", err=True)
+    result = import_mail(cfg.vault_path, messages, date_added=date.today().isoformat(),
+                         extra_seen_urls=extra_urls, extra_seen_msgids=extra_msgids)
     payload = {
         "fetched": len(messages),
         "written": result.written,

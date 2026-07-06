@@ -6,12 +6,14 @@ from typing import Iterator
 
 import numpy as np
 
+from kb_engine.importing.urls import normalize_url
 from kb_engine.models import Area, Topic, TopicMember
 from kb_engine.topics._math import frozen_centroid
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
-  path TEXT PRIMARY KEY, title TEXT, sha256 TEXT NOT NULL, tags TEXT, summary TEXT
+  path TEXT PRIMARY KEY, title TEXT, sha256 TEXT NOT NULL, tags TEXT, summary TEXT,
+  url TEXT, message_id TEXT
 );
 CREATE TABLE IF NOT EXISTS chunks (
   id INTEGER PRIMARY KEY, note_path TEXT NOT NULL, ordinal INTEGER NOT NULL,
@@ -93,6 +95,9 @@ class Store:
         self._ensure_column("notes", "summary", "TEXT")
         # Backfill for databases created before is_primary was added to _SCHEMA.
         self._ensure_column("topic_members", "is_primary", "INTEGER NOT NULL DEFAULT 1")
+        # Backfill for databases created before url/message_id were added to _SCHEMA.
+        self._ensure_column("notes", "url", "TEXT")
+        self._ensure_column("notes", "message_id", "TEXT")
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -101,15 +106,45 @@ class Store:
             self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     def upsert_note(
-        self, path: str, title: str, sha256: str, tags: list[str], summary: str = ""
+        self,
+        path: str,
+        title: str,
+        sha256: str,
+        tags: list[str],
+        summary: str = "",
+        url: str | None = None,
+        message_id: str | None = None,
     ) -> None:
         self._conn.execute(
             """
-            INSERT INTO notes(path, title, sha256, tags, summary) VALUES(?, ?, ?, ?, ?)
+            INSERT INTO notes(path, title, sha256, tags, summary, url, message_id)
+            VALUES(?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET title=excluded.title,
-                sha256=excluded.sha256, tags=excluded.tags, summary=excluded.summary
+                sha256=excluded.sha256, tags=excluded.tags, summary=excluded.summary,
+                url=excluded.url, message_id=excluded.message_id
             """,
-            (path, title, sha256, json.dumps(list(tags)), summary),
+            (path, title, sha256, json.dumps(list(tags)), summary, url, message_id),
+        )
+        self._conn.commit()
+
+    def existing_urls(self) -> set[str]:
+        """Return the set of normalized URLs stored in the cache."""
+        rows = self._conn.execute(
+            "SELECT url FROM notes WHERE url IS NOT NULL AND url != ''"
+        ).fetchall()
+        return {normalize_url(row[0]) for row in rows}
+
+    def existing_message_ids(self) -> set[str]:
+        """Return the set of message IDs stored in the cache."""
+        rows = self._conn.execute(
+            "SELECT message_id FROM notes WHERE message_id IS NOT NULL AND message_id != ''"
+        ).fetchall()
+        return {row[0] for row in rows}
+
+    def set_note_metadata(self, path: str, url: str | None, message_id: str | None) -> None:
+        """Patch just the url/message_id of an already-indexed note (no re-embed)."""
+        self._conn.execute(
+            "UPDATE notes SET url = ?, message_id = ? WHERE path = ?", (url, message_id, path)
         )
         self._conn.commit()
 

@@ -3,7 +3,7 @@ from pathlib import Path
 import frontmatter
 
 from kb_engine.importing.mail import MailMessage
-from kb_engine.importing.mail_notes import import_mail, existing_message_ids
+from kb_engine.importing.mail_notes import import_mail
 
 
 def _msg(mid, subject, sender="peteryang@substack.com", text="body text", html=None):
@@ -55,3 +55,11 @@ def test_within_batch_dedup(tmp_path):
     res = import_mail(tmp_path, [msg1, msg2], date_added="2026-07-01")
     assert res.written == 1
     assert res.skipped_dup_in_batch == 1
+
+
+def test_dedup_against_caller_supplied_seen(tmp_path):
+    from kb_engine.importing.mail_notes import import_mail
+    msg = _msg("m9@x", "Already Filed", text="View this post on the web at https://ex.com/p/z")
+    res = import_mail(tmp_path, [msg], date_added="2026-07-01",
+                      extra_seen_msgids=frozenset({"m9@x"}))
+    assert res.written == 0 and res.skipped_existing_msgid == 1

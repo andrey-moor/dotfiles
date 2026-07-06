@@ -24,3 +24,21 @@ def test_body_markdown_converts_html():
 
 def test_body_markdown_falls_back_to_plaintext():
     assert body_markdown(_msg(text="plain only")) == "plain only"
+
+
+def test_body_markdown_strips_email_table_chrome():
+    import pytest
+    pytest.importorskip("trafilatura")
+    html = (
+        "<html><body>"
+        "<img src='https://track.example/pixel.gif?token=abc'/>"
+        "<table><tr><td></td><td></td></tr></table>"
+        "<div><p>The real article paragraph with a clear sentence about latency.</p>"
+        "<p>A second substantive paragraph explaining the architecture in detail.</p></div>"
+        "<table><tr><td>Unsubscribe</td><td>Get the app</td></tr></table>"
+        "</body></html>"
+    )
+    md = body_markdown(MailMessage("m@x", "S", "a@b.com", None, "2026-07-01T00:00:00Z", "", html))
+    assert "real article paragraph" in md
+    assert "|" not in md            # no leftover Markdown tables
+    assert "pixel.gif" not in md    # tracking pixel stripped
