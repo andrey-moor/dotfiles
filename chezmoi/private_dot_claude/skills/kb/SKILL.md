@@ -17,6 +17,15 @@ description: >-
 
 Obsidian-based knowledge base with AI-assisted tagging, synthesis, and retrieval.
 
+## Preflight (every /kb:* invocation)
+
+Before any KB operation, check the digest status file:
+`_system/kb-digest.md` in the vault. If its `## Status` section says FAILED, or the
+file is older than 8 days (stat its mtime), STOP and tell the user first:
+"⚠️ The KB pipeline last ran <when> with status <status> — run `kb-engine doctor` /
+check `~/Library/Logs/kb-engine-pipeline-*.err` before trusting results."
+Then proceed with the requested operation, flagging that results may be stale.
+
 ## Vault Layout
 
 ```
