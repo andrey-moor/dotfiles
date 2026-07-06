@@ -134,10 +134,15 @@ def test_pipeline_cli_json(tmp_path, monkeypatch):
     )
     assert r.exit_code == 0, r.output
     out = json.loads(r.output)
-    assert {"tier", "ok", "outcomes", "digest_path"} <= out.keys()
+    assert {"tier", "ok", "outcomes", "counts", "digest_path"} <= out.keys()
     assert out["tier"] == "weekly"  # default tier
     assert out["ok"] is True
     assert [o["name"] for o in out["outcomes"]] == _WEEKLY_STEPS
+    # counts feed the launchd runner's review-queue notification.
+    assert set(out["counts"]) == {"inbox", "proposals", "unfiled"}
+    assert all(isinstance(n, int) for n in out["counts"].values())
+    assert out["counts"]["inbox"] == 1  # the fixture's single inbox stub
+    assert out["counts"]["proposals"] == 1  # the 0,0 cluster's proposed topic
     assert out["digest_path"].endswith("_system/kb-digest.md")
     assert (v / "_system" / "kb-digest.md").exists()
 

@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from kb_engine.config import Config
-from kb_engine.importing.digest import build_digest
+from kb_engine.importing.digest import build_digest, count_proposals
 from kb_engine.importing.inbox import existing_urls, import_urls
 from kb_engine.importing.mail_notes import (
     DEFAULT_KB_LABEL,
@@ -1153,6 +1153,13 @@ def pipeline(cfg: Config, tier: str, as_json: bool) -> None:
         result = run_pipeline(
             cfg, store, _build_embedder(cfg), _build_clusterer(), tier=tier
         )
+        # Review-queue counts (same helpers the digest renders from) — consumed
+        # by the launchd runner to size its "N to review" notification.
+        counts = {
+            "inbox": count_inbox(cfg.vault_path),
+            "proposals": count_proposals(store.load_topics()),
+            "unfiled": len(unfiled_notes(store)),
+        }
     finally:
         store.close()
 
@@ -1166,6 +1173,7 @@ def pipeline(cfg: Config, tier: str, as_json: bool) -> None:
                         {"name": o.name, "ok": o.ok, "detail": o.detail}
                         for o in result.outcomes
                     ],
+                    "counts": counts,
                     "digest_path": (
                         str(result.digest_path) if result.digest_path else None
                     ),
