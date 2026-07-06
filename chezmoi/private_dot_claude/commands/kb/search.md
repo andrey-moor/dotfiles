@@ -3,7 +3,7 @@ Search the knowledge base by topic, tags, or content.
 ## Usage
 
 `/kb:search <query>`
-`/kb:search <query> --limit N` — show up to N results (default: 20)
+`/kb:search <query> --limit N` — show up to N results (default: 10)
 
 Examples:
 - `/kb:search sprite generation`
@@ -11,59 +11,27 @@ Examples:
 - `/kb:search rust FUSE filesystem`
 - `/kb:search AI agents --limit 50`
 
-## Instructions
+## Procedure
 
-1. Parse `$ARGUMENTS`:
-   - Extract `--limit N` if present (default: 20)
-   - Remaining text is the search query
+1. Parse the query and optional `--limit N` (default 10).
+2. **Tag queries** (`tag:X`): use the Obsidian MCP tag search as before — the engine
+   does not index tag filters yet.
+3. **Everything else — engine first (hybrid semantic + keyword):**
 
-2. **Search strategy** — run these in parallel:
-
-   a. **Full-text search**: Use `mcp__obsidian__search_notes` with the query string, `searchContent: true`, `searchFrontmatter: true`, `limit: <parsed limit>`. This searches both note content and frontmatter (tags, summary, context, title) in one call.
-
-   b. **Tag listing**: Use `mcp__obsidian__list_all_tags` to find tags matching query terms, then identify which notes use those tags.
-
-3. Filter all results to notes under `Main/Knowledge/` path only (includes `wiki/`). Exclude `_system/` and `Archive/` results.
-
-4. If query starts with `tag:`, search only by tag match (exact prefix match). Use `mcp__obsidian__search_notes` with `searchFrontmatter: true` and the tag value as query.
-
-5. For each matching note, read its frontmatter via `mcp__obsidian__get_frontmatter` to build the result display.
-
-6. **Present results** sorted by relevance:
-   ```
-   ## KB Search: "<query>"
-
-   **N results found**
-
-   1. **Note Title** — [source] [wiki]
-      Tags: AI/RAG, Tutorials
-      Summary: "Brief summary..."
-      Context: "why user saved it"
-      → Main/Knowledge/note-name.md
-
-   2. **Another Note** — [github]
-      Tags: Dev/Rust, Tools
-      Summary: "..."
-      → Main/Knowledge/another-note.md
+   ```bash
+   kb-engine --vault "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents/Main" search "<query>" --json
    ```
 
-   Mark wiki articles with `[wiki]` and derived notes with `[derived]` after the source type.
-
-7. If results hit the limit:
-   ```
-   Showing <limit> results. Use `/kb:search <query> --limit 50` for more.
-   ```
-
-8. If no results found:
-   ```
-   No results for "<query>" in Knowledge Base.
-
-   Try broader terms or check Archive/ for old notes.
-   ```
-
-## Post-search actions
-
-After presenting results, the user may ask to:
-- **Archive a note**: "archive note X" → update status to `archived` via `mcp__obsidian__update_frontmatter`, regenerate index
-- **Open a note**: "show me note X" → read and display full content via `mcp__obsidian__read_note`
-- **Retag a note**: "retag note X" → read content, suggest new tags with confidence levels, apply if approved
+   Take the top `N` hits. For each, read the note's frontmatter (title, source, tags,
+   summary, why) via the Obsidian MCP and present: title — one-line summary — tags —
+   path. Mark `[wiki]` / `[derived]` notes.
+4. **Fallback:** if the engine call fails (missing binary, stale DB), fall back to the
+   Obsidian MCP full-text search and say so explicitly in the reply ("engine
+   unavailable — keyword-only results").
+5. When the user opens or acts on a result, log it (fire-and-forget; ignore errors):
+   `kb-engine --vault "<vault>" log-event --kind open --path "<note path>"`
+6. **Probe-on-miss:** if the user indicates the thing they wanted was NOT in the
+   results ("not it", "couldn't find"), once they locate the right note, append a probe
+   to `_system/probes.yaml` (query = their original phrasing, expect = the found path)
+   and tell them the suite grew.
+7. Offer post-search actions: open, archive, retag (unchanged).

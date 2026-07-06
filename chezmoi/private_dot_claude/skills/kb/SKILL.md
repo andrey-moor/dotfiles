@@ -98,12 +98,22 @@ Always read the live taxonomy at `Main/_system/_taxonomy.md` before tagging.
 
 **Triggers**: "find notes about", "what do I have on", "search KB", `/kb:search`
 
-1. Use `mcp__obsidian__search_notes` with `searchContent: true`, `searchFrontmatter: true`, `limit: N` (default 20, configurable via `--limit`).
-2. Filter to `Main/Knowledge/` path (includes wiki/ and source notes).
-3. For `tag:` prefix, search frontmatter only.
-4. Read frontmatter of matches via `mcp__obsidian__get_frontmatter`.
-5. Present with title, source, tags, summary, context. Mark `[wiki]` and `[derived]` note types.
-6. Post-search: user can archive notes ("archive X" → set status to archived), view full content, or retag from results.
+Search runs through the local `kb-engine` **hybrid search** (semantic + keyword) per the
+updated `/kb:search` procedure — the engine replaced the old Obsidian full-text search here.
+
+1. **Tag queries** (`tag:X`) use the Obsidian MCP tag search (`mcp__obsidian__search_notes`,
+   `searchFrontmatter: true`); the engine does not index tag filters yet.
+2. **Everything else** → `kb-engine --vault "<Main>" search "<query>" --json`; take the top
+   N (default 10). Read each hit's frontmatter via `mcp__obsidian__get_frontmatter` and
+   present title, source, tags, summary. Mark `[wiki]` / `[derived]` types.
+3. **Fallback**: if the engine call fails, fall back to `mcp__obsidian__search_notes`
+   full-text and say so explicitly ("engine unavailable — keyword-only results").
+4. When the user opens a result, log it fire-and-forget:
+   `kb-engine --vault "<Main>" log-event --kind open --path "<path>"`.
+5. **Probe-on-miss**: if the user says a result was "not it" and then finds the right note,
+   append a probe to `_system/probes.yaml` (query = their phrasing, expect = found path) and
+   tell them the suite grew.
+6. Post-search: user can archive ("archive X" → set status to archived), open, or retag from results.
 
 ### 4. Taxonomy
 
