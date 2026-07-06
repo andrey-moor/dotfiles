@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS area_members (
   PRIMARY KEY (area_slug, topic_slug),
   FOREIGN KEY (area_slug) REFERENCES areas(slug) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  query TEXT,
+  top_path TEXT,
+  hit_rank INTEGER
+);
 """
 
 # FTS terms = unicode word runs that may contain mid-word hyphens (e.g.
@@ -451,6 +459,30 @@ class Store:
                 best[note_path] = float(rank)
                 order.append(note_path)
         return [(p, best[p]) for p in order]
+
+    def record_event(
+        self,
+        kind: str,
+        query: str | None = None,
+        top_path: str | None = None,
+        hit_rank: int | None = None,
+    ) -> None:
+        """Append a local telemetry event (cache-local observability, not files-as-truth)."""
+        with self._conn:
+            self._conn.execute(
+                "INSERT INTO events (ts, kind, query, top_path, hit_rank) "
+                "VALUES (datetime('now'), ?, ?, ?, ?)",
+                (kind, query, top_path, hit_rank),
+            )
+
+    def count_events(self, kind: str | None = None) -> int:
+        if kind is None:
+            row = self._conn.execute("SELECT count(*) FROM events").fetchone()
+        else:
+            row = self._conn.execute(
+                "SELECT count(*) FROM events WHERE kind = ?", (kind,)
+            ).fetchone()
+        return int(row[0])
 
     def count_notes(self) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]

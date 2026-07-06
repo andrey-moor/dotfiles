@@ -179,6 +179,12 @@ def search(cfg: Config, query: str, limit: int, as_json: bool) -> None:
             }
             for path, score in results
         ]
+        store.record_event(
+            "search",
+            query=query,
+            top_path=results[0][0] if results else None,
+            hit_rank=1 if results else None,
+        )
     finally:
         store.close()
 
@@ -190,6 +196,21 @@ def search(cfg: Config, query: str, limit: int, as_json: bool) -> None:
         return
     for hit in hits:
         click.echo(f"{hit['score']:.4f}  {hit['title']}  ({hit['note_path']})")
+
+
+@main.command("log-event")
+@click.option("--kind", type=click.Choice(["open", "capture"]), required=True)
+@click.option("--path", "note_path", required=True, help="Vault-relative note path.")
+@click.pass_obj
+def log_event(cfg: Config, kind: str, note_path: str) -> None:
+    """Record a local telemetry event (used by the kb skill)."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        store.record_event(kind, top_path=note_path)
+    finally:
+        store.close()
+    click.echo("ok")
 
 
 @main.command("eval")
