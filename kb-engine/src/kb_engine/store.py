@@ -47,6 +47,16 @@ CREATE TABLE IF NOT EXISTS events (
   top_path TEXT,
   hit_rank INTEGER
 );
+CREATE TABLE IF NOT EXISTS runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  command TEXT NOT NULL,
+  tier TEXT,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  ok INTEGER,
+  counts TEXT,
+  errors TEXT
+);
 """
 
 # FTS terms = unicode word runs that may contain mid-word hyphens (e.g.
@@ -483,6 +493,47 @@ class Store:
                 "SELECT count(*) FROM events WHERE kind = ?", (kind,)
             ).fetchone()
         return int(row[0])
+
+    def start_run(self, command: str, tier: str | None = None) -> int:
+        with self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO runs (command, tier, started_at) VALUES (?, ?, datetime('now'))",
+                (command, tier),
+            )
+        return int(cur.lastrowid)
+
+    def finish_run(
+        self,
+        run_id: int,
+        ok: bool,
+        counts: dict | None = None,
+        errors: list[str] | None = None,
+    ) -> None:
+        with self._conn:
+            self._conn.execute(
+                "UPDATE runs SET finished_at = datetime('now'), ok = ?, counts = ?, errors = ? WHERE id = ?",
+                (int(ok), json.dumps(counts or {}), json.dumps(errors or []), run_id),
+            )
+
+    def last_run(self, command: str | None = None) -> dict | None:
+        sql = "SELECT command, tier, started_at, finished_at, ok, counts, errors FROM runs"
+        params: tuple = ()
+        if command is not None:
+            sql += " WHERE command = ?"
+            params = (command,)
+        sql += " ORDER BY id DESC LIMIT 1"
+        row = self._conn.execute(sql, params).fetchone()
+        if row is None:
+            return None
+        return {
+            "command": row[0],
+            "tier": row[1],
+            "started_at": row[2],
+            "finished_at": row[3],
+            "ok": None if row[4] is None else bool(row[4]),
+            "counts": json.loads(row[5]) if row[5] else {},
+            "errors": json.loads(row[6]) if row[6] else [],
+        }
 
     def count_notes(self) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]

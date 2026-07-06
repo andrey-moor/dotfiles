@@ -354,18 +354,30 @@ def status(cfg: Config, as_json: bool) -> None:
         store.init_schema()
         notes = store.count_notes()
         chunks = store.count_chunks()
+        last = store.last_run("pipeline")
     finally:
         store.close()
-    _emit(
-        {
-            "notes": notes,
-            "chunks": chunks,
-            "db_path": str(cfg.db_path),
-            "last_sync": last_sync,
-        },
-        as_json,
-        f"notes={notes} chunks={chunks} db={cfg.db_path} last_sync={last_sync}",
-    )
+
+    if as_json:
+        click.echo(
+            json.dumps(
+                {
+                    "notes": notes,
+                    "chunks": chunks,
+                    "db_path": str(cfg.db_path),
+                    "last_sync": last_sync,
+                    "last_run": last,
+                }
+            )
+        )
+        return
+
+    click.echo(f"notes={notes} chunks={chunks} db={cfg.db_path} last_sync={last_sync}")
+    if last is None:
+        click.echo("last pipeline run: never")
+    else:
+        state = "running" if last["finished_at"] is None else ("ok" if last["ok"] else "FAILED")
+        click.echo(f"last pipeline run: {last['started_at']}Z ({last['tier'] or '-'}) — {state}")
 
 
 @main.command("inbox-check")
