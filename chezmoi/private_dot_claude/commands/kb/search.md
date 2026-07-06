@@ -29,9 +29,16 @@ Examples:
    Obsidian MCP full-text search and say so explicitly in the reply ("engine
    unavailable — keyword-only results").
 5. When the user opens or acts on a result, log it (fire-and-forget; ignore errors):
-   `kb-engine --vault "<vault>" log-event --kind open --path "<note path>"`
+   `kb-engine --vault "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents/Main" log-event --kind open --path "<note path>"`
 6. **Probe-on-miss:** if the user indicates the thing they wanted was NOT in the
    results ("not it", "couldn't find"), once they locate the right note, append a probe
    to `_system/probes.yaml` (query = their original phrasing, expect = the found path)
-   and tell them the suite grew.
+   and tell them the suite grew. Read the file first and match its existing structure —
+   each probe is a list item shaped exactly like:
+
+   ```yaml
+   - query: "their original phrasing"
+     expect:
+       - "Knowledge/the-found-note.md"
+   ```
 7. Offer post-search actions: open, archive, retag (unchanged).
