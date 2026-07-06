@@ -886,7 +886,10 @@ def _check_db(db_path: Path) -> Check:
     if not db_path.is_file():
         return Check("db", False, "hard", f"missing: {db_path}")
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        # NOT mode=ro: the DB is in WAL mode (Phase 0) and read-only URI opens
+        # fail with SQLITE_CANTOPEN(14) when the -wal/-shm sidecars need creating.
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA query_only=ON")
         row = conn.execute("PRAGMA integrity_check").fetchone()
         conn.close()
     except sqlite3.Error as exc:
