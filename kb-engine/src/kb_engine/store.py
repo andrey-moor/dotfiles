@@ -88,6 +88,8 @@ class Store:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path))
         self._conn.execute("PRAGMA foreign_keys=ON")
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
 
     def init_schema(self) -> None:
         self._conn.executescript(_SCHEMA)
