@@ -5,8 +5,9 @@
 # `de.feschber.LanMouse`, so they persist across Nix rebuilds unlike
 # bare /nix/store binaries that get a new path every time.
 #
-# The `latest` tag is a rolling pre-release. When a proper tagged release
-# ships .app bundles, switch the URL and hash to that tag.
+# Pinned to the stable v0.11.0 release. Upstream retired the rolling `main`
+# tag (pre-releases are now tagged `main-<commit>`), so to bump, pick a newer
+# tagged release and update `version` + `sha256` below.
 #
 # Usage: pkgs.callPackage ../packages/lan-mouse-app { }
 
@@ -18,11 +19,11 @@
 
 stdenvNoCC.mkDerivation rec {
   pname = "lan-mouse-app";
-  version = "main";
+  version = "v0.11.0";
 
   src = fetchurl {
     url = "https://github.com/feschber/lan-mouse/releases/download/${version}/lan-mouse-macos-arm64.zip";
-    sha256 = "sha256-TSPMBtyM8zmV01b+x+Gt7Dn12XI9VCpU5DQ/Nh2LZqY=";
+    sha256 = "sha256-X/mWXQW+fxJbHXW55yWdh07JiqCGzkABJSK8JUBlAKk=";
   };
 
   dontBuild = true;
