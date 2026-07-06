@@ -118,6 +118,9 @@ class Store:
         # Backfill for databases created before url/message_id were added to _SCHEMA.
         self._ensure_column("notes", "url", "TEXT")
         self._ensure_column("notes", "message_id", "TEXT")
+        # Backfill for databases created before mtime/size (stat-prefilter) were added.
+        self._ensure_column("notes", "mtime", "REAL")
+        self._ensure_column("notes", "size", "INTEGER")
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -205,6 +208,18 @@ class Store:
     def all_note_shas(self) -> dict[str, str]:
         rows = self._conn.execute("SELECT path, sha256 FROM notes").fetchall()
         return {path: sha for path, sha in rows}
+
+    def all_note_stats(self) -> dict[str, tuple[str, float | None, int | None]]:
+        """Return ``{path: (sha256, mtime, size)}`` for the stat-prefiltered sync."""
+        rows = self._conn.execute("SELECT path, sha256, mtime, size FROM notes").fetchall()
+        return {r[0]: (r[1], r[2], r[3]) for r in rows}
+
+    def set_note_stat(self, path: str, mtime: float, size: int) -> None:
+        """Refresh the stored mtime/size for an already-indexed note (no re-embed)."""
+        with self._conn:
+            self._conn.execute(
+                "UPDATE notes SET mtime = ?, size = ? WHERE path = ?", (mtime, size, path)
+            )
 
     def notes_by_tag(self) -> dict[str, set[str]]:
         """Return ``{tag: {note_path, ...}}`` built from each note's tags JSON.

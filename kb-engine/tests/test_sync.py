@@ -1,3 +1,4 @@
+import os
 import types
 
 import numpy as np
@@ -98,11 +99,13 @@ def test_sync_skips_directory_named_like_markdown(tmp_path):
 
 
 def test_sync_backfills_url_message_id_for_unchanged_note(tmp_path):
-    """sha-unchanged notes must still refresh url/message_id so cache-based dedup works."""
+    """A note re-examined after a stat change but with unchanged content (sha) must
+    still refresh url/message_id — no re-embed — so cache-based dedup works."""
     v = tmp_path
     k = v / "Knowledge"
     k.mkdir()
-    (k / "x.md").write_text(
+    p = k / "x.md"
+    p.write_text(
         "---\ntitle: X\nurl: https://example.com/p/1\nmessage_id: msg@x\n---\nbody"
     )
     cfg = Config(vault_path=v, db_path=tmp_path / "t.db")
@@ -115,6 +118,10 @@ def test_sync_backfills_url_message_id_for_unchanged_note(tmp_path):
     store.set_note_metadata("Knowledge/x.md", None, None)
     assert not store.existing_urls(), "precondition: url wiped"
     assert not store.existing_message_ids(), "precondition: message_id wiped"
+
+    # Bump mtime so the stat-prefilter re-examines the note; its content (sha) is
+    # unchanged, so it takes the no-re-embed metadata-backfill path.
+    os.utime(p, (os.path.getatime(p), os.path.getmtime(p) + 10))
 
     # Second sync: sha is unchanged so no re-embed, but metadata must backfill.
     sync(cfg, store, FakeEmbedder(dim=16))

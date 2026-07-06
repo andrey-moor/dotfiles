@@ -1,6 +1,7 @@
 import hashlib
 import re
 import types
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -90,3 +91,53 @@ def iter_notes(
                 on_error(path, exc)
             continue
         yield note
+
+
+@dataclass(frozen=True)
+class NoteStat:
+    path: str  # vault-relative posix path
+    abs_path: Path
+    mtime: float
+    size: int
+
+
+def iter_note_stats(
+    root: Path, base: Path | None = None, exclude_dirs: tuple[str, ...] = ()
+) -> Iterator[NoteStat]:
+    """Stat-only walk — never reads file contents (iCloud-safe)."""
+    anchor = root if base is None else base
+    for path in sorted(root.rglob("*.md")):
+        if not path.is_file():
+            continue
+        if exclude_dirs and path.relative_to(root).parts[0] in exclude_dirs:
+            continue
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        yield NoteStat(
+            path=path.relative_to(anchor).as_posix(),
+            abs_path=path,
+            mtime=st.st_mtime,
+            size=st.st_size,
+        )
+
+
+def evicted_note_paths(
+    root: Path, base: Path | None = None, exclude_dirs: tuple[str, ...] = ()
+) -> frozenset[str]:
+    """Vault-relative .md paths currently evicted by iCloud (.<name>.md.icloud)."""
+    anchor = root if base is None else base
+    out: set[str] = set()
+    for path in root.rglob("*.icloud"):
+        name = path.name
+        if not (name.startswith(".") and name.endswith(".icloud")):
+            continue
+        original = name[1 : -len(".icloud")]
+        if not original.endswith(".md"):
+            continue
+        rel_parts = path.relative_to(root).parts
+        if exclude_dirs and rel_parts[0] in exclude_dirs:
+            continue
+        out.add((path.parent / original).relative_to(anchor).as_posix())
+    return frozenset(out)
