@@ -15,6 +15,7 @@ from kb_engine.importing.mail_notes import import_mail
 from kb_engine.importing.things import read_things_tasks
 from kb_engine.importing.urls import normalize_url
 from kb_engine.embeddings import Embedder, FakeEmbedder, LocalJinaEmbedder
+from kb_engine.evaluation import ProbeError, evaluate, load_probes
 from kb_engine.models import TopicMember
 from kb_engine.pipeline import count_inbox, run_pipeline, unfiled_notes
 from kb_engine.search import hybrid_search
@@ -189,6 +190,55 @@ def search(cfg: Config, query: str, limit: int, as_json: bool) -> None:
         return
     for hit in hits:
         click.echo(f"{hit['score']:.4f}  {hit['title']}  ({hit['note_path']})")
+
+
+@main.command("eval")
+@click.option("--k", default=5, show_default=True, type=int, help="Rank cutoff for recall/MRR.")
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON.")
+@click.pass_obj
+def eval_cmd(cfg: Config, k: int, as_json: bool) -> None:
+    """Run retrieval probes from _system/probes.yaml; report recall@k and MRR."""
+    probes_path = cfg.vault_path / "_system" / "probes.yaml"
+    if not probes_path.is_file():
+        raise click.UsageError(f"no probes file at {probes_path}")
+    try:
+        probes = load_probes(probes_path)
+    except ProbeError as exc:
+        raise click.UsageError(str(exc)) from exc
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()  # tolerate evaluating a never-synced DB (no tables yet)
+        embedder = _build_embedder(cfg)
+        ranked = [
+            [path for path, _score in hybrid_search(store, embedder, p.query, limit=k)]
+            for p in probes
+        ]
+    finally:
+        store.close()
+    report = evaluate(ranked, probes, k=k)
+    if as_json:
+        click.echo(
+            json.dumps(
+                {
+                    "k": report.k,
+                    "recall": report.recall,
+                    "mrr": report.mrr,
+                    "probes": [
+                        {"query": o.query, "hit_rank": o.hit_rank}
+                        for o in report.outcomes
+                    ],
+                }
+            )
+        )
+        return
+    hits = sum(1 for o in report.outcomes if o.hit_rank is not None)
+    click.echo(
+        f"recall@{report.k} {report.recall:.2f} ({hits}/{len(report.outcomes)}) "
+        f"· MRR {report.mrr:.2f}"
+    )
+    for o in report.outcomes:
+        mark = f"#{o.hit_rank}" if o.hit_rank else "MISS"
+        click.echo(f"  [{mark:>4}] {o.query}")
 
 
 @main.command("synthesis-candidates")
