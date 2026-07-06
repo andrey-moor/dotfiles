@@ -1158,7 +1158,7 @@ def digest(cfg: Config, as_json: bool) -> None:
     type=click.Choice(["daily", "weekly"]),
     default="weekly",
     show_default=True,
-    help="daily = sync + import-mail + digest; weekly adds apply/discover + eval.",
+    help="daily = import-mail + enrich + sync + digest; weekly adds apply/discover + eval.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
@@ -1167,9 +1167,10 @@ def pipeline(cfg: Config, tier: str, as_json: bool) -> None:
 
     Each step is isolated so one failure never aborts the run; the review digest
     (``_system/kb-digest.md``, with a status header) is written even on failure
-    and every run is recorded. ``--tier daily`` runs sync → import-mail → digest;
-    ``--tier weekly`` also applies *active* topics, clusters the residual into
-    proposals, and runs a retrieval eval. LLM-free and safe to run unattended.
+    and every run is recorded. ``--tier daily`` runs import-mail → enrich → sync →
+    digest; ``--tier weekly`` also applies *active* topics, clusters the residual
+    into proposals, and runs a retrieval eval. Enrichment only runs with
+    ``ANTHROPIC_API_KEY`` set; otherwise it skips, keeping the run LLM-free.
     """
     store = Store(cfg.db_path)
     try:

@@ -14,6 +14,7 @@ def _cfg(tmp_path):
 
 def test_failed_sync_still_writes_digest_with_failed_status(tmp_path, monkeypatch):
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)  # import-mail skips, no network
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = _cfg(tmp_path)
     store = Store(cfg.db_path)
 
@@ -30,20 +31,22 @@ def test_failed_sync_still_writes_digest_with_failed_status(tmp_path, monkeypatc
 
 def test_daily_tier_skips_topic_steps(tmp_path, monkeypatch):
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)  # import-mail skips, no network
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = _cfg(tmp_path)
     store = Store(cfg.db_path)
     result = run_pipeline(cfg, store, FakeEmbedder(), FakeClusterer([]), tier="daily")
     names = [o.name for o in result.outcomes]
-    assert "sync" in names and "apply-topics" not in names and "discover" not in names
+    assert ["import-mail", "enrich", "sync"] == names
 
 
 def test_weekly_tier_runs_topic_steps_and_records_run(tmp_path, monkeypatch):
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)  # import-mail skips, no network
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = _cfg(tmp_path)
     store = Store(cfg.db_path)
     result = run_pipeline(cfg, store, FakeEmbedder(), FakeClusterer([]), tier="weekly")
     names = [o.name for o in result.outcomes]
-    assert ["sync", "import-mail", "apply-topics", "discover", "eval"] == names
+    assert ["import-mail", "enrich", "sync", "apply-topics", "discover", "eval"] == names
     assert store.last_run("pipeline")["tier"] == "weekly"
     digest = (tmp_path / "_system" / "kb-digest.md").read_text()
     assert digest.startswith("# KB Digest")

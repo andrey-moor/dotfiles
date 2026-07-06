@@ -6,12 +6,13 @@ when steps fail (in a ``finally``), and every run is recorded in the ``runs``
 table.
 
 Tiers:
-- ``daily``:  sync → import-mail → digest
-- ``weekly``: sync → import-mail → apply-topics → discover → eval → digest
+- ``daily``:  import-mail → enrich → sync → digest
+- ``weekly``: import-mail → enrich → sync → apply-topics → discover → eval → digest
 
-Note mutation happens only for ``active`` topics (the gated apply); everything
-else is engine-cache plus a regenerable ``_system/kb-digest.md``. Safe to run
-unattended (LLM-free).
+Enrichment (summaries/whys/titles) runs only when ``ANTHROPIC_API_KEY`` is set;
+without it the step is a no-op skip so the pipeline stays LLM-free by default.
+Note mutation is otherwise limited to ``active`` topics (the gated apply);
+everything else is engine-cache plus a regenerable ``_system/kb-digest.md``.
 """
 
 import os
@@ -85,6 +86,19 @@ def _import_mail_step(cfg: Config, store: Store) -> str:
     return f"{result.written} newsletter note(s) written ({fetched} fetched)"
 
 
+def _enrich_step(cfg: Config) -> str:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return "skipped: no ANTHROPIC_API_KEY"
+    from kb_engine.enrich import enrich_notes
+    from kb_engine.llm import AnthropicLLM
+
+    s = enrich_notes(cfg, AnthropicLLM(model=cfg.llm_model))
+    return (
+        f"{s.summarized} summarized · {s.whys} whys · {s.titles} titles · "
+        f"{s.skipped} skipped · {len(s.failures)} failed"
+    )
+
+
 def _apply_step(cfg: Config, store: Store) -> str:
     r = apply_topic_tags(store, cfg.vault_path, only_status=_ACTIVE_ONLY)
     return (
@@ -142,8 +156,9 @@ def run_pipeline(
     run_id = store.start_run("pipeline", tier=tier)
     outcomes: list[StepOutcome] = []
 
-    _run_step("sync", lambda: _sync_step(cfg, store, embedder), outcomes)
     _run_step("import-mail", lambda: _import_mail_step(cfg, store), outcomes)
+    _run_step("enrich", lambda: _enrich_step(cfg), outcomes)
+    _run_step("sync", lambda: _sync_step(cfg, store, embedder), outcomes)
     if tier == "weekly":
         _run_step("apply-topics", lambda: _apply_step(cfg, store), outcomes)
         _run_step("discover", lambda: _discover_step(cfg, store, clusterer), outcomes)

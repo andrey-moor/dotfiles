@@ -10,7 +10,7 @@ from kb_engine.pipeline import PipelineResult, run_pipeline
 from kb_engine.store import Store
 from kb_engine.topics.clustering import FakeClusterer
 
-_WEEKLY_STEPS = ["sync", "import-mail", "apply-topics", "discover", "eval"]
+_WEEKLY_STEPS = ["import-mail", "enrich", "sync", "apply-topics", "discover", "eval"]
 
 
 def _vault(tmp_path):
@@ -30,6 +30,7 @@ def _vault(tmp_path):
 def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
     # Two notes both clustered into one topic (labels 0,0); default weekly tier.
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)  # import-mail skips
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     embedder = FakeEmbedder(dim=cfg.embed_dim)
@@ -56,6 +57,7 @@ def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
 def test_pipeline_only_applies_active_topics_no_mutation(tmp_path, monkeypatch):
     # Discovered proposals stay `proposed`, so no topic/ tag is written to notes.
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     try:
@@ -72,6 +74,7 @@ def test_pipeline_only_applies_active_topics_no_mutation(tmp_path, monkeypatch):
 def test_pipeline_applies_active_manual_topic(tmp_path, monkeypatch):
     # An active manual topic with a member note IS applied (the only mutation path).
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     embedder = FakeEmbedder(dim=cfg.embed_dim)
@@ -95,6 +98,7 @@ def test_pipeline_applies_active_manual_topic(tmp_path, monkeypatch):
 def test_pipeline_empty_vault(tmp_path, monkeypatch):
     # No Knowledge dir at all: every step is a clean no-op, digest still written.
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = Config(vault_path=tmp_path, db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     try:
@@ -112,6 +116,7 @@ def test_pipeline_empty_vault(tmp_path, monkeypatch):
 def test_pipeline_daily_tier_cli_skips_topic_steps(tmp_path, monkeypatch):
     monkeypatch.setenv("KB_FAKE_EMBED", "1")
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     v = _vault(tmp_path)
     db = tmp_path / "t.db"
     r = CliRunner().invoke(
@@ -120,13 +125,14 @@ def test_pipeline_daily_tier_cli_skips_topic_steps(tmp_path, monkeypatch):
     assert r.exit_code == 0, r.output
     out = json.loads(r.output)
     assert out["tier"] == "daily"
-    assert [o["name"] for o in out["outcomes"]] == ["sync", "import-mail"]
+    assert [o["name"] for o in out["outcomes"]] == ["import-mail", "enrich", "sync"]
 
 
 def test_pipeline_cli_json(tmp_path, monkeypatch):
     monkeypatch.setenv("KB_FAKE_EMBED", "1")
     monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0")
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     v = _vault(tmp_path)
     db = tmp_path / "t.db"
     r = CliRunner().invoke(
@@ -151,6 +157,7 @@ def test_pipeline_cli_human_output(tmp_path, monkeypatch):
     monkeypatch.setenv("KB_FAKE_EMBED", "1")
     monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0")
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     v = _vault(tmp_path)
     db = tmp_path / "t.db"
     r = CliRunner().invoke(main, ["--vault", str(v), "--db", str(db), "pipeline"])
