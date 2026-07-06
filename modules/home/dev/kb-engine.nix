@@ -15,13 +15,14 @@ let
 
   logDir = "${config.home.homeDirectory}/Library/Logs";
 
-  # Weekly pipeline runner: run the deterministic pipeline against the vault,
-  # then nudge with a notification reporting how many items need review. The
-  # pipeline is LLM-free and mutates notes only for active topics (none yet),
-  # so this is safe to run unattended.
-  pipelineRunner = pkgs.writeShellScript "kb-engine-pipeline" ''
+  # Tiered pipeline runner factory: run the deterministic pipeline against the
+  # vault for the given tier, then nudge with a notification reporting how many
+  # items need review. The pipeline is LLM-free and mutates notes only for active
+  # topics (none yet), so this is safe to run unattended. daily = sync +
+  # import-mail + digest; weekly additionally applies topics/clusters + eval.
+  mkPipelineRunner = tier: pkgs.writeShellScript "kb-engine-pipeline-${tier}" ''
     set -euo pipefail
-    out="$(${kbEngine}/bin/kb-engine --vault "${cfg.vaultPath}" pipeline --json)"
+    out="$(${kbEngine}/bin/kb-engine --vault "${cfg.vaultPath}" pipeline --tier ${tier} --json)"
     echo "$out"
     # inbox backlog + proposals awaiting naming + unfiled notes = the review queue.
     n="$(printf '%s' "$out" | /usr/bin/python3 -c \
@@ -55,7 +56,7 @@ in {
     };
 
     schedule = {
-      enable = mkEnableOption "weekly launchd agent that runs the kb-engine pipeline + nudges";
+      enable = mkEnableOption "daily + weekly launchd agents that run the kb-engine pipeline + nudge";
 
       calendar = mkOption {
         # A launchd StartCalendarInterval spec (Weekday/Hour/Minute, etc.).
@@ -73,13 +74,22 @@ in {
       home.packages = [ kbEngine ];
     }
     (mkIf cfg.schedule.enable {
-      launchd.agents.kb-engine-pipeline = {
+      launchd.agents.kb-engine-pipeline-daily = {
         enable = true;
         config = {
-          ProgramArguments = [ "${pipelineRunner}" ];
-          StartCalendarInterval = cfg.schedule.calendar;
-          StandardOutPath = "${logDir}/kb-engine-pipeline.log";
-          StandardErrorPath = "${logDir}/kb-engine-pipeline.err";
+          ProgramArguments = [ "${mkPipelineRunner "daily"}" ];
+          StartCalendarInterval = { Hour = 8; Minute = 0; }; # daily 08:00
+          StandardOutPath = "${logDir}/kb-engine-pipeline-daily.log";
+          StandardErrorPath = "${logDir}/kb-engine-pipeline-daily.err";
+        };
+      };
+      launchd.agents.kb-engine-pipeline-weekly = {
+        enable = true;
+        config = {
+          ProgramArguments = [ "${mkPipelineRunner "weekly"}" ];
+          StartCalendarInterval = cfg.schedule.calendar; # Monday 09:00
+          StandardOutPath = "${logDir}/kb-engine-pipeline-weekly.log";
+          StandardErrorPath = "${logDir}/kb-engine-pipeline-weekly.err";
         };
       };
       launchd.agents.kb-vault-autocommit = {
