@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from kb_engine.models import Area, Topic
 from kb_engine.store import Store
@@ -17,6 +18,7 @@ def _t(slug, vec):
 
 
 def test_build_areas_groups_near_centroids():
+    pytest.importorskip("sklearn")  # AgglomerativeClustering — only in the [topics] extra
     topics = [_t("rust1", [1, 0, 0]), _t("rust2", [0.95, 0.05, 0]), _t("llm", [0, 0, 1])]
     areas = build_areas(topics, distance_threshold=0.3)
     # the two rust topics share an area; llm is its own
@@ -45,6 +47,7 @@ def _t_kw(slug, vec, keywords):
 
 
 def test_build_areas_dedupes_colliding_slugs():
+    pytest.importorskip("sklearn")  # AgglomerativeClustering — only in the [topics] extra
     # Two far-apart clusters whose top keyword is identical must get distinct
     # area slugs (second disambiguated with a "-2" suffix).
     topics = [
@@ -58,6 +61,7 @@ def test_build_areas_dedupes_colliding_slugs():
 
 
 def test_build_areas_falls_back_to_indexed_slug_without_keywords():
+    pytest.importorskip("sklearn")  # AgglomerativeClustering — only in the [topics] extra
     # Topics with no keywords can't derive a slug, so the area uses "area-{i}".
     topics = [
         _t_kw("x", [1, 0, 0], ()),

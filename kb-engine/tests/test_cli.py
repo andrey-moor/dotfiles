@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+import pytest
 from click.testing import CliRunner
 
 from kb_engine.cli import main
@@ -178,6 +179,7 @@ def test_topics_discover_sticky_cli_json(tmp_path, monkeypatch):
 
 
 def test_topics_areas_cli(tmp_path, monkeypatch):
+    pytest.importorskip("sklearn")  # build_areas uses AgglomerativeClustering — [topics] extra
     monkeypatch.setenv("KB_FAKE_EMBED", "1")
     monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,1,1")
     v = tmp_path / "Knowledge"
