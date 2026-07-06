@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 
 from kb_engine.chunking import embedding_text, fts_text, summary_of
@@ -10,6 +11,12 @@ from kb_engine.vault import iter_notes
 # Inbox holds unprocessed captures; never embed it. Everything else under
 # Knowledge/ (including synthesized wiki/ articles) is indexed.
 EXCLUDED_DIRS = ("inbox",)
+
+logger = logging.getLogger(__name__)
+
+
+def _log_unreadable(path, exc) -> None:
+    logger.warning("skipping unreadable note %s: %s", path, exc)
 
 
 @dataclass(frozen=True)
@@ -27,7 +34,10 @@ def _disk_notes(cfg: Config) -> dict[str, Note]:
     return {
         note.path: note
         for note in iter_notes(
-            knowledge_dir, base=cfg.vault_path, exclude_dirs=EXCLUDED_DIRS
+            knowledge_dir,
+            base=cfg.vault_path,
+            exclude_dirs=EXCLUDED_DIRS,
+            on_error=_log_unreadable,
         )
     }
 

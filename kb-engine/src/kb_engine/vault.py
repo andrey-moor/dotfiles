@@ -2,7 +2,7 @@ import hashlib
 import re
 import types
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 import frontmatter
 
@@ -66,12 +66,16 @@ def iter_notes(
     root: Path,
     base: Path | None = None,
     exclude_dirs: tuple[str, ...] = (),
+    on_error: Callable[[Path, OSError], None] | None = None,
 ) -> Iterator[Note]:
     """Yield notes for every ``*.md`` file under ``root``, sorted by path.
 
     ``base`` anchors the returned ``Note.path`` (defaults to ``root``), so a
     vault root can be passed to get vault-relative ``Knowledge/...`` paths.
     ``exclude_dirs`` skips top-level subdirectories of ``root`` by name.
+
+    Unreadable files (iCloud eviction, permissions) are skipped, reported via
+    ``on_error`` when given — a single bad file must never abort a sync.
     """
     anchor = root if base is None else base
     for path in sorted(root.rglob("*.md")):
@@ -79,4 +83,10 @@ def iter_notes(
             continue
         if exclude_dirs and path.relative_to(root).parts[0] in exclude_dirs:
             continue
-        yield read_note(path, base=anchor)
+        try:
+            note = read_note(path, base=anchor)
+        except OSError as exc:
+            if on_error is not None:
+                on_error(path, exc)
+            continue
+        yield note
