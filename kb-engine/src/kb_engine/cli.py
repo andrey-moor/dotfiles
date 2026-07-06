@@ -1,12 +1,14 @@
 import json
 import sys
 import os
+from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 import click
 
 from kb_engine.config import Config
+from kb_engine.doctor import run_checks
 from kb_engine.importing.digest import build_digest, count_proposals
 from kb_engine.importing.inbox import existing_urls, import_urls
 from kb_engine.importing.mail_notes import (
@@ -380,6 +382,27 @@ def status(cfg: Config, as_json: bool) -> None:
     else:
         state = "running" if last["finished_at"] is None else ("ok" if last["ok"] else "FAILED")
         click.echo(f"last pipeline run: {last['started_at']}Z ({last['tier'] or '-'}) — {state}")
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def doctor(cfg: Config, as_json: bool) -> None:
+    """Run health checks so the KB can never look healthier than it is.
+
+    Prints one ``✅/⚠️/❌ name — detail`` line per check (❌ = failed hard check,
+    ⚠️ = failed warn check). A hard failure — missing vault/db, a corrupt cache,
+    or a stale/FAILED digest — sets exit code 1; warn failures never do.
+    """
+    checks = run_checks(cfg)
+    if as_json:
+        click.echo(json.dumps([asdict(c) for c in checks]))
+    else:
+        for c in checks:
+            mark = "✅" if c.ok else ("❌" if c.severity == "hard" else "⚠️")
+            click.echo(f"{mark} {c.name} — {c.detail}")
+    if any(not c.ok and c.severity == "hard" for c in checks):
+        sys.exit(1)
 
 
 @main.command("inbox-check")
