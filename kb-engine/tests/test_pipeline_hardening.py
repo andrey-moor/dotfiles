@@ -1,7 +1,9 @@
+import kb_engine.llm as llm_mod
 import kb_engine.pipeline as pipeline_mod
 from kb_engine.topics.clustering import FakeClusterer  # returns the label array it is given
 from kb_engine.config import Config
 from kb_engine.embeddings import FakeEmbedder
+from kb_engine.llm import FakeLLM
 from kb_engine.pipeline import run_pipeline
 from kb_engine.store import Store
 
@@ -37,6 +39,29 @@ def test_daily_tier_skips_topic_steps(tmp_path, monkeypatch):
     result = run_pipeline(cfg, store, FakeEmbedder(), FakeClusterer([]), tier="daily")
     names = [o.name for o in result.outcomes]
     assert ["import-mail", "enrich", "sync"] == names
+
+
+def test_enrich_step_without_key_pins_skip_string(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    cfg = _cfg(tmp_path)
+    assert pipeline_mod._enrich_step(cfg) == "skipped: no ANTHROPIC_API_KEY"
+
+
+def test_enrich_step_pins_success_detail_format(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    # _enrich_step imports AnthropicLLM at call time, so patching the llm module
+    # swaps in the offline fake; no network is ever touched.
+    monkeypatch.setattr(llm_mod, "AnthropicLLM", lambda model: FakeLLM(reply="d."))
+    cfg = _cfg(tmp_path)
+    knowledge = tmp_path / "Knowledge"
+    (knowledge / "garbled-machine-slug-here.md").write_text(
+        "---\ntitle: garbled-machine-slug-here\nsummary: ''\n---\nbody"
+    )
+    # Empty body + clean title: nothing to summarize from -> the skipped counter.
+    (knowledge / "empty.md").write_text("---\ntitle: A Clean Title\nsummary: ''\n---\n")
+    assert pipeline_mod._enrich_step(cfg) == (
+        "1 summarized · 1 whys · 1 titles · 1 skipped · 0 failed"
+    )
 
 
 def test_weekly_tier_runs_topic_steps_and_records_run(tmp_path, monkeypatch):

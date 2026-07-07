@@ -5,10 +5,14 @@ with an empty ``summary``, drafts a factual summary, a "why saved" line (only if
 missing), and repairs a garbled machine-slug title (only if it looks like one).
 Every write carries ``provenance: auto`` so a later run — and a human — can tell
 what the machine touched: a non-empty ``summary``/``why``/``title`` that has no
-auto mark is human and is NEVER overwritten. Per-note LLM/HTTP errors are
-collected, never raised, so one bad note never aborts the run.
+auto mark is human and is NEVER overwritten. Writes are atomic (tmp file +
+``os.replace``) and order-preserving (``sort_keys=False``), so untouched
+frontmatter keeps its file order and a crash can never truncate a note.
+Per-note LLM/HTTP/write errors — and unreadable files — are collected in
+``failures``, never raised, so one bad note never aborts the run.
 """
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -92,16 +96,19 @@ def enrich_notes(cfg: Config, llm: LLM, limit: int = DEFAULT_LIMIT) -> EnrichSta
     Inbox is INCLUDED (``exclude_dirs=()``). Notes with a non-empty ``summary``
     are skipped (never selected); an empty-body note whose title is not garbage
     has nothing to work from and is counted as ``skipped``. ``limit`` bounds the
-    number of notes that reach the LLM in one run. Per-note LLM/HTTP failures are
-    collected in ``failures`` and never abort the walk; unreadable files are
-    skipped the same way.
+    number of notes that reach the LLM in one run. Per-note LLM/HTTP/write
+    failures — a blank summary draft counts as one — and unreadable files are
+    collected in ``failures`` and never abort the walk.
     """
     summarized = whys = titles = skipped = 0
     failures: list[str] = []
     llm_calls = 0
 
+    def _unreadable(path: Path, _exc: OSError) -> None:
+        failures.append(path.relative_to(cfg.vault_path).as_posix())
+
     for note in iter_notes(
-        cfg.knowledge_dir, base=cfg.vault_path, exclude_dirs=(), on_error=_ignore_error
+        cfg.knowledge_dir, base=cfg.vault_path, exclude_dirs=(), on_error=_unreadable
     ):
         if not _needs(note):
             continue
@@ -115,6 +122,11 @@ def enrich_notes(cfg: Config, llm: LLM, limit: int = DEFAULT_LIMIT) -> EnrichSta
         try:
             user = _user_content(note)
             summary = _draft(llm, SUMMARY_SYSTEM, user)
+            if not summary:
+                # An empty summary + auto stamp would re-qualify the note on
+                # every run; treat a blank draft as a failure and write nothing.
+                failures.append(note.path)
+                continue
             why = (
                 _draft(llm, WHY_SYSTEM, user)
                 if _is_empty(note.frontmatter.get("why"))
@@ -125,11 +137,11 @@ def enrich_notes(cfg: Config, llm: LLM, limit: int = DEFAULT_LIMIT) -> EnrichSta
                 if _is_garbage_title(note.title)
                 else None
             )
+            _write_note(cfg.vault_path / note.path, summary, why, new_title)
         except Exception:  # noqa: BLE001 — a bad note is recorded, never fatal
             failures.append(note.path)
             continue
 
-        _write_note(cfg.vault_path / note.path, summary, why, new_title)
         summarized += 1
         whys += 1 if why is not None else 0
         titles += 1 if new_title is not None else 0
@@ -146,7 +158,12 @@ def enrich_notes(cfg: Config, llm: LLM, limit: int = DEFAULT_LIMIT) -> EnrichSta
 def _write_note(
     path: Path, summary: str, why: str | None, new_title: str | None
 ) -> None:
-    """Round-trip the note via python-frontmatter, body byte-unchanged."""
+    """Round-trip via python-frontmatter: body byte-unchanged, key order kept.
+
+    ``sort_keys=False`` keeps untouched fields in their original file order
+    (new keys append at the end), and the tmp-file + ``os.replace`` dance makes
+    the write atomic — a crash mid-write can never truncate the note.
+    """
     post = frontmatter.loads(path.read_text())
     post["summary"] = summary
     if why is not None:
@@ -154,8 +171,6 @@ def _write_note(
     if new_title is not None:
         post["title"] = new_title
     post["provenance"] = "auto"
-    path.write_text(frontmatter.dumps(post))
-
-
-def _ignore_error(_path: Path, _exc: OSError) -> None:
-    """Unreadable files (iCloud eviction, permissions) never abort enrichment."""
+    tmp = path.with_suffix(".md.tmp")  # not *.md: invisible to the note walk
+    tmp.write_text(frontmatter.dumps(post, sort_keys=False))
+    os.replace(tmp, path)
