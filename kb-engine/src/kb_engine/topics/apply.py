@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-import frontmatter
-
 from kb_engine.store import Store
+from kb_engine.vault import load_post, write_post_atomic
 
 _TOPIC_TAG_PREFIX = "topic"
 DEFAULT_APPLY_STATUSES = ("active",)
@@ -76,7 +75,7 @@ def _apply_to_note(
     rewritten (tags added and/or the ``primary_topic`` field newly set/changed);
     ``tags_added`` counts only newly-written topic tags.
     """
-    post = frontmatter.load(note_path)
+    post = load_post(note_path.read_text())
     existing = _as_tag_list(post.get("tags"))
     new_tags = [f"{_TOPIC_TAG_PREFIX}/{slug}" for slug in slugs]
     to_add = [tag for tag in new_tags if tag not in existing]
@@ -91,7 +90,7 @@ def _apply_to_note(
         post["tags"] = existing + to_add
     if primary_changed:
         post["primary_topic"] = primary_slug
-    note_path.write_text(frontmatter.dumps(post) + "\n")
+    write_post_atomic(note_path, post)
     return (True, len(to_add))
 
 

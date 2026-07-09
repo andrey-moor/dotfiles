@@ -3,7 +3,7 @@ import frontmatter
 
 from kb_engine.models import Topic, TopicMember
 from kb_engine.store import Store
-from kb_engine.topics.apply import ApplyResult, apply_topic_tags
+from kb_engine.topics.apply import ApplyResult, _apply_to_note, apply_topic_tags
 
 
 def _note(vault, relpath, text):
@@ -217,3 +217,33 @@ def test_apply_secondary_member_gets_tag_but_no_primary_topic_field(tmp_path):
     fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
     assert "topic/ml" in fm["tags"]
     assert "primary_topic" not in fm.metadata
+
+
+def test_apply_tolerates_content_frontmatter_key(tmp_path):
+    """A member note carrying backfill's `content: unavailable` must still get
+    tagged — frontmatter.load() crashes on that key; the house load_post doesn't."""
+    note = tmp_path / "Knowledge" / "stub.md"
+    note.parent.mkdir(parents=True)
+    note.write_text(
+        "---\ntitle: Stub\ncontent: unavailable\ntags: [old]\n---\nbody\n"
+    )
+    changed, added = _apply_to_note(note, ["mytopic"], None)
+    assert (changed, added) == (True, 1)
+    text = note.read_text()
+    assert "topic/mytopic" in text
+    assert "content: unavailable" in text
+
+
+def test_apply_preserves_frontmatter_key_order(tmp_path):
+    note = tmp_path / "n.md"
+    note.write_text("---\nzeta: 1\nalpha: 2\ntags: [x]\n---\nbody\n")
+    _apply_to_note(note, ["t"], "t")
+    text = note.read_text()
+    assert text.index("zeta") < text.index("alpha"), "dumps must not sort keys"
+
+
+def test_apply_leaves_no_tmp_file(tmp_path):
+    note = tmp_path / "n.md"
+    note.write_text("---\ntitle: N\n---\nbody\n")
+    _apply_to_note(note, ["t"], None)
+    assert list(tmp_path.glob("*.tmp")) == []
