@@ -43,7 +43,9 @@ def test_edit_triggers_reembed_and_delete_removes(tmp_path):
     assert sync(cfg, store, FakeEmbedder(dim=16)).deleted == 1
 
 
-def test_sync_skips_inbox_but_includes_wiki(tmp_path):
+def test_sync_indexes_inbox_and_wiki(tmp_path):
+    # Phase-3 change: the inbox is now INDEXED, not skipped. Auto-filing is a
+    # human-gated decision, so a fresh capture becomes findable via indexing.
     v = _vault(tmp_path)
     k = v / "Knowledge"
     inbox = k / "inbox"
@@ -54,11 +56,11 @@ def test_sync_skips_inbox_but_includes_wiki(tmp_path):
     (wiki / "topic.md").write_text("---\ntitle: Topic\n---\nsynthesized article")
     cfg = Config(vault_path=v, db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
-    # a.md + wiki/topic.md = 2 added; inbox/unprocessed.md skipped.
-    assert sync(cfg, store, FakeEmbedder(dim=16)).added == 2
+    # a.md + wiki/topic.md + inbox/unprocessed.md = 3 added.
+    assert sync(cfg, store, FakeEmbedder(dim=16)).added == 3
     shas = store.all_note_shas()
     assert "Knowledge/wiki/topic.md" in shas
-    assert "Knowledge/inbox/unprocessed.md" not in shas
+    assert "Knowledge/inbox/unprocessed.md" in shas
 
 
 def test_sync_stats_is_frozen():

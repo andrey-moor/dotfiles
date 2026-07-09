@@ -40,15 +40,21 @@ def test_empty_body_yields_single_title_only_chunk():
 # --- embedding_text / fts_text ---
 
 
-def _note_with_summary(title: str, body: str, summary: str | None) -> Note:
-    fm = types.MappingProxyType({"summary": summary} if summary is not None else {})
+def _note_with_summary(
+    title: str, body: str, summary: str | None, why: str | None = None
+) -> Note:
+    raw: dict[str, str] = {}
+    if summary is not None:
+        raw["summary"] = summary
+    if why is not None:
+        raw["why"] = why
     return Note(
         path="Knowledge/a.md",
         title=title,
         body=body,
         tags=(),
         wikilinks=(),
-        frontmatter=fm,
+        frontmatter=types.MappingProxyType(raw),
         sha256="0" * 64,
     )
 
@@ -72,6 +78,16 @@ def test_embedding_text_falls_back_when_summary_key_absent():
 
 def test_embedding_text_title_only_when_empty_body_and_summary():
     assert embedding_text(_note_with_summary("Only Title", "", "")) == "Only Title"
+
+
+def test_embedding_text_threads_why():
+    n = _note_with_summary("T", "", "S", why="for the demo")
+    assert embedding_text(n) == "T\n\nS\n\nfor the demo"
+
+
+def test_embedding_text_no_why_unchanged():
+    n = _note_with_summary("T", "", "S")
+    assert embedding_text(n) == "T\n\nS"
 
 
 def test_fts_text_is_title_plus_full_body():

@@ -8,9 +8,12 @@ from kb_engine.models import Note
 from kb_engine.store import Store
 from kb_engine.vault import evicted_note_paths, iter_note_stats, read_note
 
-# Inbox holds unprocessed captures; never embed it. Everything else under
-# Knowledge/ (including synthesized wiki/ articles) is indexed.
-EXCLUDED_DIRS = ("inbox",)
+# The entire Knowledge/ tree is indexed, inbox/ INCLUDED. Indexing the inbox is
+# the deliberate Phase-3 resolution of "a new capture must be findable within a
+# day with zero human touch": auto-filing is a human-gated decision (vault D14),
+# so findability comes from indexing rather than filing. The old noise rationale
+# is void now that inbox notes carry auto-generated summaries.
+EXCLUDED_DIRS: tuple[str, ...] = ()
 
 logger = logging.getLogger(__name__)
 

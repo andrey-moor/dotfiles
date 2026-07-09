@@ -54,7 +54,9 @@ def test_semantic_search_keeps_best_chunk_per_note(tmp_path):
     assert hits[0][1] > 0.99  # best (identical) chunk drives the score
 
 
-def test_hybrid_search_scopes_to_knowledge_excluding_inbox(tmp_path):
+def test_hybrid_search_scopes_to_knowledge_including_inbox(tmp_path):
+    # Phase-3 change: inbox notes ARE returned (findability by indexing); the
+    # Knowledge/ scope filter still drops paths outside Knowledge/.
     s, e = _store_with(
         tmp_path,
         {
@@ -66,7 +68,7 @@ def test_hybrid_search_scopes_to_knowledge_excluding_inbox(tmp_path):
     hits = hybrid_search(s, e, "memory", limit=10)
     paths = {p for p, _ in hits}
     assert "Knowledge/mem.md" in paths
-    assert "Knowledge/inbox/raw.md" not in paths
+    assert "Knowledge/inbox/raw.md" in paths
     assert "Other/note.md" not in paths
 
 

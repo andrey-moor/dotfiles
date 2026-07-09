@@ -13,16 +13,21 @@ def summary_of(note: Note) -> str:
 
 
 def embedding_text(note: Note) -> str:
-    """Text embedded into the note's semantic vector: title + summary.
+    """Text embedded into the note's semantic vector: title + summary + why.
 
     Falls back to the first ``_BODY_FALLBACK_CHARS`` of the body when there is no
-    summary, and to the title alone when both are empty.
+    summary, and to the title alone when both are empty. A non-empty ``why``
+    (why-this-was-captured) is appended so capture intent is retrievable.
     """
     summary = summary_of(note)
     if not summary:
         summary = note.body.strip()[:_BODY_FALLBACK_CHARS]
     title = note.title.strip()
-    return f"{title}\n\n{summary}" if summary else title
+    text = f"{title}\n\n{summary}" if summary else title
+    why = str(note.frontmatter.get("why") or "").strip() if note.frontmatter else ""
+    if why:
+        text = f"{text}\n\n{why}"
+    return text
 
 
 def fts_text(note: Note) -> str:

@@ -4,7 +4,6 @@ from kb_engine.store import Store
 DEFAULT_LIMIT = 20
 RRF_K = 60
 SCOPE_PREFIX = "Knowledge/"
-INBOX_PREFIX = SCOPE_PREFIX + "inbox/"
 
 Ranked = list[tuple[str, float]]
 
@@ -41,14 +40,9 @@ def hybrid_search(
     limit: int = DEFAULT_LIMIT,
     scope_prefix: str = SCOPE_PREFIX,
 ) -> Ranked:
-    """Fuse semantic + keyword results, then scope to Knowledge/ (no inbox)."""
+    """Fuse semantic + keyword results, then scope to Knowledge/ (inbox included)."""
     sem = semantic_search(store, embedder, query, limit=limit * 2)
     kw = store.keyword_search(query, limit=limit * 2)  # [(path, bm25)]
     fused = rrf_fuse([sem, kw], limit=limit * 2)
-    inbox_prefix = scope_prefix + "inbox/"
-    fused = [
-        (p, s)
-        for p, s in fused
-        if p.startswith(scope_prefix) and not p.startswith(inbox_prefix)
-    ]
+    fused = [(p, s) for p, s in fused if p.startswith(scope_prefix)]
     return fused[:limit]

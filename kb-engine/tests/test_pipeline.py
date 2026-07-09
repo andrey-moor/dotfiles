@@ -14,7 +14,8 @@ _WEEKLY_STEPS = ["import-mail", "enrich", "sync", "apply-topics", "discover", "e
 
 
 def _vault(tmp_path):
-    """A vault with two Knowledge notes (synced) and one inbox stub."""
+    """A vault with two Knowledge notes and one inbox stub — all three are
+    synced now that the inbox is indexed (Phase-3 change)."""
     k = tmp_path / "Knowledge"
     k.mkdir()
     (k / "a.md").write_text("---\ntitle: Rust A\n---\nrust macros and borrow checker")
@@ -28,13 +29,13 @@ def _vault(tmp_path):
 
 
 def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
-    # Two notes both clustered into one topic (labels 0,0); default weekly tier.
+    # All three notes (incl. inbox) clustered into one topic; default weekly tier.
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)  # import-mail skips
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
     store = Store(cfg.db_path)
     embedder = FakeEmbedder(dim=cfg.embed_dim)
-    clusterer = FakeClusterer(labels=[0, 0])
+    clusterer = FakeClusterer(labels=[0, 0, 0])
     try:
         res = run_pipeline(cfg, store, embedder, clusterer)
     finally:
@@ -45,7 +46,7 @@ def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
     assert res.ok is True  # skips (mail/eval) count as ok, no step raised
     assert [o.name for o in res.outcomes] == _WEEKLY_STEPS
     by_name = {o.name: o for o in res.outcomes}
-    assert "2 added" in by_name["sync"].detail  # both notes embedded
+    assert "3 added" in by_name["sync"].detail  # all three (incl. inbox) embedded
     assert "skipped: no FASTMAIL_API_TOKEN" == by_name["import-mail"].detail
     assert by_name["apply-topics"].detail.startswith("0 changed")  # no active topics
     assert "1 new topic(s)" in by_name["discover"].detail  # one proposal from the cluster
