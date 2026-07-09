@@ -33,7 +33,7 @@ from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
 from kb_engine.topics.anchoring import reanchor_topics
 from kb_engine.topics.thresholds import derive_thresholds, persist_thresholds
-from kb_engine.topics.areas import build_areas
+from kb_engine.topics.areas_registry import seed_areas
 from kb_engine.topics.assignment import (
     DEFAULT_ASSIGN_HIGH,
     DEFAULT_ASSIGN_LOW,
@@ -51,7 +51,6 @@ from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
 
 DEFAULT_SEARCH_LIMIT = 10
 DEFAULT_SYNTHESIS_MIN = 5
-DEFAULT_AREA_THRESHOLD = 0.3
 # DEFAULT_ASSIGN_HIGH / SECONDARY / LOW are imported from topics.assignment (above).
 # DEFAULT_KB_LABEL / DEFAULT_MAIL_LIMIT live in kb_engine.importing.mail_notes
 # (imported above) so the import-mail flags and the pipeline share one default.
@@ -550,38 +549,70 @@ def topics_discover(cfg: Config, coarse: bool, as_json: bool) -> None:
 
 
 @topics.command("areas")
-@click.option(
-    "--threshold",
-    default=DEFAULT_AREA_THRESHOLD,
-    show_default=True,
-    type=float,
-    help="Cosine distance cut for agglomerative grouping of topic centroids.",
-)
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
-def topics_areas(cfg: Config, threshold: float, as_json: bool) -> None:
-    """Group discovered topics into areas (agglomerative on centroids)."""
+def topics_areas(cfg: Config, as_json: bool) -> None:
+    """List the areas registry with each area's member topics."""
     store = Store(cfg.db_path)
     try:
-        store.init_schema()  # tolerate running against a never-synced DB
-        areas = build_areas(store.load_topics(), distance_threshold=threshold)
-        store.save_areas(areas)
-        area_rows = [
-            {"slug": area.slug, "label": area.label, "topics": list(area.topic_slugs)}
-            for area in areas
-        ]
+        store.init_schema()
+        areas = store.load_areas()
     finally:
         store.close()
-
+    rows = [
+        {
+            "slug": a.slug, "label": a.label, "description": a.description,
+            "topics": list(a.topic_slugs),
+        }
+        for a in areas
+    ]
     if as_json:
-        click.echo(json.dumps({"n_areas": len(area_rows), "areas": area_rows}))
+        click.echo(json.dumps({"areas": rows}))
         return
-    if not area_rows:
-        click.echo("No areas.")
+    if not rows:
+        click.echo("No areas. Run `kb-engine topics seed-areas` first.")
         return
-    for row in area_rows:
-        topics_list = ", ".join(row["topics"])
-        click.echo(f"{row['slug']}  ({len(row['topics'])} topics)  [{topics_list}]")
+    for row in rows:
+        topics_list = ", ".join(row["topics"]) or "—"
+        click.echo(f"{row['slug']:10} {row['label']:14} [{topics_list}]")
+
+
+@topics.command("seed-areas")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_seed_areas(cfg: Config, as_json: bool) -> None:
+    """Seed the 9-area registry (idempotent full replace)."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        n = seed_areas(store)
+    finally:
+        store.close()
+    _emit({"seeded": n}, as_json, f"Seeded {n} areas.")
+
+
+@topics.command("set-area")
+@click.argument("topic_slug")
+@click.argument("area_slug")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_set_area(cfg: Config, topic_slug: str, area_slug: str, as_json: bool) -> None:
+    """Assign TOPIC_SLUG to AREA_SLUG (both must exist)."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        if topic_slug not in {t.slug for t in store.load_topics()}:
+            raise click.ClickException(f"no such topic: {topic_slug}")
+        if area_slug not in {a.slug for a in store.load_areas()}:
+            raise click.ClickException(f"no such area: {area_slug} (seed-areas first?)")
+        store.set_topic_area(topic_slug, area_slug)
+    finally:
+        store.close()
+    _emit(
+        {"topic": topic_slug, "area": area_slug},
+        as_json,
+        f"{topic_slug} -> {area_slug}",
+    )
 
 
 @topics.command("diff-taxonomy")

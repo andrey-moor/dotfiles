@@ -41,7 +41,10 @@ def _store_with_topics(tmp_path):
     s.set_members(
         "llm", [TopicMember(note_path="Knowledge/c.md", score=0.8, source="auto")]
     )
-    s.save_areas([Area(slug="ai", label="AI", topic_slugs=("rust-macros", "llm"))])
+    # Area membership is composed from topics.area now (registry, not clustering).
+    s.save_areas([Area(slug="ai", label="AI", topic_slugs=())])
+    s.set_topic_area("rust-macros", "ai")
+    s.set_topic_area("llm", "ai")
     return s
 
 

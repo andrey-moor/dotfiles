@@ -41,6 +41,7 @@ class Topic:
     anchor_source: str = "label"  # "label" (text anchor) | "members" (centroid of members)
     threshold_high: float | None = None  # per-topic primary bar; None = use global
     threshold_secondary: float | None = None  # per-topic cross-link bar; None = global
+    area: str | None = None  # registry area slug; None = unassigned
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,8 @@ class TopicMember:
 class Area:
     slug: str
     label: str
-    topic_slugs: tuple[str, ...]  # member topic slugs
+    topic_slugs: tuple[str, ...]  # member topic slugs (composed at read time)
+    description: str = ""  # one-line area description (registry-declared)
 
 
 @dataclass(frozen=True)

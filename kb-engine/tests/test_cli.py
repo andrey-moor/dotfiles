@@ -1,7 +1,6 @@
 import json
 
 import numpy as np
-import pytest
 from click.testing import CliRunner
 
 from kb_engine.cli import main
@@ -150,26 +149,34 @@ def test_topics_discover_on_unsynced_db_does_not_crash(tmp_path, monkeypatch):
     assert out["n_topics"] == 0 and out["n_unfiled"] == 0
 
 
-def test_topics_areas_cli(tmp_path, monkeypatch):
-    pytest.importorskip("sklearn")  # build_areas uses AgglomerativeClustering — [topics] extra
-    monkeypatch.setenv("KB_FAKE_EMBED", "1")
-    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,1,1")
-    v = tmp_path / "Knowledge"
-    v.mkdir(parents=True)
-    for n, (t, b) in {
-        "a.md": ("A", "rust macros"),
-        "b.md": ("B", "rust borrow"),
-        "c.md": ("C", "llm prompt"),
-        "d.md": ("D", "llm tokens"),
-    }.items():
-        (v / n).write_text(f"---\ntitle: {t}\n---\n{b}")
+def test_topics_seed_and_set_area(tmp_path, monkeypatch):
     db = tmp_path / "t.db"
-    args = ["--vault", str(tmp_path), "--db", str(db)]
-    CliRunner().invoke(main, args + ["sync"])
-    CliRunner().invoke(main, args + ["topics", "discover"])
-    r = CliRunner().invoke(main, args + ["topics", "areas", "--json"])
-    assert r.exit_code == 0
-    assert "areas" in json.loads(r.output)
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db), "topics", "seed-areas",
+                 "--json"], monkeypatch)
+    assert json.loads(r.output) == {"seeded": 9}
+    store = Store(db)
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(4, np.float32))
+    store.close()
+    r2 = _invoke(["--vault", str(tmp_path), "--db", str(db), "topics", "set-area",
+                  "t1", "dev", "--json"], monkeypatch)
+    assert r2.exit_code == 0
+    r3 = _invoke(["--vault", str(tmp_path), "--db", str(db), "topics", "areas",
+                  "--json"], monkeypatch)
+    dev = [a for a in json.loads(r3.output)["areas"] if a["slug"] == "dev"][0]
+    assert dev["topics"] == ["t1"]
+
+
+def test_topics_set_area_unknown_area_fails(tmp_path, monkeypatch):
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(4, np.float32))
+    store.close()
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db), "topics", "set-area",
+                 "t1", "nope"], monkeypatch)
+    assert r.exit_code != 0
+    assert "no such area" in r.output
 
 
 def _tagged_vault(tmp_path):

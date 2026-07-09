@@ -332,3 +332,15 @@ def test_clear_auto_primaries_leaves_user_and_secondaries(tmp_path):
     t2 = {(m.note_path, m.source, m.is_primary) for m in store.topic_members("t2")}
     assert t2 == {("n.md", "auto", False), ("other.md", "user", True)}
     store.close()
+
+
+def test_topic_area_roundtrip_and_default_none(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(2, np.float32))
+    assert store.load_topics()[0].area is None
+    store.set_topic_area("t1", "dev")
+    assert store.load_topics()[0].area == "dev"
+    store.set_topic_area("t1", None)
+    assert store.load_topics()[0].area is None
+    store.close()

@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS topics (
   slug TEXT PRIMARY KEY, label TEXT, keywords TEXT, centroid BLOB NOT NULL,
   kind TEXT NOT NULL, status TEXT NOT NULL,
   anchor_source TEXT NOT NULL DEFAULT 'label',
-  threshold_high REAL, threshold_secondary REAL
+  threshold_high REAL, threshold_secondary REAL,
+  area TEXT
 );
 CREATE TABLE IF NOT EXISTS topic_members (
   topic_slug TEXT NOT NULL, note_path TEXT NOT NULL, score REAL, source TEXT,
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS topic_members (
   FOREIGN KEY (topic_slug) REFERENCES topics(slug) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS areas (
-  slug TEXT PRIMARY KEY, label TEXT
+  slug TEXT PRIMARY KEY, label TEXT, description TEXT
 );
 CREATE TABLE IF NOT EXISTS area_members (
   area_slug TEXT NOT NULL, topic_slug TEXT NOT NULL,
@@ -134,6 +135,9 @@ class Store:
         # Backfill for databases created before per-topic thresholds (Phase 4).
         self._ensure_column("topics", "threshold_high", "REAL")
         self._ensure_column("topics", "threshold_secondary", "REAL")
+        # Backfill for databases created before the areas→topics hierarchy (Phase 5).
+        self._ensure_column("topics", "area", "TEXT")
+        self._ensure_column("areas", "description", "TEXT")
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -358,8 +362,8 @@ class Store:
                 self._conn.execute(
                     """
                     INSERT INTO topics(slug, label, keywords, centroid, kind, status,
-                        anchor_source, threshold_high, threshold_secondary)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        anchor_source, threshold_high, threshold_secondary, area)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         slug,
@@ -371,6 +375,7 @@ class Store:
                         topic.anchor_source,
                         topic.threshold_high,
                         topic.threshold_secondary,
+                        topic.area,
                     ),
                 )
                 for member in members_by_slug.get(topic.slug, []):
@@ -386,7 +391,7 @@ class Store:
     def load_topics(self) -> list[Topic]:
         rows = self._conn.execute(
             "SELECT slug, label, keywords, centroid, kind, status, anchor_source, "
-            "threshold_high, threshold_secondary "
+            "threshold_high, threshold_secondary, area "
             "FROM topics ORDER BY slug"
         ).fetchall()
         return [
@@ -400,10 +405,11 @@ class Store:
                 anchor_source=anchor_source,
                 threshold_high=threshold_high,
                 threshold_secondary=threshold_secondary,
+                area=area,
             )
             for (
                 slug, label, keywords, centroid, kind, status, anchor_source,
-                threshold_high, threshold_secondary,
+                threshold_high, threshold_secondary, area,
             ) in rows
         ]
 
@@ -424,6 +430,13 @@ class Store:
                 "UPDATE topics SET threshold_high = ?, threshold_secondary = ? "
                 "WHERE slug = ?",
                 (high, secondary, slug),
+            )
+
+    def set_topic_area(self, slug: str, area: str | None) -> None:
+        """Assign a topic to a registry area (None clears it)."""
+        with self._conn:
+            self._conn.execute(
+                "UPDATE topics SET area = ? WHERE slug = ?", (area, slug)
             )
 
     def add_manual_topic(
@@ -467,42 +480,37 @@ class Store:
         ]
 
     def save_areas(self, areas: list[Area]) -> None:
-        """Replace all areas + their members in a single transaction.
+        """Replace the areas REGISTRY (slug/label/description rows).
 
-        Areas are a full re-grouping each run, so existing areas (and their
-        cascading members) are cleared before inserting the new set.
-        """
+        Membership is not stored here: an area's topics are composed at read
+        time from ``topics.area``. The legacy ``area_members`` table is no
+        longer written (kept for old DBs; harmless)."""
         with self._conn:
             self._conn.execute("DELETE FROM areas")
             for area in areas:
                 self._conn.execute(
-                    "INSERT INTO areas(slug, label) VALUES(?, ?)",
-                    (area.slug, area.label),
+                    "INSERT INTO areas(slug, label, description) VALUES(?, ?, ?)",
+                    (area.slug, area.label, area.description),
                 )
-                for topic_slug in area.topic_slugs:
-                    self._conn.execute(
-                        "INSERT INTO area_members(area_slug, topic_slug) VALUES(?, ?)",
-                        (area.slug, topic_slug),
-                    )
 
     def load_areas(self) -> list[Area]:
+        by_area: dict[str, list[str]] = {}
+        for slug, area in self._conn.execute(
+            "SELECT slug, area FROM topics WHERE area IS NOT NULL ORDER BY slug"
+        ):
+            by_area.setdefault(area, []).append(slug)
         rows = self._conn.execute(
-            "SELECT slug, label FROM areas ORDER BY slug"
+            "SELECT slug, label, description FROM areas ORDER BY slug"
         ).fetchall()
-        areas: list[Area] = []
-        for slug, label in rows:
-            member_rows = self._conn.execute(
-                "SELECT topic_slug FROM area_members WHERE area_slug=? ORDER BY topic_slug",
-                (slug,),
-            ).fetchall()
-            areas.append(
-                Area(
-                    slug=slug,
-                    label=label,
-                    topic_slugs=tuple(topic_slug for (topic_slug,) in member_rows),
-                )
+        return [
+            Area(
+                slug=slug,
+                label=label,
+                topic_slugs=tuple(by_area.get(slug, [])),
+                description=description or "",
             )
-        return areas
+            for slug, label, description in rows
+        ]
 
     def set_members(self, slug: str, members: list[TopicMember]) -> None:
         """Add/update topic members additively (existing members are kept).
