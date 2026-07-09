@@ -31,6 +31,7 @@ from kb_engine.surface import related_to_note, related_to_query
 from kb_engine.synthesis import synthesis_candidates
 from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
+from kb_engine.topics.anchoring import reanchor_topics
 from kb_engine.topics.areas import build_areas
 from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
@@ -972,6 +973,28 @@ def topics_suggest(cfg: Config, apply_changes: bool, as_json: bool) -> None:
         keywords = ", ".join(row["keywords"])
         click.echo(f"{row['slug']}  ({row['size']} notes)  [{keywords}]")
     click.echo(f"unfiled={result.n_unfiled} applied={apply_changes}")
+
+
+@topics.command("reanchor")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_reanchor(cfg: Config, as_json: bool) -> None:
+    """Recompute manual-topic anchors from member vectors (>=3 members)."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        result = reanchor_topics(store)
+    finally:
+        store.close()
+    _emit(
+        {
+            "reanchored": list(result.reanchored),
+            "kept_label": list(result.kept_label),
+        },
+        as_json,
+        f"Re-anchored {len(result.reanchored)} topic(s); "
+        f"{len(result.kept_label)} kept label anchor.",
+    )
 
 
 @main.command("import-mail")

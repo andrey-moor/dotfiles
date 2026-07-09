@@ -38,6 +38,7 @@ class Topic:
     centroid: np.ndarray  # float32, unit-normalized
     kind: str  # "discovered" | "manual"
     status: str  # "proposed" | "active" | "deprecated"
+    anchor_source: str = "label"  # "label" (text anchor) | "members" (centroid of members)
 
 
 @dataclass(frozen=True)

@@ -791,3 +791,27 @@ def test_dedup_report_json(tmp_path, monkeypatch, real_vectors):
     assert payload["threshold"] == 0.95
     assert len(payload["pairs"]) == 1
     assert payload["pairs"][0]["cosine"] > 0.97
+
+
+# --- topics reanchor ---------------------------------------------------------
+
+
+def test_topics_reanchor_json(tmp_path, monkeypatch, real_vectors):
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    store.add_manual_topic("warm", "Warm", "d", np.ones(1024, np.float32))
+    rows = []
+    for path, vec in real_vectors.by_group("topic:")[:3]:
+        store.upsert_note(path, path, f"sha-{path}", [])
+        store.replace_chunks(path, [(0, path, vec)])
+        rows.append(TopicMember(note_path=path, score=0.8, source="auto"))
+    store.set_members("warm", rows)
+    store.close()
+    r = _invoke(
+        ["--vault", str(tmp_path), "--db", str(db), "topics", "reanchor", "--json"],
+        monkeypatch,
+    )
+    assert r.exit_code == 0
+    payload = json.loads(r.output)
+    assert payload["reanchored"] == ["warm"]

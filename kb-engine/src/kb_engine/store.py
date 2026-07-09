@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, note_path UNINDEXED);
 CREATE TABLE IF NOT EXISTS topics (
   slug TEXT PRIMARY KEY, label TEXT, keywords TEXT, centroid BLOB NOT NULL,
-  kind TEXT NOT NULL, status TEXT NOT NULL
+  kind TEXT NOT NULL, status TEXT NOT NULL,
+  anchor_source TEXT NOT NULL DEFAULT 'label'
 );
 CREATE TABLE IF NOT EXISTS topic_members (
   topic_slug TEXT NOT NULL, note_path TEXT NOT NULL, score REAL, source TEXT,
@@ -121,6 +122,8 @@ class Store:
         # Backfill for databases created before mtime/size (stat-prefilter) were added.
         self._ensure_column("notes", "mtime", "REAL")
         self._ensure_column("notes", "size", "INTEGER")
+        # Backfill for databases created before topic re-anchoring (Phase 4).
+        self._ensure_column("topics", "anchor_source", "TEXT NOT NULL DEFAULT 'label'")
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -344,8 +347,8 @@ class Store:
                 taken.add(slug)
                 self._conn.execute(
                     """
-                    INSERT INTO topics(slug, label, keywords, centroid, kind, status)
-                    VALUES(?, ?, ?, ?, ?, ?)
+                    INSERT INTO topics(slug, label, keywords, centroid, kind, status, anchor_source)
+                    VALUES(?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         slug,
@@ -354,6 +357,7 @@ class Store:
                         _to_blob(topic.centroid),
                         topic.kind,
                         topic.status,
+                        topic.anchor_source,
                     ),
                 )
                 for member in members_by_slug.get(topic.slug, []):
@@ -368,7 +372,8 @@ class Store:
 
     def load_topics(self) -> list[Topic]:
         rows = self._conn.execute(
-            "SELECT slug, label, keywords, centroid, kind, status FROM topics ORDER BY slug"
+            "SELECT slug, label, keywords, centroid, kind, status, anchor_source "
+            "FROM topics ORDER BY slug"
         ).fetchall()
         return [
             Topic(
@@ -378,9 +383,20 @@ class Store:
                 centroid=frozen_centroid(_from_blob(centroid)),
                 kind=kind,
                 status=status,
+                anchor_source=anchor_source,
             )
-            for slug, label, keywords, centroid, kind, status in rows
+            for slug, label, keywords, centroid, kind, status, anchor_source in rows
         ]
+
+    def update_topic_anchor(
+        self, slug: str, centroid: np.ndarray, anchor_source: str
+    ) -> None:
+        """Swap a topic's anchor centroid and record where it came from."""
+        with self._conn:
+            self._conn.execute(
+                "UPDATE topics SET centroid = ?, anchor_source = ? WHERE slug = ?",
+                (_to_blob(centroid), anchor_source, slug),
+            )
 
     def add_manual_topic(
         self, slug: str, label: str, description: str, centroid: np.ndarray

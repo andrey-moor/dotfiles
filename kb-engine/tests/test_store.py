@@ -1,3 +1,5 @@
+import sqlite3
+
 import numpy as np
 from kb_engine.models import TopicMember
 from kb_engine.store import Store, _sanitize_fts_query
@@ -212,4 +214,39 @@ def test_note_vectors_for_returns_only_requested(tmp_path):
     got = store.note_vectors_for(["a.md", "missing.md"])
     assert set(got) == {"a.md"}
     assert np.allclose(got["a.md"], va)
+    store.close()
+
+
+def test_topic_anchor_source_roundtrip(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    c = np.array([1.0, 0.0], np.float32)
+    store.add_manual_topic("t1", "T1", "desc", c)
+    loaded = store.load_topics()[0]
+    assert loaded.anchor_source == "label"
+    new = np.array([0.0, 1.0], np.float32)
+    store.update_topic_anchor("t1", new, "members")
+    loaded = store.load_topics()[0]
+    assert loaded.anchor_source == "members"
+    assert np.allclose(loaded.centroid, new)
+    store.close()
+
+
+def test_existing_db_gains_anchor_source_column(tmp_path):
+    """init_schema on a pre-Phase-4 DB backfills the column with 'label'."""
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        "CREATE TABLE topics (slug TEXT PRIMARY KEY, label TEXT, keywords TEXT,"
+        " centroid BLOB NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL);"
+    )
+    conn.execute(
+        "INSERT INTO topics VALUES ('old', 'Old', '[]', ?, 'manual', 'active')",
+        (np.ones(2, np.float32).tobytes(),),
+    )
+    conn.commit()
+    conn.close()
+    store = Store(db)
+    store.init_schema()
+    assert store.load_topics()[0].anchor_source == "label"
     store.close()
