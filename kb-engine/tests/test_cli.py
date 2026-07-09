@@ -768,3 +768,26 @@ def test_related_to_ghost_note_returns_empty(tmp_path, monkeypatch):
     r = _invoke(args + ["related", "--to", "Knowledge/ghost.md", "--json"], monkeypatch)
     assert r.exit_code == 0, r.output
     assert json.loads(r.output) == {"hits": []}
+
+
+# --- dedup-report ------------------------------------------------------------
+
+
+def test_dedup_report_json(tmp_path, monkeypatch, real_vectors):
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    for path, vec in real_vectors.by_group("neardup:0"):
+        p = f"Knowledge/{path.split('/')[-1]}"
+        store.upsert_note(p, p, f"sha-{p}", [])
+        store.replace_chunks(p, [(0, p, vec)])
+    store.close()
+    r = _invoke(
+        ["--vault", str(tmp_path), "--db", str(db), "dedup-report", "--json"],
+        monkeypatch,
+    )
+    assert r.exit_code == 0
+    payload = json.loads(r.output)
+    assert payload["threshold"] == 0.95
+    assert len(payload["pairs"]) == 1
+    assert payload["pairs"][0]["cosine"] > 0.97

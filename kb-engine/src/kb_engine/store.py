@@ -288,6 +288,21 @@ class Store:
         if current_path is not None:
             yield current_path, np.mean(acc, axis=0).astype(np.float32)
 
+    def note_vectors_for(self, paths: list[str]) -> dict[str, np.ndarray]:
+        """Mean-pooled note vectors for just ``paths`` (missing paths omitted)."""
+        out: dict[str, list[np.ndarray]] = {}
+        marks = ",".join("?" for _ in paths)
+        if not paths:
+            return {}
+        for note_path, blob in self._conn.execute(
+            f"SELECT note_path, vector FROM chunks WHERE note_path IN ({marks})",
+            list(paths),
+        ):
+            out.setdefault(note_path, []).append(_from_blob(blob))
+        return {
+            p: np.mean(vs, axis=0).astype(np.float32) for p, vs in out.items()
+        }
+
     def note_texts(self) -> dict[str, str]:
         """Return ``{note_path: "title summary"}`` for keyword (c-TF-IDF) labeling.
 

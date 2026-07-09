@@ -93,6 +93,23 @@ kb-engine digest --json   # or: kb-engine pipeline --json
 ```
 Then report what was processed, named, and applied.
 
+### 6. Merge near-duplicates (when the user asks, or a sweep is due)
+
+Re-captures of the same content (e.g. the same tweet clipped twice) waste review
+attention. Search already suppresses >0.97 cosine twins automatically (best-ranked
+survives) — merging cleans the vault itself. **Merging is a decision: propose, let
+the human confirm each pair. Never delete a note.**
+
+1. `kb-engine --vault "<Main>" dedup-report --json` → pairs sorted by cosine.
+2. For each confirmed pair, pick the keeper (better title/content/enrichment):
+   - Union the `why:` lines — if the twin's `why` adds intent the keeper lacks,
+     append it to the keeper's `why`.
+   - Carry over any human-written frontmatter the keeper lacks (never overwrite
+     the keeper's own human text).
+   - On the twin, add frontmatter `duplicate_of: "<keeper vault-relative path>"`
+     — the twin stays on disk (nothing lost), suppression keeps it out of search.
+3. Report merged pairs to the user in the pass summary.
+
 ## Report
 
 ```

@@ -198,3 +198,18 @@ def test_notes_without_topic_excludes_secondary_members(tmp_path):
     assert "Knowledge/sec.md" not in result  # secondary membership still counts as filed
     assert "Knowledge/unfiled.md" in result
     store.close()
+
+
+def test_note_vectors_for_returns_only_requested(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.upsert_note("a.md", "A", "sha-a", [])
+    store.upsert_note("b.md", "B", "sha-b", [])
+    va = np.array([1.0, 0.0, 0.0], np.float32)
+    vb = np.array([0.0, 1.0, 0.0], np.float32)
+    store.replace_chunks("a.md", [(0, "a text", va)])
+    store.replace_chunks("b.md", [(0, "b text", vb)])
+    got = store.note_vectors_for(["a.md", "missing.md"])
+    assert set(got) == {"a.md"}
+    assert np.allclose(got["a.md"], va)
+    store.close()

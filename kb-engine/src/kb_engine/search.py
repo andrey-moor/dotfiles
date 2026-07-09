@@ -1,9 +1,12 @@
+import numpy as np
+
 from kb_engine.embeddings import Embedder
 from kb_engine.store import Store
 
 DEFAULT_LIMIT = 20
 RRF_K = 60
 SCOPE_PREFIX = "Knowledge/"
+SUPPRESS_THRESHOLD = 0.97
 
 Ranked = list[tuple[str, float]]
 
@@ -33,6 +36,29 @@ def rrf_fuse(
     return sorted(scores.items(), key=lambda kv: kv[1], reverse=True)[:limit]
 
 
+def _suppress_near_dups(
+    store: Store, ranked: Ranked, threshold: float = SUPPRESS_THRESHOLD
+) -> Ranked:
+    """Drop results whose note vector is a >threshold cosine twin of a
+    higher-ranked kept result (the best-ranked twin survives). Results without
+    a stored vector are kept — fail open."""
+    vectors = store.note_vectors_for([path for path, _ in ranked])
+    kept: Ranked = []
+    kept_units: list[np.ndarray] = []
+    for path, score in ranked:
+        vector = vectors.get(path)
+        if vector is None:
+            kept.append((path, score))
+            continue
+        norm = float(np.linalg.norm(vector))
+        unit = vector / norm if norm else vector
+        if any(float(unit @ ku) > threshold for ku in kept_units):
+            continue
+        kept.append((path, score))
+        kept_units.append(unit)
+    return kept
+
+
 def hybrid_search(
     store: Store,
     embedder: Embedder,
@@ -45,4 +71,5 @@ def hybrid_search(
     kw = store.keyword_search(query, limit=limit * 2)  # [(path, bm25)]
     fused = rrf_fuse([sem, kw], limit=limit * 2)
     fused = [(p, s) for p, s in fused if p.startswith(scope_prefix)]
+    fused = _suppress_near_dups(store, fused)
     return fused[:limit]

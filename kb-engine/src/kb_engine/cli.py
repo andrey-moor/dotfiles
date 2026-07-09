@@ -10,6 +10,7 @@ import click
 from kb_engine.backfill import DEFAULT_LIMIT as DEFAULT_BACKFILL_LIMIT
 from kb_engine.backfill import backfill_content
 from kb_engine.config import Config
+from kb_engine.dedup import DEFAULT_DEDUP_THRESHOLD, near_duplicates
 from kb_engine.doctor import run_checks
 from kb_engine.importing.digest import build_digest, count_proposals
 from kb_engine.importing.inbox import existing_urls, import_urls
@@ -297,6 +298,42 @@ def synthesis_candidates_cmd(cfg: Config, min_members: int, as_json: bool) -> No
         return
     for row in rows:
         click.echo(f"{row['slug']}  ({row['size']} notes)  {row['label']}")
+
+
+@main.command("dedup-report")
+@click.option(
+    "--threshold",
+    default=DEFAULT_DEDUP_THRESHOLD,
+    show_default=True,
+    type=float,
+    help="Min cosine for a pair to count as a near-duplicate.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def dedup_report(cfg: Config, threshold: float, as_json: bool) -> None:
+    """Report near-duplicate note pairs (gist-vector cosine >= threshold).
+
+    Read-only. Merging is a human decision — see /kb:review's merge flow."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        pairs = near_duplicates(store, threshold=threshold)
+    finally:
+        store.close()
+    if as_json:
+        click.echo(json.dumps({
+            "threshold": threshold,
+            "pairs": [
+                {"a": p.a, "b": p.b, "cosine": round(p.cosine, 6)} for p in pairs
+            ],
+        }))
+        return
+    if not pairs:
+        click.echo(f"No pairs >= {threshold}.")
+        return
+    for p in pairs:
+        click.echo(f"{p.cosine:.4f}  {p.a}  <->  {p.b}")
+    click.echo(f"{len(pairs)} pair(s) >= {threshold}")
 
 
 @main.command()
