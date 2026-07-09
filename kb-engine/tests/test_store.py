@@ -2,7 +2,7 @@ import sqlite3
 
 import numpy as np
 import pytest
-from kb_engine.models import TopicMember
+from kb_engine.models import QueueEntry, TopicMember
 from kb_engine.store import Store, _sanitize_fts_query
 
 
@@ -263,4 +263,55 @@ def test_topic_thresholds_roundtrip_and_default_none(tmp_path):
     loaded = store.load_topics()[0]
     assert loaded.threshold_high == pytest.approx(0.61)
     assert loaded.threshold_secondary == pytest.approx(0.53)
+    store.close()
+
+
+def test_replace_auto_members_preserves_user_rows(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(2, np.float32))
+    store.set_members("t1", [
+        TopicMember("keep.md", 1.0, "user", True),
+        TopicMember("old-auto.md", 0.6, "auto", True),
+    ])
+    store.replace_auto_members("t1", [
+        TopicMember("new-auto.md", 0.7, "auto", True),
+        TopicMember("keep.md", 0.5, "auto", True),  # collides with user row
+    ])
+    members = {m.note_path: m for m in store.topic_members("t1")}
+    assert set(members) == {"keep.md", "new-auto.md"}
+    assert members["keep.md"].source == "user"  # user row untouched
+    assert members["keep.md"].score == pytest.approx(1.0)
+    store.close()
+
+
+def test_user_primary_paths(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(2, np.float32))
+    store.set_members("t1", [
+        TopicMember("u.md", 1.0, "user", True),
+        TopicMember("a.md", 0.6, "auto", True),
+        TopicMember("s.md", 0.6, "user", False),  # user but secondary
+    ])
+    assert store.user_primary_paths() == {"u.md"}
+    store.close()
+
+
+def test_review_queue_roundtrip_and_ordering(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.replace_review_queue([
+        QueueEntry("b.md", (("t1", 0.50), ("t2", 0.48)), "borderline"),
+        QueueEntry("a.md", (("t3", 0.52),), "borderline"),
+    ])
+    entries = store.load_review_queue()
+    assert [e.note_path for e in entries] == ["a.md", "b.md"]  # best score first
+    assert entries[0].candidates == (("t3", 0.52),)
+    assert entries[0].reason == "borderline"
+    assert entries[0].created_at  # stamped by the store
+    store.replace_review_queue([QueueEntry("c.md", (("t1", 0.5),), "borderline")])
+    assert [e.note_path for e in store.load_review_queue()] == ["c.md"]
+    store.remove_from_review_queue("c.md")
+    assert store.load_review_queue() == []
     store.close()

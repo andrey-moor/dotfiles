@@ -56,3 +56,13 @@ class Area:
     slug: str
     label: str
     topic_slugs: tuple[str, ...]  # member topic slugs
+
+
+@dataclass(frozen=True)
+class QueueEntry:
+    """A note awaiting a human topic decision (the borderline review queue)."""
+
+    note_path: str
+    candidates: tuple[tuple[str, float], ...]  # (topic slug, score), best first
+    reason: str  # "borderline" (Phase 5 adds classifier reasons)
+    created_at: str = ""  # stamped by the store on insert

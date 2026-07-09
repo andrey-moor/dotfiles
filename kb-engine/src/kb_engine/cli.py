@@ -34,7 +34,12 @@ from kb_engine.sync import sync as sync_index
 from kb_engine.topics.anchoring import reanchor_topics
 from kb_engine.topics.thresholds import derive_thresholds, persist_thresholds
 from kb_engine.topics.areas import build_areas
-from kb_engine.topics.assignment import assign_notes
+from kb_engine.topics.assignment import (
+    DEFAULT_ASSIGN_HIGH,
+    DEFAULT_ASSIGN_LOW,
+    DEFAULT_ASSIGN_SECONDARY,
+    assign_notes,
+)
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
 from kb_engine.topics.sticky import sticky_discover
@@ -48,9 +53,7 @@ from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
 DEFAULT_SEARCH_LIMIT = 10
 DEFAULT_SYNTHESIS_MIN = 5
 DEFAULT_AREA_THRESHOLD = 0.3
-DEFAULT_ASSIGN_HIGH = 0.55
-DEFAULT_ASSIGN_SECONDARY = 0.45  # min cosine for a secondary (cross-link) topic
-DEFAULT_ASSIGN_LOW = 0.4
+# DEFAULT_ASSIGN_HIGH / SECONDARY / LOW are imported from topics.assignment (above).
 # DEFAULT_KB_LABEL / DEFAULT_MAIL_LIMIT live in kb_engine.importing.mail_notes
 # (imported above) so the import-mail flags and the pipeline share one default.
 _SUGGEST_MIN_CLUSTER_SIZE = 2  # surface two-note mini-themes below the adaptive floor
@@ -891,8 +894,16 @@ def topics_assign(
             for member in members
         ]
         borderline_rows = [
-            {"note": note_path, "topic": slug, "score": round(score, 6)}
-            for note_path, (slug, score) in borderline
+            {
+                "note": note_path,
+                "topic": candidates[0][0],
+                "score": round(candidates[0][1], 6),
+                "candidates": [
+                    {"topic": slug, "score": round(score, 6)}
+                    for slug, score in candidates
+                ],
+            }
+            for note_path, candidates in borderline
         ]
         n_unassigned = len(note_vectors) - len(assigned) - len(borderline)
     finally:

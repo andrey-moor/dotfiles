@@ -146,10 +146,12 @@ def test_topics_assign_apply_persists_members(tmp_path, monkeypatch):
     assert len(Store(db).topic_members("rust")) >= 1  # members persisted
 
 
-def _topic(slug, vec):
-    v = np.asarray(vec, np.float32)
-    return Topic(slug=slug, label=slug, keywords=(), centroid=v / np.linalg.norm(v),
-                 kind="manual", status="active")
+def _topic(slug, centroid, high=None, secondary=None):
+    return Topic(
+        slug=slug, label=slug.upper(), keywords=(slug,),
+        centroid=np.asarray(centroid, np.float32), kind="manual", status="active",
+        threshold_high=high, threshold_secondary=secondary,
+    )
 
 
 def test_assign_returns_primary_plus_capped_secondaries():
@@ -232,3 +234,89 @@ def test_topics_assign_rejects_secondary_above_high_cleanly(tmp_path):
     )
     assert r.exit_code == 2
     assert "must be <= --high" in r.output
+
+
+def _distinct_pair(real_vectors):
+    """First fixture group pair where member 0 of g1 sits closer to its own
+    centroid than to g2's — the geometric premise the tests below need
+    (test_topic_groups_are_geometrically_distinct guarantees such pairs exist)."""
+    groups = {}
+    for e, row in zip(real_vectors.entries, real_vectors.matrix):
+        if e["group"].startswith("topic:"):
+            groups.setdefault(e["group"], []).append(row)
+    items = list(groups.values())
+    for i, v1 in enumerate(items):
+        c1 = np.mean(v1, axis=0)
+        c1 = c1 / np.linalg.norm(c1)
+        for v2 in items[i + 1:]:
+            c2 = np.mean(v2, axis=0)
+            c2 = c2 / np.linalg.norm(c2)
+            if float(v1[0] @ c1) > float(v1[0] @ c2):
+                return v1, c1, v2, c2
+    raise AssertionError("no geometrically distinct fixture group pair")
+
+
+def test_per_topic_high_overrides_global(real_vectors):
+    """A note failing a tight topic's bar but clearing a looser lower-ranked
+    topic gets the looser topic as primary."""
+    v1, c1, v2, c2 = _distinct_pair(real_vectors)
+    note = v1[0]  # a member of g1
+    s1 = float(note @ c1)
+    s2 = float(note @ c2)
+    assert s1 > s2
+    # tight bar on its own topic (just above its score), loose on the other
+    topics = [
+        _topic("own", c1, high=s1 + 0.01, secondary=s1 - 0.02),
+        _topic("other", c2, high=max(0.0, s2 - 0.01), secondary=max(0.0, s2 - 0.02)),
+    ]
+    assigned, borderline = assign_notes(
+        {"n.md": note}, topics, high=0.99, secondary=0.98, low=0.0
+    )
+    assert "n.md" in assigned
+    assert assigned["n.md"][0].slug == "other"
+    assert assigned["n.md"][0].is_primary is True
+
+
+def test_borderline_carries_top3_candidates(real_vectors):
+    members = real_vectors.by_group("topic:")
+    note = members[0][1]
+    cents = []
+    for i in range(3):
+        c = members[i][1].astype(np.float64)
+        cents.append((c / np.linalg.norm(c)).astype(np.float32))
+    scores = sorted((float(note @ c) for c in cents), reverse=True)
+    top = scores[0]
+    topics = [
+        _topic(f"t{i}", cents[i], high=top + 0.05, secondary=None) for i in range(3)
+    ]
+    assigned, borderline = assign_notes(
+        {"n.md": note}, topics, high=top + 0.05, secondary=top + 0.04, low=0.0
+    )
+    assert assigned == {}
+    assert len(borderline) == 1
+    path, candidates = borderline[0]
+    assert path == "n.md"
+    assert 1 <= len(candidates) <= 3
+    assert candidates[0][1] == pytest.approx(top, abs=1e-5)
+    assert [c[1] for c in candidates] == sorted(
+        [c[1] for c in candidates], reverse=True
+    )
+
+
+def test_secondary_uses_each_topics_own_bar(real_vectors):
+    v1, c1, v2, c2 = _distinct_pair(real_vectors)
+    note = v1[0]
+    s2 = float(note @ c2)
+    topics_loose = [
+        _topic("home", c1, high=0.0, secondary=0.0),
+        _topic("link", c2, high=0.99, secondary=max(0.0, s2 - 0.01)),
+    ]
+    assigned, _ = assign_notes({"n.md": note}, topics_loose, 0.99, 0.98, 0.0)
+    slugs = [a.slug for a in assigned["n.md"]]
+    assert slugs[0] == "home" and "link" in slugs
+    topics_tight = [
+        _topic("home", c1, high=0.0, secondary=0.0),
+        _topic("link", c2, high=0.99, secondary=min(1.0, s2 + 0.01)),
+    ]
+    assigned2, _ = assign_notes({"n.md": note}, topics_tight, 0.99, 0.98, 0.0)
+    assert [a.slug for a in assigned2["n.md"]] == ["home"]

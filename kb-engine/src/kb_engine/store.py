@@ -7,7 +7,7 @@ from typing import Iterator
 import numpy as np
 
 from kb_engine.importing.urls import normalize_url
-from kb_engine.models import Area, Topic, TopicMember
+from kb_engine.models import Area, QueueEntry, Topic, TopicMember
 from kb_engine.topics._math import frozen_centroid
 
 _SCHEMA = """
@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS runs (
   ok INTEGER,
   counts TEXT,
   errors TEXT
+);
+CREATE TABLE IF NOT EXISTS review_queue (
+  note_path TEXT PRIMARY KEY,
+  candidates TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 """
 
@@ -516,6 +522,76 @@ class Store:
                     (slug, member.note_path, member.score, member.source,
                      int(member.is_primary)),
                 )
+
+    def replace_auto_members(self, slug: str, members: list[TopicMember]) -> None:
+        """Replace a topic's auto-sourced members wholesale (one weekly pass's
+        truth). Human rows (source user/seed) are never touched — on a path
+        collision the existing human row wins (INSERT OR IGNORE)."""
+        with self._conn:
+            self._conn.execute(
+                "DELETE FROM topic_members WHERE topic_slug = ? AND source = 'auto'",
+                (slug,),
+            )
+            for member in members:
+                self._conn.execute(
+                    """
+                    INSERT OR IGNORE INTO topic_members(
+                        topic_slug, note_path, score, source, is_primary
+                    ) VALUES(?, ?, ?, ?, ?)
+                    """,
+                    (slug, member.note_path, member.score, member.source,
+                     int(member.is_primary)),
+                )
+
+    def user_primary_paths(self) -> set[str]:
+        """Note paths a human has pinned as primary somewhere (assignment skips them)."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT note_path FROM topic_members "
+            "WHERE source = 'user' AND is_primary = 1"
+        ).fetchall()
+        return {row[0] for row in rows}
+
+    def replace_review_queue(self, entries: list[QueueEntry]) -> None:
+        """Rewrite the borderline review queue (one weekly pass's truth)."""
+        with self._conn:
+            self._conn.execute("DELETE FROM review_queue")
+            for entry in entries:
+                self._conn.execute(
+                    "INSERT INTO review_queue(note_path, candidates, reason, created_at) "
+                    "VALUES(?, ?, ?, datetime('now'))",
+                    (
+                        entry.note_path,
+                        json.dumps([[slug, score] for slug, score in entry.candidates]),
+                        entry.reason,
+                    ),
+                )
+
+    def load_review_queue(self) -> list[QueueEntry]:
+        """Queue entries, best top-candidate score first (ties by path)."""
+        rows = self._conn.execute(
+            "SELECT note_path, candidates, reason, created_at FROM review_queue"
+        ).fetchall()
+        entries = [
+            QueueEntry(
+                note_path=path,
+                candidates=tuple(
+                    (slug, float(score)) for slug, score in json.loads(candidates)
+                ),
+                reason=reason,
+                created_at=created_at,
+            )
+            for path, candidates, reason, created_at in rows
+        ]
+        return sorted(
+            entries,
+            key=lambda e: (-(e.candidates[0][1] if e.candidates else 0.0), e.note_path),
+        )
+
+    def remove_from_review_queue(self, note_path: str) -> None:
+        with self._conn:
+            self._conn.execute(
+                "DELETE FROM review_queue WHERE note_path = ?", (note_path,)
+            )
 
     def keyword_search(self, query: str, limit: int = 20) -> list[tuple[str, float]]:
         match = _sanitize_fts_query(query)
