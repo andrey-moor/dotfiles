@@ -1,7 +1,7 @@
 import numpy as np
 
 from kb_engine.importing.digest import DigestStatus, build_digest, count_proposals
-from kb_engine.models import Area, Topic, TopicMember
+from kb_engine.models import Area, QueueEntry, Topic, TopicMember
 from kb_engine.pipeline import StepOutcome
 from kb_engine.store import Store
 
@@ -106,3 +106,29 @@ def test_build_digest_truncates_long_unfiled_list(tmp_path):
     assert "…and 5 more" in text
     # only the first 25 are listed inline
     assert text.count("[[Knowledge/n") == 25
+
+
+def test_digest_renders_borderline_queue(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.replace_review_queue([
+        QueueEntry("Knowledge/a.md", (("rust-learning", 0.52), ("rust-tooling", 0.47)),
+                   "borderline"),
+        QueueEntry("Knowledge/b.md", (("ui-design", 0.49),), "borderline"),
+    ])
+    text = build_digest(store, vault_path=tmp_path, inbox_count=0, unfiled=[])
+    assert "## Borderline queue" in text
+    assert "- [ ] Decide 2 borderline assignment(s)" in text
+    a = text.index("Knowledge/a.md")
+    b = text.index("Knowledge/b.md")
+    assert a < b  # best top-candidate first
+    assert "rust-learning (0.52)" in text
+    store.close()
+
+
+def test_digest_no_queue_section_when_empty(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    text = build_digest(store, vault_path=tmp_path, inbox_count=0, unfiled=[])
+    assert "Borderline queue" not in text
+    store.close()

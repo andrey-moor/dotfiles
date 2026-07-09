@@ -19,6 +19,7 @@ from kb_engine.store import Store
 # a status, so it has no place here.)
 _PROPOSAL_STATUSES = frozenset({"proposed"})
 _MAX_UNFILED_LISTED = 25
+_MAX_QUEUE_LISTED = 10
 _DIGEST_RELPATH = Path("_system") / "kb-digest.md"
 
 
@@ -77,6 +78,7 @@ def build_digest(
     """
     topics = store.load_topics()
     areas = store.load_areas()
+    queue = store.load_review_queue()
     n_proposals = count_proposals(topics)
     n_topics = len(topics)
     n_areas = len(areas)
@@ -93,10 +95,10 @@ def build_digest(
         f"- Topics: {n_topics}",
         f"- Areas: {n_areas}",
         f"- Unfiled notes: {n_unfiled}",
-        "",
-        "## Needs review",
-        "",
     ])
+    if queue:
+        lines.append(f"- Borderline queue: {len(queue)}")
+    lines.extend(["", "## Needs review", ""])
 
     checklist: list[str] = []
     if inbox_count:
@@ -110,6 +112,10 @@ def build_digest(
         )
     if n_unfiled:
         checklist.append(f"- [ ] File {n_unfiled} unfiled note(s)")
+    if queue:
+        checklist.append(
+            f"- [ ] Decide {len(queue)} borderline assignment(s) (`/kb:review`)"
+        )
     if not checklist:
         checklist.append("- [x] Nothing to review.")
     lines.extend(checklist)
@@ -121,6 +127,16 @@ def build_digest(
         remaining = n_unfiled - _MAX_UNFILED_LISTED
         if remaining > 0:
             lines.append(f"- …and {remaining} more")
+
+    if queue:
+        lines.extend(["", "## Borderline queue", ""])
+        for entry in queue[:_MAX_QUEUE_LISTED]:
+            options = ", ".join(
+                f"{slug} ({score:.2f})" for slug, score in entry.candidates
+            )
+            lines.append(f"- [[{entry.note_path}]] → {options}")
+        if len(queue) > _MAX_QUEUE_LISTED:
+            lines.append(f"- …and {len(queue) - _MAX_QUEUE_LISTED} more")
 
     return "\n".join(lines).rstrip() + "\n"
 

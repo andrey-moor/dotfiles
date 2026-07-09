@@ -12,7 +12,7 @@ from kb_engine.store import Store
 from kb_engine.sync import sync
 from kb_engine.topics.clustering import FakeClusterer
 
-_WEEKLY_STEPS = ["import-mail", "enrich", "backfill", "sync", "apply-topics", "discover", "eval"]
+_WEEKLY_STEPS = ["import-mail", "enrich", "backfill", "sync", "topics", "apply-topics", "eval"]
 
 
 def _vault(tmp_path):
@@ -69,7 +69,7 @@ def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
     assert "3 added" in by_name["sync"].detail  # all three (incl. inbox) embedded
     assert "skipped: no FASTMAIL_API_TOKEN" == by_name["import-mail"].detail
     assert by_name["apply-topics"].detail.startswith("0 changed")  # no active topics
-    assert "1 new topic(s)" in by_name["discover"].detail  # one proposal from the cluster
+    assert "1 new topic(s)" in by_name["topics"].detail  # one proposal from the cluster
     assert "skipped: no probes.yaml" == by_name["eval"].detail
     assert res.digest_path is not None and res.digest_path.name == "kb-digest.md"
     assert (cfg.vault_path / "_system" / "kb-digest.md").exists()
@@ -93,7 +93,9 @@ def test_pipeline_only_applies_active_topics_no_mutation(tmp_path, monkeypatch):
 
 
 def test_pipeline_applies_active_manual_topic(tmp_path, monkeypatch):
-    # An active manual topic with a member note IS applied (the only mutation path).
+    # An active manual topic with a human-pinned member note IS applied (the only
+    # mutation path). The user-pinned member survives the weekly pass's wholesale
+    # auto-member replace, so the topics step runs before apply and the tag lands.
     monkeypatch.delenv("FASTMAIL_API_TOKEN", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # enrich skips, no network
     cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
@@ -103,10 +105,13 @@ def test_pipeline_applies_active_manual_topic(tmp_path, monkeypatch):
     # Anchor with an embedding of matching dim (as the `topics add` CLI does).
     store.add_manual_topic("rust", "Rust", "rust", embedder.embed_query("rust"))
     store.set_members(
-        "rust", [TopicMember(note_path="Knowledge/a.md", score=0.9, source="auto")]
+        "rust",
+        [TopicMember(note_path="Knowledge/a.md", score=0.9, source="user", is_primary=True)],
     )
     try:
-        res = run_pipeline(cfg, store, embedder, FakeClusterer(labels=[0]))
+        # a.md is pinned (excluded from assignment); the 2-note residual (b + inbox
+        # stub) reaches the clusterer as noise, so no proposal competes with rust.
+        res = run_pipeline(cfg, store, embedder, FakeClusterer(labels=[-1, -1]))
     finally:
         store.close()
 
@@ -166,10 +171,11 @@ def test_pipeline_cli_json(tmp_path, monkeypatch):
     assert out["ok"] is True
     assert [o["name"] for o in out["outcomes"]] == _WEEKLY_STEPS
     # counts feed the launchd runner's review-queue notification.
-    assert set(out["counts"]) == {"inbox", "proposals", "unfiled"}
+    assert set(out["counts"]) == {"inbox", "proposals", "unfiled", "queue"}
     assert all(isinstance(n, int) for n in out["counts"].values())
     assert out["counts"]["inbox"] == 1  # the fixture's single inbox stub
     assert out["counts"]["proposals"] == 1  # the 0,0 cluster's proposed topic
+    assert out["counts"]["queue"] >= 0  # borderline review queue size
     assert out["digest_path"].endswith("_system/kb-digest.md")
     assert (v / "_system" / "kb-digest.md").exists()
 

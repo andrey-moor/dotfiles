@@ -150,34 +150,6 @@ def test_topics_discover_on_unsynced_db_does_not_crash(tmp_path, monkeypatch):
     assert out["n_topics"] == 0 and out["n_unfiled"] == 0
 
 
-def test_topics_discover_sticky_cli_json(tmp_path, monkeypatch):
-    # CLI wiring of --sticky: emits the sticky payload shape and preserves the
-    # manual topic. (Assignment geometry is covered deterministically in
-    # test_sticky.py; fake embeddings are near-orthogonal so we don't assert
-    # a specific assignment count here.)
-    monkeypatch.setenv("KB_FAKE_EMBED", "1")
-    monkeypatch.setenv("KB_FAKE_CLUSTER", "0,0,1")
-    v = _topics_vault(tmp_path)
-    db = tmp_path / "t.db"
-    args = ["--vault", str(v), "--db", str(db)]
-    CliRunner().invoke(main, args + ["sync"])
-    CliRunner().invoke(
-        main,
-        args
-        + ["topics", "add", "rust", "--label", "Rust", "--description", "rust macros"],
-    )
-    r = CliRunner().invoke(
-        main, args + ["topics", "discover", "--sticky", "--high", "0.9", "--json"]
-    )
-    assert r.exit_code == 0
-    out = json.loads(r.output)
-    assert out["sticky"] is True
-    assert {"n_assigned_existing", "n_new_topics", "n_unfiled"} <= out.keys()
-    # the manual topic must still exist after a sticky re-discover
-    slugs = {t.slug for t in Store(db).load_topics()}
-    assert "rust" in slugs
-
-
 def test_topics_areas_cli(tmp_path, monkeypatch):
     pytest.importorskip("sklearn")  # build_areas uses AgglomerativeClustering — [topics] extra
     monkeypatch.setenv("KB_FAKE_EMBED", "1")

@@ -34,7 +34,7 @@ let
     echo "$out"
     # inbox backlog + proposals awaiting naming + unfiled notes = the review queue.
     n="$(printf '%s' "$out" | /usr/bin/python3 -c \
-      'import json,sys; c=json.load(sys.stdin)["counts"]; print(c["inbox"]+c["proposals"]+c["unfiled"])' \
+      'import json,sys; c=json.load(sys.stdin)["counts"]; print(c["inbox"]+c["proposals"]+c["unfiled"]+c.get("queue",0))' \
       2>/dev/null || echo "")"
     if [ -n "$n" ]; then
       msg="KB digest ready — $n to review"

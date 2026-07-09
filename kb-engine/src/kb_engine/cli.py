@@ -42,7 +42,6 @@ from kb_engine.topics.assignment import (
 )
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
 from kb_engine.topics.discover import discover_topics
-from kb_engine.topics.sticky import sticky_discover
 from kb_engine.topics.suggest import suggest_from_residual
 from kb_engine.filing import apply_dispositions
 from kb_engine.inbox_check import check_inbox
@@ -501,58 +500,20 @@ def topics() -> None:
 
 @topics.command("discover")
 @click.option(
-    "--sticky",
-    is_flag=True,
-    help="Assign notes to existing active topics first, cluster only the residual.",
-)
-@click.option(
-    "--high",
-    default=DEFAULT_ASSIGN_HIGH,
-    show_default=True,
-    type=float,
-    help="Cosine threshold for assigning a note to an existing topic (--sticky).",
-)
-@click.option(
     "--coarse",
     is_flag=True,
     help="Use excess-of-mass clustering (fewer, broader topics). Default is leaf (finer, more coherent).",
 )
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
-def topics_discover(
-    cfg: Config, sticky: bool, high: float, coarse: bool, as_json: bool
-) -> None:
+def topics_discover(cfg: Config, coarse: bool, as_json: bool) -> None:
     """Cluster note vectors into topics (UMAP→HDBSCAN) and persist them.
 
-    With ``--sticky``, notes scoring ``>= --high`` against an existing active
-    topic are kept on that topic and only the residual is clustered into new
-    proposals. Clustering uses leaf selection by default (finer topics); pass
-    ``--coarse`` for excess-of-mass (fewer, broader clusters).
+    Clustering uses leaf selection by default (finer topics); pass ``--coarse``
+    for excess-of-mass (fewer, broader clusters).
     """
     method = "eom" if coarse else "leaf"
     store = Store(cfg.db_path)
-    if sticky:
-        try:
-            store.init_schema()
-            sticky_result = sticky_discover(
-                store, _build_clusterer(method), high=high
-            )
-        finally:
-            store.close()
-        payload = {
-            "sticky": True,
-            "n_assigned_existing": sticky_result.n_assigned_existing,
-            "n_new_topics": sticky_result.n_new_topics,
-            "n_unfiled": sticky_result.n_unfiled,
-        }
-        _emit(
-            payload,
-            as_json,
-            f"Sticky discover: assigned_existing={sticky_result.n_assigned_existing} "
-            f"new_topics={sticky_result.n_new_topics} "
-            f"unfiled={sticky_result.n_unfiled}",
-        )
-        return
     try:
         store.init_schema()  # tolerate discovering against a never-synced DB
         result = discover_topics(store, _build_clusterer(method))
@@ -1320,6 +1281,7 @@ def pipeline(cfg: Config, tier: str, as_json: bool) -> None:
             "inbox": count_inbox(cfg.vault_path),
             "proposals": count_proposals(store.load_topics()),
             "unfiled": len(unfiled_notes(store)),
+            "queue": len(store.load_review_queue()),
         }
     finally:
         store.close()

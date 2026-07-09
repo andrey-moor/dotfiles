@@ -7,7 +7,7 @@ table.
 
 Tiers:
 - ``daily``:  import-mail → enrich → sync → digest
-- ``weekly``: import-mail → enrich → backfill → sync → apply-topics → discover → eval → digest
+- ``weekly``: import-mail → enrich → backfill → sync → topics → apply-topics → eval → digest
 
 Enrichment (summaries/whys/titles) runs only when ``ANTHROPIC_API_KEY`` is set;
 without it the step is a no-op skip so the pipeline stays LLM-free by default.
@@ -28,7 +28,7 @@ from kb_engine.store import Store
 from kb_engine.sync import sync
 from kb_engine.topics.apply import apply_topic_tags
 from kb_engine.topics.clustering import Clusterer
-from kb_engine.topics.sticky import sticky_discover
+from kb_engine.topics.weekly import weekly_topic_pass
 
 _INBOX_RELDIR = Path("Knowledge") / "inbox"
 # Vault-relative POSIX prefix of synced inbox notes (store paths use "/").
@@ -122,11 +122,12 @@ def _backfill_step(cfg: Config, store: Store) -> str:
     return f"{s.fetched} fetched · {s.unavailable} unavailable · {s.skipped} skipped"
 
 
-def _discover_step(cfg: Config, store: Store, clusterer: Clusterer) -> str:
-    r = sticky_discover(store, clusterer)
+def _topics_step(cfg: Config, store: Store, clusterer: Clusterer) -> str:
+    r = weekly_topic_pass(store, clusterer)
     return (
-        f"{r.n_assigned_existing} assigned · {r.n_new_topics} new topic(s) · "
-        f"{r.n_unfiled} unfiled"
+        f"{r.reanchored} reanchored · {r.thresholds_set} thresholds · "
+        f"{r.assigned} assigned · {r.queued} queued · "
+        f"{r.new_topics} new topic(s) · {r.unfiled} unfiled"
     )
 
 
@@ -178,8 +179,8 @@ def run_pipeline(
         _run_step("backfill", lambda: _backfill_step(cfg, store), outcomes)
     _run_step("sync", lambda: _sync_step(cfg, store, embedder), outcomes)
     if tier == "weekly":
+        _run_step("topics", lambda: _topics_step(cfg, store, clusterer), outcomes)
         _run_step("apply-topics", lambda: _apply_step(cfg, store), outcomes)
-        _run_step("discover", lambda: _discover_step(cfg, store, clusterer), outcomes)
         _run_step("eval", lambda: _eval_step(cfg, store, embedder), outcomes)
 
     ok = all(o.ok for o in outcomes)
