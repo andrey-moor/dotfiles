@@ -48,6 +48,10 @@ from kb_engine.inbox_check import check_inbox
 from kb_engine.topics.apply import apply_topic_tags
 from kb_engine.topics.render import render_topics
 from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
+from kb_engine.topics.migration import (
+    build_migration_proposal,
+    render_migration_proposal,
+)
 
 DEFAULT_SEARCH_LIMIT = 10
 DEFAULT_SYNTHESIS_MIN = 5
@@ -680,6 +684,37 @@ def topics_diff_taxonomy(
         click.echo(f"new (no aligned tag): {', '.join(diff.new_topics)}")
     if diff.orphan_tags:
         click.echo(f"orphan tags (no aligned topic): {', '.join(diff.orphan_tags)}")
+
+
+@topics.command("propose-migration")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_propose_migration(cfg: Config, as_json: bool) -> None:
+    """Generate _system/migration-proposal.md for the human review gate.
+
+    Proposes per-tag dispositions + topic→area assignments. Edit the decision
+    columns, then run `topics migrate --proposal <path>` (dry-run first)."""
+    taxonomy_path = cfg.vault_path / _TAXONOMY_RELPATH
+    declared = parse_taxonomy_tags(taxonomy_path) if taxonomy_path.exists() else set()
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        proposal = build_migration_proposal(store, declared)
+    finally:
+        store.close()
+    out_path = cfg.vault_path / "_system" / "migration-proposal.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(render_migration_proposal(proposal))
+    _emit(
+        {
+            "path": str(out_path),
+            "tags": len(proposal.dispositions),
+            "topics": len(proposal.topic_areas),
+        },
+        as_json,
+        f"Wrote {out_path} ({len(proposal.dispositions)} tags, "
+        f"{len(proposal.topic_areas)} topic-area rows). Review + edit decisions.",
+    )
 
 
 @topics.command("render")

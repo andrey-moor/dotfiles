@@ -6,6 +6,7 @@ from click.testing import CliRunner
 from kb_engine.cli import main
 from kb_engine.models import QueueEntry, Topic, TopicMember
 from kb_engine.store import Store
+from kb_engine.topics.areas_registry import seed_areas
 
 
 def _seed_topic(store, slug, n_members):
@@ -879,3 +880,26 @@ def test_topics_confirm_unknown_note_fails(tmp_path, monkeypatch):
                  "topics", "confirm", "t1", "Knowledge/ghost.md"], monkeypatch)
     assert r.exit_code != 0
     assert "not in the index" in r.output
+
+
+def test_topics_propose_migration_writes_artifact(tmp_path, monkeypatch):
+    db = tmp_path / "t.db"
+    (tmp_path / "_system").mkdir()
+    (tmp_path / "_system" / "_taxonomy.md").write_text(
+        "# Tax\n\n## Categories\n\n- **Dev/Rust** — rust\n"
+    )
+    store = Store(db)
+    store.init_schema()
+    seed_areas(store)
+    store.upsert_note("Knowledge/r.md", "r", "sha-r", ["Dev/Rust"])
+    store.close()
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db), "topics",
+                 "propose-migration", "--json"], monkeypatch)
+    assert r.exit_code == 0
+    payload = json.loads(r.output)
+    artifact = tmp_path / "_system" / "migration-proposal.md"
+    assert artifact.is_file()
+    assert payload["path"].endswith("migration-proposal.md")
+    assert payload["tags"] == 1
+    text = artifact.read_text()
+    assert "## Tag dispositions" in text and "Dev/Rust" in text
