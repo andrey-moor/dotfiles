@@ -47,6 +47,9 @@ Run the `/kb:process` flow over `Main/Knowledge/inbox/`:
   and ask the user once, rather than interrupting per note.
 - File approved notes from `inbox/` into `Main/Knowledge/`, add `## Related` cross-links,
   and propose any new taxonomy tags.
+- **Provenance pass:** for notes touched this session with `provenance: auto`, confirm
+  or correct the drafted summary/why/title, then set `provenance: confirmed`. Auto
+  drafts are proposals, not truth (D14).
 
 Dedup is handled **at ingest** by `kb-engine import-things` (it normalizes + dedups URLs
 against the vault and within the batch), so you should not encounter duplicate-URL stubs here.

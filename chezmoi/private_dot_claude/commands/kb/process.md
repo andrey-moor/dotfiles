@@ -83,6 +83,13 @@ Extract from whichever tier succeeds:
 **c. Generate summary**
 Write a 1-3 sentence summary of what the content is about. Be specific and factual.
 
+- **Content policy:** keep the fetched/clipped full readable text in the note under a
+  `## Content` section, capped at 4,000 words with a truncation marker
+  (`…truncated — full text at <url>`). The summary goes ONLY in frontmatter. Never
+  replace the body with the summary. If the note already has auto-drafted frontmatter
+  (`provenance: auto`), review the drafts: correcting or accepting them flips
+  `provenance` to `confirmed`.
+
 **d. Suggest tags**
 Based on the content AND the user's `context` field (if present), suggest tags from the taxonomy.
 
