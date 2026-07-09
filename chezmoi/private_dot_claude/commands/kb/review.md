@@ -110,6 +110,19 @@ the human confirm each pair. Never delete a note.**
      — the twin stays on disk (nothing lost), suppression keeps it out of search.
 3. Report merged pairs to the user in the pass summary.
 
+### 7. Decide borderline assignments (when the digest lists a queue)
+
+The weekly pass queues notes whose best topic score sits just under that topic's
+bar — each is one human call the engine won't make alone.
+
+For each `## Borderline queue` line (`[[note]] → topic-a (0.52), topic-b (0.48)`):
+- **Agree with a candidate:** `kb-engine --vault "<Main>" topics confirm <slug> "<note path>"`
+  — records a user-pinned primary (auto passes will never fight it).
+- **None fit:** leave it. The queue is rewritten every weekly pass; if it keeps
+  re-appearing, consider a new manual topic (`kb-engine topics add`).
+
+After a confirm batch: `kb-engine --vault "<Main>" topics apply` writes the tags.
+
 ## Report
 
 ```

@@ -551,6 +551,15 @@ class Store:
         ).fetchall()
         return {row[0] for row in rows}
 
+    def clear_auto_primaries(self, note_path: str) -> None:
+        """Drop a note's auto primary rows — a human confirm supersedes them."""
+        with self._conn:
+            self._conn.execute(
+                "DELETE FROM topic_members "
+                "WHERE note_path = ? AND source = 'auto' AND is_primary = 1",
+                (note_path,),
+            )
+
     def replace_review_queue(self, entries: list[QueueEntry]) -> None:
         """Rewrite the borderline review queue (one weekly pass's truth)."""
         with self._conn:

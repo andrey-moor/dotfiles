@@ -5,7 +5,7 @@ import pytest
 from click.testing import CliRunner
 
 from kb_engine.cli import main
-from kb_engine.models import Topic, TopicMember
+from kb_engine.models import QueueEntry, Topic, TopicMember
 from kb_engine.store import Store
 
 
@@ -820,3 +820,55 @@ def test_topics_thresholds_dry_run_does_not_persist(tmp_path, monkeypatch, real_
     store.init_schema()
     assert store.load_topics()[0].threshold_high is not None
     store.close()
+
+
+def test_topics_confirm_from_queue(tmp_path, monkeypatch):
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(4, np.float32))
+    store.upsert_note("Knowledge/n.md", "N", "sha-n", [])
+    store.replace_review_queue(
+        [QueueEntry("Knowledge/n.md", (("t1", 0.52),), "borderline")]
+    )
+    store.close()
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db),
+                 "topics", "confirm", "t1", "Knowledge/n.md", "--json"], monkeypatch)
+    assert r.exit_code == 0
+    payload = json.loads(r.output)
+    assert payload == {
+        "slug": "t1", "note": "Knowledge/n.md",
+        "score": 0.52, "source": "user", "dequeued": True,
+    }
+    store = Store(db)
+    store.init_schema()
+    members = store.topic_members("t1")
+    assert [(m.note_path, m.source, m.is_primary) for m in members] == [
+        ("Knowledge/n.md", "user", True)
+    ]
+    assert store.load_review_queue() == []
+    store.close()
+
+
+def test_topics_confirm_unknown_slug_fails(tmp_path, monkeypatch):
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    store.upsert_note("Knowledge/n.md", "N", "sha-n", [])
+    store.close()
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db),
+                 "topics", "confirm", "nope", "Knowledge/n.md"], monkeypatch)
+    assert r.exit_code != 0
+    assert "no such topic" in r.output
+
+
+def test_topics_confirm_unknown_note_fails(tmp_path, monkeypatch):
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(4, np.float32))
+    store.close()
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db),
+                 "topics", "confirm", "t1", "Knowledge/ghost.md"], monkeypatch)
+    assert r.exit_code != 0
+    assert "not in the index" in r.output

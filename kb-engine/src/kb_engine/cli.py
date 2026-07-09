@@ -1009,6 +1009,51 @@ def topics_thresholds(cfg: Config, dry_run: bool, as_json: bool) -> None:
     )
 
 
+@topics.command("confirm")
+@click.argument("slug")
+@click.argument("note_path")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_confirm(cfg: Config, slug: str, note_path: str, as_json: bool) -> None:
+    """Confirm NOTE_PATH into topic SLUG as its human-decided primary.
+
+    The /kb:review queue verb: writes a source='user' primary membership,
+    clears any auto primaries for the note, and removes its queue row.
+    Run `topics apply` afterwards to write the tag into the note."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        known = {t.slug for t in store.load_topics()}
+        if slug not in known:
+            raise click.ClickException(f"no such topic: {slug}")
+        if store.note_sha(note_path) is None:
+            raise click.ClickException(f"note not in the index: {note_path}")
+        score = 1.0
+        dequeued = False
+        for entry in store.load_review_queue():
+            if entry.note_path == note_path:
+                score = next(
+                    (s for cand, s in entry.candidates if cand == slug), 1.0
+                )
+                dequeued = True
+                break
+        store.clear_auto_primaries(note_path)
+        store.set_members(
+            slug,
+            [TopicMember(note_path=note_path, score=score, source="user",
+                         is_primary=True)],
+        )
+        store.remove_from_review_queue(note_path)
+    finally:
+        store.close()
+    _emit(
+        {"slug": slug, "note": note_path, "score": round(score, 6),
+         "source": "user", "dequeued": dequeued},
+        as_json,
+        f"Confirmed {note_path} -> {slug} (score {score:.2f}).",
+    )
+
+
 @main.command("import-mail")
 @click.option("--label", default=DEFAULT_KB_LABEL, show_default=True, help="Fastmail label to ingest.")
 @click.option("--limit", default=DEFAULT_MAIL_LIMIT, show_default=True, type=int)

@@ -315,3 +315,20 @@ def test_review_queue_roundtrip_and_ordering(tmp_path):
     store.remove_from_review_queue("c.md")
     assert store.load_review_queue() == []
     store.close()
+
+
+def test_clear_auto_primaries_leaves_user_and_secondaries(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(2, np.float32))
+    store.add_manual_topic("t2", "T2", "d", np.ones(2, np.float32))
+    store.set_members("t1", [TopicMember("n.md", 0.6, "auto", True)])
+    store.set_members("t2", [
+        TopicMember("n.md", 0.5, "auto", False),  # secondary survives
+        TopicMember("other.md", 0.9, "user", True),
+    ])
+    store.clear_auto_primaries("n.md")
+    assert store.topic_members("t1") == []
+    t2 = {(m.note_path, m.source, m.is_primary) for m in store.topic_members("t2")}
+    assert t2 == {("n.md", "auto", False), ("other.md", "user", True)}
+    store.close()
