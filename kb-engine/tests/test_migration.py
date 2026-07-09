@@ -93,3 +93,96 @@ def test_tag_with_unknown_category_is_skipped_with_note(tmp_path):
     proposal = build_migration_proposal(store, {"Dev/Rust", "Weird/Thing"})
     assert "Weird/Thing" not in {d.tag for d in proposal.dispositions}
     store.close()
+
+
+# --- rejection-guard regressions (finding I1) ---------------------------------
+# This artifact drives a mass retag; each guard below is a safety gate. These
+# tests pin the exact rejection paths against refactor regressions. Each builds a
+# valid proposal, corrupts ONE cell, and asserts the ValueError names the row.
+
+
+def test_parse_rejects_typod_map_target(tmp_path):
+    """THE typo guard: a map target that is a near-miss of a real topic slug
+    (valid grammar, but absent from the doc's topic list) is rejected."""
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace(
+        "map:rust-learning", "map:rust-learnin"
+    )
+    with pytest.raises(ValueError, match=r"Dev/Rust.*map target"):
+        parse_migration_proposal(text)
+    store.close()
+
+
+def test_parse_rejects_map_target_absent_from_doc(tmp_path):
+    """A grammatically valid map target naming a topic not listed in the doc's
+    ## Topic → area section is rejected (doc-scoped validation)."""
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace(
+        "map:rust-learning", "map:database-design"
+    )
+    with pytest.raises(ValueError, match=r"Dev/Rust.*map target"):
+        parse_migration_proposal(text)
+    store.close()
+
+
+def test_parse_rejects_non_integer_count(tmp_path):
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace("| 4 |", "| four |")
+    with pytest.raises(ValueError, match=r"Dev/Rust.*non-integer"):
+        parse_migration_proposal(text)
+    store.close()
+
+
+def test_parse_rejects_unknown_area_in_disposition_row(tmp_path):
+    """Distinct from test_parse_rejects_unknown_area (which corrupts the first
+    ``| dev |`` — the topic→area row): this corrupts the disposition row's area
+    cell, exercising the disposition-path guard."""
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace("4 | dev |", "4 | dve |")
+    with pytest.raises(ValueError, match=r"Dev/Rust.*unknown area"):
+        parse_migration_proposal(text)
+    store.close()
+
+
+def test_parse_rejects_disposition_row_with_too_few_cells(tmp_path):
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace(
+        "| rust-learning (1.00) | map:rust-learning |", "| map:rust-learning |"
+    )
+    with pytest.raises(ValueError, match=r"Dev/Rust.*malformed disposition"):
+        parse_migration_proposal(text)
+    store.close()
+
+
+def test_parse_rejects_topic_row_with_too_few_cells(tmp_path):
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace(
+        "| dev | 4/4 member notes tagged Dev/* |", "| dev |"
+    )
+    with pytest.raises(ValueError, match=r"rust-learning.*malformed topic"):
+        parse_migration_proposal(text)
+    store.close()
+
+
+def test_parse_rejects_duplicate_section(tmp_path):
+    """A duplicated ## Tag dispositions section would silently merge its rows
+    into the cutover (over-inclusion); the parser rejects it outright. The extra
+    row is itself valid, so only the duplicate-section guard can raise here."""
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal)
+    extra = (
+        "\n## Tag dispositions\n\n"
+        "| tag | count | area | best topic (jaccard) | decision |\n"
+        "|---|---|---|---|---|\n"
+        "| Sneaky/Extra | 1 | dev | — | area |\n"
+    )
+    with pytest.raises(ValueError, match="duplicate section"):
+        parse_migration_proposal(text + extra)
+    store.close()

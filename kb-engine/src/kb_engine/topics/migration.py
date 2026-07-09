@@ -217,10 +217,15 @@ def _section_rows(text: str, heading: str, header: tuple[str, ...]) -> list[list
     """Return the data-row cell lists under ``heading`` (header/divider skipped).
 
     Text outside the ``## `` sections is ignored; the human edits cells only.
+    A heading appearing more than once is rejected: a duplicated section would
+    silently merge rows from both copies into the cutover (over-inclusion).
     """
+    lines = text.splitlines()
+    if sum(1 for line in lines if line.strip() == heading) > 1:
+        raise ValueError(f"duplicate section: {heading}")
     rows: list[list[str]] = []
     in_section = False
-    for line in text.splitlines():
+    for line in lines:
         stripped = line.strip()
         if stripped.startswith("## "):
             in_section = stripped == heading
