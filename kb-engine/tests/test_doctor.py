@@ -1,10 +1,17 @@
 import sqlite3
 import time
+from pathlib import Path
 
 import pytest
 
 from kb_engine.config import Config
-from kb_engine.doctor import _check_db, check_digest_fresh, check_launchd, run_checks
+from kb_engine.doctor import (
+    _check_db,
+    _check_secrets,
+    check_digest_fresh,
+    check_launchd,
+    run_checks,
+)
 
 
 def test_digest_fresh_ok(tmp_path):
@@ -73,3 +80,33 @@ def test_run_checks_reports_missing_vault(tmp_path):
     cfg = Config(vault_path=tmp_path / "nope", db_path=tmp_path / "kb.db")
     checks = {c.name: c for c in run_checks(cfg)}
     assert checks["vault"].ok is False and checks["vault"].severity == "hard"
+
+
+def _write_secrets(tmp_path, monkeypatch, mode):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    d = tmp_path / ".config" / "kb-engine"
+    d.mkdir(parents=True)
+    f = d / "secrets.env"
+    f.write_text("FASTMAIL_API_TOKEN=\nANTHROPIC_API_KEY=\n")
+    f.chmod(mode)
+    return f
+
+
+def test_check_secrets_missing_file_fails_hard(tmp_path, monkeypatch):
+    # Phase 3 made secrets mandatory: a missing file is now a hard failure.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    c = _check_secrets()
+    assert c.name == "secrets" and c.ok is False and c.severity == "hard"
+
+
+def test_check_secrets_wrong_mode_fails_hard(tmp_path, monkeypatch):
+    _write_secrets(tmp_path, monkeypatch, 0o644)
+    c = _check_secrets()
+    assert c.ok is False and c.severity == "hard"
+
+
+def test_check_secrets_present_and_0600_passes(tmp_path, monkeypatch):
+    # Empty values still pass — the check is existence + 0600 mode, not contents.
+    _write_secrets(tmp_path, monkeypatch, 0o600)
+    c = _check_secrets()
+    assert c.ok is True and c.severity == "hard"

@@ -68,9 +68,9 @@ def _check_db(db_path: Path) -> Check:
 def _check_secrets() -> Check:
     p = Path.home() / ".config" / "kb-engine" / "secrets.env"
     if not p.is_file():
-        return Check("secrets", False, "warn", f"missing: {p} (required from Phase 3)")
+        return Check("secrets", False, "hard", f"missing: {p} (required from Phase 3)")
     mode = p.stat().st_mode & 0o777
-    return Check("secrets", mode == 0o600, "warn", f"mode {oct(mode)}")
+    return Check("secrets", mode == 0o600, "hard", f"mode {oct(mode)}")
 
 
 def _check_vault_git(vault_path: Path, now: float) -> Check:

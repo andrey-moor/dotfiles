@@ -22,6 +22,14 @@ let
   # import-mail + digest; weekly additionally applies topics/clusters + eval.
   mkPipelineRunner = tier: pkgs.writeShellScript "kb-engine-pipeline-${tier}" ''
     set -euo pipefail
+    # Source enrichment/import secrets (FASTMAIL_API_TOKEN, ANTHROPIC_API_KEY)
+    # if provisioned. Empty/absent values leave the enrich + import-mail steps
+    # skipping cleanly (their checks are os.environ.get truthiness).
+    if [ -f "$HOME/.config/kb-engine/secrets.env" ]; then
+      set -a
+      . "$HOME/.config/kb-engine/secrets.env"
+      set +a
+    fi
     out="$(${kbEngine}/bin/kb-engine --vault "${cfg.vaultPath}" pipeline --tier ${tier} --json)"
     echo "$out"
     # inbox backlog + proposals awaiting naming + unfiled notes = the review queue.

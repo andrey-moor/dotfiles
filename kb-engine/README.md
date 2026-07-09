@@ -36,6 +36,39 @@ The first run with `--extra ml` downloads the `jinaai/jina-embeddings-v3` model.
 Importing `kb_engine` never requires torch — the real embedder imports it lazily,
 so logic, tests, and `--help` work without the ML stack.
 
+## Fresh machine bootstrap
+
+Standing up kb-engine on a new machine (the `kb-engine` wrapper + the scheduled
+launchd agents are all Nix-managed by `modules.dev.kb-engine`):
+
+```bash
+# 1. Clone the dotfiles repo, then build + apply the Nix configuration.
+#    This puts `kb-engine` on PATH and installs the daily/weekly launchd agents.
+just switch
+
+# 2. Provision secrets. The pipeline runners source this file (0600) before every
+#    run; enrichment + import-mail stay skipped until it holds real values.
+mkdir -p ~/.config/kb-engine
+$EDITOR ~/.config/kb-engine/secrets.env   # created empty by Nix; fill from 1Password
+chmod 600 ~/.config/kb-engine/secrets.env
+#   FASTMAIL_API_TOKEN — Fastmail → Settings → Privacy & Security → API tokens
+#                        (read-only, Mail scope).
+#   ANTHROPIC_API_KEY  — console.anthropic.com → API keys (dedicated KB key).
+
+# 3. Build the embedding cache from the vault (first run downloads jina-v3).
+kb-engine --vault "<vault>" rebuild
+
+# 4. Confirm health — every check must be green (secrets is now a HARD check).
+kb-engine --vault "<vault>" doctor
+
+# 5. Confirm the scheduled agents are loaded.
+launchctl list | grep kb
+```
+
+`<vault>` is the Obsidian vault path (`modules.dev.kb-engine.vaultPath`; defaults to
+the iCloud "Main" vault). Once secrets hold real values, the next scheduled run picks
+up enrichment + email import automatically — no re-switch needed.
+
 ## Usage
 
 In this dotfiles repo, a `kb-engine` wrapper is put on `PATH` by the Nix module
