@@ -1,6 +1,7 @@
 import sqlite3
 
 import numpy as np
+import pytest
 from kb_engine.models import TopicMember
 from kb_engine.store import Store, _sanitize_fts_query
 
@@ -249,4 +250,17 @@ def test_existing_db_gains_anchor_source_column(tmp_path):
     store = Store(db)
     store.init_schema()
     assert store.load_topics()[0].anchor_source == "label"
+    store.close()
+
+
+def test_topic_thresholds_roundtrip_and_default_none(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(2, np.float32))
+    assert store.load_topics()[0].threshold_high is None
+    assert store.load_topics()[0].threshold_secondary is None
+    store.set_topic_thresholds("t1", 0.61, 0.53)
+    loaded = store.load_topics()[0]
+    assert loaded.threshold_high == pytest.approx(0.61)
+    assert loaded.threshold_secondary == pytest.approx(0.53)
     store.close()

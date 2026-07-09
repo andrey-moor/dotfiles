@@ -32,6 +32,7 @@ from kb_engine.synthesis import synthesis_candidates
 from kb_engine.sync import rebuild as rebuild_index
 from kb_engine.sync import sync as sync_index
 from kb_engine.topics.anchoring import reanchor_topics
+from kb_engine.topics.thresholds import derive_thresholds, persist_thresholds
 from kb_engine.topics.areas import build_areas
 from kb_engine.topics.assignment import assign_notes
 from kb_engine.topics.clustering import Clusterer, FakeClusterer, UmapHdbscanClusterer
@@ -994,6 +995,45 @@ def topics_reanchor(cfg: Config, as_json: bool) -> None:
         as_json,
         f"Re-anchored {len(result.reanchored)} topic(s); "
         f"{len(result.kept_label)} kept label anchor.",
+    )
+
+
+@topics.command("thresholds")
+@click.option("--dry-run", is_flag=True, help="Report only; do not persist.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_thresholds(cfg: Config, dry_run: bool, as_json: bool) -> None:
+    """Derive per-topic assignment thresholds from member-sim distributions.
+
+    high = max(0.45, p25 of member cosines to the current anchor);
+    secondary = high - 0.08. Persists unless --dry-run."""
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        stats = derive_thresholds(store)
+        if not dry_run:
+            persist_thresholds(store, stats)
+    finally:
+        store.close()
+    rows = [
+        {
+            "slug": s.slug, "n_members": s.n_members,
+            "p25": round(s.p25, 4), "p50": round(s.p50, 4), "p75": round(s.p75, 4),
+            "high": round(s.high, 4), "secondary": round(s.secondary, 4),
+        }
+        for s in stats
+    ]
+    if as_json:
+        click.echo(json.dumps({"persisted": not dry_run, "topics": rows}))
+        return
+    for r in rows:
+        click.echo(
+            f"{r['slug']:40} n={r['n_members']:>3} p25={r['p25']:.3f} "
+            f"p50={r['p50']:.3f} p75={r['p75']:.3f} -> high={r['high']:.3f} "
+            f"secondary={r['secondary']:.3f}"
+        )
+    click.echo(
+        f"{len(rows)} topic(s) {'reported (dry-run)' if dry_run else 'persisted'}"
     )
 
 

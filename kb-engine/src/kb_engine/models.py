@@ -39,6 +39,8 @@ class Topic:
     kind: str  # "discovered" | "manual"
     status: str  # "proposed" | "active" | "deprecated"
     anchor_source: str = "label"  # "label" (text anchor) | "members" (centroid of members)
+    threshold_high: float | None = None  # per-topic primary bar; None = use global
+    threshold_secondary: float | None = None  # per-topic cross-link bar; None = global
 
 
 @dataclass(frozen=True)

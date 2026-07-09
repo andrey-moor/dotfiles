@@ -24,7 +24,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, note_path UNINDEX
 CREATE TABLE IF NOT EXISTS topics (
   slug TEXT PRIMARY KEY, label TEXT, keywords TEXT, centroid BLOB NOT NULL,
   kind TEXT NOT NULL, status TEXT NOT NULL,
-  anchor_source TEXT NOT NULL DEFAULT 'label'
+  anchor_source TEXT NOT NULL DEFAULT 'label',
+  threshold_high REAL, threshold_secondary REAL
 );
 CREATE TABLE IF NOT EXISTS topic_members (
   topic_slug TEXT NOT NULL, note_path TEXT NOT NULL, score REAL, source TEXT,
@@ -124,6 +125,9 @@ class Store:
         self._ensure_column("notes", "size", "INTEGER")
         # Backfill for databases created before topic re-anchoring (Phase 4).
         self._ensure_column("topics", "anchor_source", "TEXT NOT NULL DEFAULT 'label'")
+        # Backfill for databases created before per-topic thresholds (Phase 4).
+        self._ensure_column("topics", "threshold_high", "REAL")
+        self._ensure_column("topics", "threshold_secondary", "REAL")
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -347,8 +351,9 @@ class Store:
                 taken.add(slug)
                 self._conn.execute(
                     """
-                    INSERT INTO topics(slug, label, keywords, centroid, kind, status, anchor_source)
-                    VALUES(?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO topics(slug, label, keywords, centroid, kind, status,
+                        anchor_source, threshold_high, threshold_secondary)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         slug,
@@ -358,6 +363,8 @@ class Store:
                         topic.kind,
                         topic.status,
                         topic.anchor_source,
+                        topic.threshold_high,
+                        topic.threshold_secondary,
                     ),
                 )
                 for member in members_by_slug.get(topic.slug, []):
@@ -372,7 +379,8 @@ class Store:
 
     def load_topics(self) -> list[Topic]:
         rows = self._conn.execute(
-            "SELECT slug, label, keywords, centroid, kind, status, anchor_source "
+            "SELECT slug, label, keywords, centroid, kind, status, anchor_source, "
+            "threshold_high, threshold_secondary "
             "FROM topics ORDER BY slug"
         ).fetchall()
         return [
@@ -384,8 +392,13 @@ class Store:
                 kind=kind,
                 status=status,
                 anchor_source=anchor_source,
+                threshold_high=threshold_high,
+                threshold_secondary=threshold_secondary,
             )
-            for slug, label, keywords, centroid, kind, status, anchor_source in rows
+            for (
+                slug, label, keywords, centroid, kind, status, anchor_source,
+                threshold_high, threshold_secondary,
+            ) in rows
         ]
 
     def update_topic_anchor(
@@ -396,6 +409,15 @@ class Store:
             self._conn.execute(
                 "UPDATE topics SET centroid = ?, anchor_source = ? WHERE slug = ?",
                 (_to_blob(centroid), anchor_source, slug),
+            )
+
+    def set_topic_thresholds(self, slug: str, high: float, secondary: float) -> None:
+        """Persist a topic's derived assignment thresholds."""
+        with self._conn:
+            self._conn.execute(
+                "UPDATE topics SET threshold_high = ?, threshold_secondary = ? "
+                "WHERE slug = ?",
+                (high, secondary, slug),
             )
 
     def add_manual_topic(

@@ -815,3 +815,36 @@ def test_topics_reanchor_json(tmp_path, monkeypatch, real_vectors):
     assert r.exit_code == 0
     payload = json.loads(r.output)
     assert payload["reanchored"] == ["warm"]
+
+
+def test_topics_thresholds_dry_run_does_not_persist(tmp_path, monkeypatch, real_vectors):
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    store.add_manual_topic("t1", "T1", "d", np.ones(1024, np.float32))
+    rows = []
+    for path, vec in real_vectors.by_group("topic:")[:3]:
+        store.upsert_note(path, path, f"sha-{path}", [])
+        store.replace_chunks(path, [(0, path, vec)])
+        rows.append(TopicMember(note_path=path, score=0.8, source="auto"))
+    store.set_members("t1", rows)
+    store.close()
+
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db),
+                 "topics", "thresholds", "--dry-run", "--json"], monkeypatch)
+    assert r.exit_code == 0
+    payload = json.loads(r.output)
+    assert payload["persisted"] is False
+    assert payload["topics"][0]["slug"] == "t1"
+    store = Store(db)
+    store.init_schema()
+    assert store.load_topics()[0].threshold_high is None
+    store.close()
+
+    r2 = _invoke(["--vault", str(tmp_path), "--db", str(db),
+                  "topics", "thresholds", "--json"], monkeypatch)
+    assert json.loads(r2.output)["persisted"] is True
+    store = Store(db)
+    store.init_schema()
+    assert store.load_topics()[0].threshold_high is not None
+    store.close()
