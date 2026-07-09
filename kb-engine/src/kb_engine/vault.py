@@ -1,4 +1,5 @@
 import hashlib
+import os
 import re
 import types
 from dataclasses import dataclass
@@ -8,6 +9,35 @@ from typing import Callable, Iterator
 import frontmatter
 
 from kb_engine.models import Note
+
+
+def load_post(text: str) -> frontmatter.Post:
+    """Parse frontmatter into a Post, tolerating a ``content`` metadata key.
+
+    ``frontmatter.loads`` raises when the frontmatter has a key named ``content``
+    (it collides with ``Post``'s positional body arg); ``parse`` does not, so the
+    Post is built from the parsed ``(metadata, body)``. Use this for any
+    read-modify-write of a note that may carry backfill's ``content: unavailable``.
+    """
+    metadata, body = frontmatter.parse(text)
+    post = frontmatter.Post(body)
+    post.metadata = metadata
+    return post
+
+
+def write_post_atomic(path: Path, post: frontmatter.Post) -> None:
+    """Write a python-frontmatter Post atomically, preserving frontmatter order.
+
+    ``sort_keys=False`` keeps untouched fields in their original file order (new
+    keys append at the end); the tmp-file + ``os.replace`` dance makes the write
+    atomic, so a crash mid-write can never truncate the note. The tmp name ends
+    in ``.md.tmp`` (not ``.md``) so it stays invisible to the note walk. Shared
+    by every vault writer (enrichment, backfill) so the house rules — atomicity
+    and key-order preservation — live in one place.
+    """
+    tmp = path.with_suffix(".md.tmp")
+    tmp.write_text(frontmatter.dumps(post, sort_keys=False))
+    os.replace(tmp, path)
 
 # Inline tags: #Category/Sub, #tag — captured without the leading '#'.
 _TAG_RE = re.compile(r"(?:^|\s)#([A-Za-z0-9][\w/-]*)")
@@ -43,9 +73,10 @@ def _dedupe_preserve_order(items: list[str]) -> tuple[str, ...]:
 def read_note(path: Path, base: Path) -> Note:
     raw = path.read_bytes()
     sha256 = hashlib.sha256(raw).hexdigest()
-    post = frontmatter.loads(raw.decode("utf-8"))
-    metadata = post.metadata
-    body = post.content
+    # ``frontmatter.parse`` (not ``loads``): a note whose frontmatter has a key
+    # literally named ``content`` (e.g. backfill's ``content: unavailable``)
+    # would crash ``loads`` — it collides with ``Post``'s positional body arg.
+    metadata, body = frontmatter.parse(raw.decode("utf-8"))
 
     title = str(metadata.get("title") or path.stem)
     tags = _dedupe_preserve_order(_frontmatter_tags(metadata) + _extract_inline_tags(body))

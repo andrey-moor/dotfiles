@@ -12,7 +12,6 @@ Per-note LLM/HTTP/write errors — and unreadable files — are collected in
 ``failures``, never raised, so one bad note never aborts the run.
 """
 
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +21,7 @@ import frontmatter
 from kb_engine.config import Config
 from kb_engine.llm import LLM
 from kb_engine.models import Note
-from kb_engine.vault import iter_notes
+from kb_engine.vault import iter_notes, write_post_atomic
 
 DEFAULT_LIMIT = 50
 _BODY_CHARS = 6000  # cap the content handed to the LLM
@@ -160,9 +159,9 @@ def _write_note(
 ) -> None:
     """Round-trip via python-frontmatter: body byte-unchanged, key order kept.
 
-    ``sort_keys=False`` keeps untouched fields in their original file order
-    (new keys append at the end), and the tmp-file + ``os.replace`` dance makes
-    the write atomic — a crash mid-write can never truncate the note.
+    Uses the shared ``write_post_atomic`` (tmp-file + ``os.replace``,
+    ``sort_keys=False``) so untouched fields keep their file order and a crash
+    mid-write can never truncate the note.
     """
     post = frontmatter.loads(path.read_text())
     post["summary"] = summary
@@ -171,6 +170,4 @@ def _write_note(
     if new_title is not None:
         post["title"] = new_title
     post["provenance"] = "auto"
-    tmp = path.with_suffix(".md.tmp")  # not *.md: invisible to the note walk
-    tmp.write_text(frontmatter.dumps(post, sort_keys=False))
-    os.replace(tmp, path)
+    write_post_atomic(path, post)

@@ -7,7 +7,7 @@ table.
 
 Tiers:
 - ``daily``:  import-mail → enrich → sync → digest
-- ``weekly``: import-mail → enrich → sync → apply-topics → discover → eval → digest
+- ``weekly``: import-mail → enrich → backfill → sync → apply-topics → discover → eval → digest
 
 Enrichment (summaries/whys/titles) runs only when ``ANTHROPIC_API_KEY`` is set;
 without it the step is a no-op skip so the pipeline stays LLM-free by default.
@@ -115,6 +115,13 @@ def _apply_step(cfg: Config, store: Store) -> str:
     )
 
 
+def _backfill_step(cfg: Config, store: Store) -> str:
+    from kb_engine.backfill import backfill_content
+
+    s = backfill_content(cfg, store)
+    return f"{s.fetched} fetched · {s.unavailable} unavailable · {s.skipped} skipped"
+
+
 def _discover_step(cfg: Config, store: Store, clusterer: Clusterer) -> str:
     r = sticky_discover(store, clusterer)
     return (
@@ -166,6 +173,9 @@ def run_pipeline(
 
     _run_step("import-mail", lambda: _import_mail_step(cfg, store), outcomes)
     _run_step("enrich", lambda: _enrich_step(cfg), outcomes)
+    if tier == "weekly":
+        # Backfill full text BEFORE sync so the appended content gets embedded.
+        _run_step("backfill", lambda: _backfill_step(cfg, store), outcomes)
     _run_step("sync", lambda: _sync_step(cfg, store, embedder), outcomes)
     if tier == "weekly":
         _run_step("apply-topics", lambda: _apply_step(cfg, store), outcomes)

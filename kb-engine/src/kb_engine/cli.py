@@ -7,6 +7,8 @@ from pathlib import Path
 
 import click
 
+from kb_engine.backfill import DEFAULT_LIMIT as DEFAULT_BACKFILL_LIMIT
+from kb_engine.backfill import backfill_content
 from kb_engine.config import Config
 from kb_engine.doctor import run_checks
 from kb_engine.importing.digest import build_digest, count_proposals
@@ -963,6 +965,30 @@ def import_mail_cmd(cfg: Config, label: str, limit: int, as_json: bool) -> None:
           f"mail: fetched {fetched} | wrote {result.written} | "
           f"skipped url={result.skipped_existing_url} msgid={result.skipped_existing_msgid} "
           f"batch={result.skipped_dup_in_batch}")
+
+
+@main.command("backfill-content")
+@click.option("--limit", default=DEFAULT_BACKFILL_LIMIT, show_default=True, type=int)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def backfill_content_cmd(cfg: Config, limit: int, as_json: bool) -> None:
+    """Fetch full text for thin captures and append a ## Content section."""
+    store = Store(cfg.db_path)
+    try:
+        stats = backfill_content(cfg, store, limit=limit)
+    finally:
+        store.close()
+    _emit(
+        {
+            "fetched": stats.fetched,
+            "unavailable": stats.unavailable,
+            "skipped": stats.skipped,
+            "failures": list(stats.failures),
+        },
+        as_json,
+        f"Backfill: {stats.fetched} fetched · {stats.unavailable} unavailable · "
+        f"{stats.skipped} skipped ({len(stats.failures)} failed)",
+    )
 
 
 @main.command("import-things")

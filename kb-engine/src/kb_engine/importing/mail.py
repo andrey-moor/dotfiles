@@ -6,6 +6,8 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from kb_engine.extract import html_to_markdown
+
 CORE = "urn:ietf:params:jmap:core"
 MAIL = "urn:ietf:params:jmap:mail"
 
@@ -87,14 +89,9 @@ def body_markdown(msg: MailMessage) -> str:
     degenerate Markdown table wrapping the whole article body."""
     if msg.html_body:
         try:
-            import trafilatura  # lazy (optional [mail] extra)
-
-            extracted = trafilatura.extract(
-                msg.html_body, output_format="markdown", include_links=True,
-                include_images=False, include_tables=False,
-            )
-            if extracted and extracted.strip():
-                return extracted.strip()
+            extracted = html_to_markdown(msg.html_body)  # shared trafilatura call
+            if extracted:
+                return extracted
         except ImportError:
             pass  # [mail] extra not installed; use the text/markdownify fallbacks
         except Exception:

@@ -71,7 +71,7 @@ def test_weekly_tier_runs_topic_steps_and_records_run(tmp_path, monkeypatch):
     store = Store(cfg.db_path)
     result = run_pipeline(cfg, store, FakeEmbedder(), FakeClusterer([]), tier="weekly")
     names = [o.name for o in result.outcomes]
-    assert ["import-mail", "enrich", "sync", "apply-topics", "discover", "eval"] == names
+    assert ["import-mail", "enrich", "backfill", "sync", "apply-topics", "discover", "eval"] == names
     assert store.last_run("pipeline")["tier"] == "weekly"
     digest = (tmp_path / "_system" / "kb-digest.md").read_text()
     assert digest.startswith("# KB Digest")

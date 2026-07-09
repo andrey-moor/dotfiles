@@ -12,7 +12,7 @@ from kb_engine.store import Store
 from kb_engine.sync import sync
 from kb_engine.topics.clustering import FakeClusterer
 
-_WEEKLY_STEPS = ["import-mail", "enrich", "sync", "apply-topics", "discover", "eval"]
+_WEEKLY_STEPS = ["import-mail", "enrich", "backfill", "sync", "apply-topics", "discover", "eval"]
 
 
 def _vault(tmp_path):
