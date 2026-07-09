@@ -3,7 +3,11 @@
 Walks ``Knowledge/`` (inbox INCLUDED — new clips are the point) and, for notes
 with an empty ``summary``, drafts a factual summary, a "why saved" line (only if
 missing), and repairs a garbled machine-slug title (only if it looks like one).
-Every write carries ``provenance: auto`` so a later run — and a human — can tell
+Notes that backfill will still fetch (thin body + fetchable url — the shared
+``is_backfill_candidate`` predicate) are deferred, not summarized: the T8 live
+run showed the LLM answers title-only stubs with polite refusals, which would
+be written back as permanent "summaries". A refusal-marker guard backstops the
+gate. Every write carries ``provenance: auto`` so a later run — and a human — can tell
 what the machine touched: a non-empty ``summary``/``why``/``title`` that has no
 auto mark is human and is NEVER overwritten. Writes are atomic (tmp file +
 ``os.replace``) and order-preserving (``sort_keys=False``), so untouched
@@ -16,6 +20,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from kb_engine.backfill import is_backfill_candidate
 from kb_engine.config import Config
 from kb_engine.llm import LLM
 from kb_engine.models import Note
@@ -42,6 +47,19 @@ TITLE_SYSTEM = (
 _GARBAGE_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+){2,}")
 _STATUS_SLUG = re.compile(r"-status-\d+")
 _UNTITLED = {"untitled", "(untitled)"}
+
+# Cheap insurance behind the defer-gate: a draft that reads as an LLM refusal
+# ("I don't have any content to summarize…") must never be written as a
+# summary — it would block re-enrichment forever. Matched case-insensitively.
+_REFUSAL_MARKERS = (
+    "i don't have",
+    "i do not have",
+    "i don't see any",  # 2 of the 9 live T8 refusals used this phrasing
+    "please share",
+    "please provide",
+    "no actual content",
+    "unable to summarize",
+)
 
 
 @dataclass(frozen=True)
@@ -73,6 +91,12 @@ def _needs(note: Note) -> bool:
     return _is_empty(note.frontmatter.get("summary"))
 
 
+def _is_refusal(summary: str) -> bool:
+    """True when a draft reads as an LLM refusal rather than a summary."""
+    text = summary.lower().replace("’", "'")  # live refusals use "don’t"
+    return any(marker in text for marker in _REFUSAL_MARKERS)
+
+
 def _draft(llm: LLM, system: str, user: str) -> str:
     return llm.complete(system, user).strip()
 
@@ -91,11 +115,15 @@ def enrich_notes(cfg: Config, llm: LLM, limit: int = DEFAULT_LIMIT) -> EnrichSta
     """Draft summaries/whys/titles for empty-summary notes under ``Knowledge/``.
 
     Inbox is INCLUDED (``exclude_dirs=()``). Notes with a non-empty ``summary``
-    are skipped (never selected); an empty-body note whose title is not garbage
-    has nothing to work from and is counted as ``skipped``. ``limit`` bounds the
-    number of notes that reach the LLM in one run. Per-note LLM/HTTP/write
-    failures — a blank summary draft counts as one — and unreadable files are
-    collected in ``failures`` and never abort the walk.
+    are skipped (never selected). Backfill candidates (thin fetchable stubs)
+    are deferred — counted ``skipped`` — until backfill gives them content;
+    once backfill exhausts (``content: unavailable``) they ARE enriched from
+    title + stub, the best available. An empty-body note whose title is not
+    garbage has nothing to work from and is counted as ``skipped``. ``limit``
+    bounds the number of notes that reach the LLM in one run. Per-note
+    LLM/HTTP/write failures — a blank or refusal-shaped summary draft counts
+    as one — and unreadable files are collected in ``failures`` and never
+    abort the walk.
     """
     summarized = whys = titles = skipped = 0
     failures: list[str] = []
@@ -109,6 +137,12 @@ def enrich_notes(cfg: Config, llm: LLM, limit: int = DEFAULT_LIMIT) -> EnrichSta
     ):
         if not _needs(note):
             continue
+        if is_backfill_candidate(note):
+            # Content-less fetchable stubs defer to backfill; enrich picks
+            # them up once content exists. (T8: summarizing title-only stubs
+            # produced LLM refusals written back as permanent summaries.)
+            skipped += 1
+            continue
         if not note.body.strip() and not _is_garbage_title(note.title):
             skipped += 1  # nothing to summarize, title already clean
             continue
@@ -119,9 +153,9 @@ def enrich_notes(cfg: Config, llm: LLM, limit: int = DEFAULT_LIMIT) -> EnrichSta
         try:
             user = _user_content(note)
             summary = _draft(llm, SUMMARY_SYSTEM, user)
-            if not summary:
-                # An empty summary + auto stamp would re-qualify the note on
-                # every run; treat a blank draft as a failure and write nothing.
+            if not summary or _is_refusal(summary):
+                # A blank draft would re-qualify forever; a refusal draft would
+                # be baked in as a permanent "summary". Write nothing, record.
                 failures.append(note.path)
                 continue
             why = (

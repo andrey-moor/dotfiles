@@ -72,8 +72,13 @@ def _attempts(metadata: object) -> int:
         return 0
 
 
-def _is_candidate(note: Note) -> bool:
-    """A thin, fetchable, not-yet-exhausted capture (see module docstring)."""
+def is_backfill_candidate(note: Note) -> bool:
+    """A thin, fetchable, not-yet-exhausted capture (see module docstring).
+
+    Shared predicate: enrich imports this as its defer-gate (a note backfill
+    will still fetch must not be summarized yet), so the ruleset lives in
+    exactly one place.
+    """
     if "wiki" in Path(note.path).parts:
         return False
     fm = note.frontmatter
@@ -95,7 +100,7 @@ def backfill_candidates(cfg: Config) -> list[str]:
     return [
         note.path
         for note in iter_notes(cfg.knowledge_dir, base=cfg.vault_path, exclude_dirs=())
-        if _is_candidate(note)
+        if is_backfill_candidate(note)
     ]
 
 
