@@ -31,6 +31,8 @@ from kb_engine.topics.clustering import Clusterer
 from kb_engine.topics.sticky import sticky_discover
 
 _INBOX_RELDIR = Path("Knowledge") / "inbox"
+# Vault-relative POSIX prefix of synced inbox notes (store paths use "/").
+_INBOX_PREFIX = _INBOX_RELDIR.as_posix() + "/"
 
 # Unattended runs apply only approved topics; proposals stay proposed.
 _ACTIVE_ONLY = ("active",)
@@ -60,14 +62,20 @@ def count_inbox(vault_path: Path) -> int:
 
 
 def unfiled_notes(store: Store) -> list[str]:
-    """Note paths in the store assigned to no topic, sorted."""
+    """Note paths in the store assigned to no topic, sorted.
+
+    Unfiled = filed but topicless; inbox notes are excluded — the inbox
+    backlog has its own digest count.
+    """
     all_notes = set(store.all_note_shas())
     filed = {
         member.note_path
         for topic in store.load_topics()
         for member in store.topic_members(topic.slug)
     }
-    return sorted(all_notes - filed)
+    return sorted(
+        path for path in all_notes - filed if not path.startswith(_INBOX_PREFIX)
+    )
 
 
 def _sync_step(cfg: Config, store: Store, embedder: Embedder) -> str:

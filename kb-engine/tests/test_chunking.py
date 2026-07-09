@@ -90,6 +90,22 @@ def test_embedding_text_no_why_unchanged():
     assert embedding_text(n) == "T\n\nS"
 
 
+def test_embedding_text_ignores_non_string_why():
+    # A YAML-list why (why: [a, b]) must be treated as absent, not stringified —
+    # mirrors summary_of's isinstance-str guard.
+    fm = types.MappingProxyType({"summary": "S", "why": ["a", "b"]})
+    n = Note(
+        path="Knowledge/x.md",
+        title="T",
+        body="",
+        tags=(),
+        wikilinks=(),
+        frontmatter=fm,
+        sha256="0" * 64,
+    )
+    assert embedding_text(n) == "T\n\nS"
+
+
 def test_fts_text_is_title_plus_full_body():
     n = _note_with_summary("T", "the whole body here", "short gist")
     assert fts_text(n) == "T\n\nthe whole body here"

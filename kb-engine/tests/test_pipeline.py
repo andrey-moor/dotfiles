@@ -5,9 +5,11 @@ from click.testing import CliRunner
 from kb_engine.cli import main
 from kb_engine.config import Config
 from kb_engine.embeddings import FakeEmbedder
+from kb_engine.importing.digest import write_digest
 from kb_engine.models import TopicMember
-from kb_engine.pipeline import PipelineResult, run_pipeline
+from kb_engine.pipeline import PipelineResult, run_pipeline, unfiled_notes
 from kb_engine.store import Store
+from kb_engine.sync import sync
 from kb_engine.topics.clustering import FakeClusterer
 
 _WEEKLY_STEPS = ["import-mail", "enrich", "sync", "apply-topics", "discover", "eval"]
@@ -26,6 +28,24 @@ def _vault(tmp_path):
         "---\ntitle: X\nurl: https://e.com/x\nstatus: inbox\n---\n## Notes"
     )
     return tmp_path
+
+
+def test_unfiled_excludes_inbox_but_keeps_topicless_notes(tmp_path):
+    # unfiled = filed but topicless; synced inbox stubs must NOT count as
+    # unfiled — the digest already tracks them via the separate inbox backlog.
+    cfg = Config(vault_path=_vault(tmp_path), db_path=tmp_path / "t.db")
+    store = Store(cfg.db_path)
+    try:
+        sync(cfg, store, FakeEmbedder(dim=cfg.embed_dim))  # indexes inbox/x.md too
+        unfiled = unfiled_notes(store)
+        digest_text = write_digest(cfg, store).read_text()
+    finally:
+        store.close()
+
+    assert "Knowledge/a.md" in unfiled  # filed but topicless → listed
+    assert "Knowledge/inbox/x.md" not in unfiled
+    assert "[[Knowledge/a.md]]" in digest_text  # digest unfiled list mirrors it
+    assert "Knowledge/inbox/x.md" not in digest_text
 
 
 def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
