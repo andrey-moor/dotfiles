@@ -43,7 +43,10 @@ let
     set -euo pipefail
     cd "${cfg.vaultPath}"
     ${pkgs.git}/bin/git add -A
-    ${pkgs.git}/bin/git diff --cached --quiet || ${pkgs.git}/bin/git commit -m "auto: $(date +%F)"
+    # -c commit.gpgsign=false: the 1Password signing socket is unreachable in the
+    # launchd context (nightly runs failed exit-128 with "failed to write commit
+    # object"); a local-only snapshot repo needs no signatures.
+    ${pkgs.git}/bin/git diff --cached --quiet || ${pkgs.git}/bin/git -c commit.gpgsign=false commit -m "auto: $(date +%F)"
   '';
 in {
   options.modules.dev.kb-engine = {
