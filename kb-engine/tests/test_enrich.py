@@ -76,6 +76,27 @@ def test_llm_failure_collected_not_raised(tmp_path):
     assert stats.failures == ("Knowledge/bad.md",) and stats.summarized == 0
 
 
+def test_enrich_tolerates_content_unavailable_key(tmp_path):
+    # A backfill-marked note has a frontmatter key literally named `content`,
+    # which crashes frontmatter.loads — the enrich writer must use the
+    # crash-proof reader so the drafted summary persists and the marker survives.
+    cfg = _vault(tmp_path)
+    p = _write(
+        cfg,
+        "Knowledge/thin.md",
+        "---\ntitle: Thin\nurl: https://e.com/x\nsource: article\n"
+        "content: unavailable\ncontent_attempts: 3\nsummary: ''\n---\nshort body",
+    )
+    stats = enrich_notes(cfg, FakeLLM(reply="drafted."))
+    assert stats.summarized == 1 and stats.failures == ()
+    # parse (not loads): the `content` key would crash loads in the test too.
+    meta, body = frontmatter.parse(p.read_text())
+    assert meta["summary"] == "drafted."
+    assert meta["content"] == "unavailable"  # backfill marker preserved
+    assert meta["content_attempts"] == 3
+    assert body == "short body"
+
+
 def _frontmatter_keys(raw):
     """Top-level frontmatter key names, in file order, parsed from raw text."""
     block = raw.split("---\n")[1]

@@ -61,20 +61,34 @@ def test_candidates_selects_stubs_only(tmp_path):
     assert backfill_candidates(cfg) == ["Knowledge/stub.md"]
 
 
+def test_already_backfilled_note_not_a_candidate(tmp_path):
+    # A successful fetch whose extraction was short leaves the body under 500
+    # chars — the ## Content section it already carries must stop it from
+    # re-qualifying (else another section is appended every weekly run).
+    cfg = _cfg(tmp_path)
+    _write(cfg, "Knowledge/backfilled.md",
+           "---\ntitle: Done\nurl: https://example.com/e\nsource: article\n---\n"
+           "short\n\n## Content\n\nA brief extraction, still under the stub threshold.")
+    assert backfill_candidates(cfg) == []
+
+
 def test_fetch_success_appends_content_section(tmp_path):
     cfg = _cfg(tmp_path)
     p = _write(cfg, "Knowledge/stub.md",
                "---\ntitle: Stub\nurl: https://example.com/a\nsource: article\nsummary: ''\n---\nshort")
+    _write(cfg, "Knowledge/z-deferred.md",
+           "---\ntitle: Z\nurl: https://example.com/z\nsource: article\n---\nshort")
     store = Store(cfg.db_path)
 
     def handler(request):
         return httpx.Response(200, text=_ARTICLE.format(
             body="The full article paragraph explaining multi-region latency budgets clearly."))
 
-    stats = backfill_content(cfg, store, client=_client(handler))
+    stats = backfill_content(cfg, store, limit=1, client=_client(handler))
     store.close()
 
     assert stats.fetched == 1
+    assert stats.skipped == 1  # z-deferred.md deferred beyond --limit
     post = frontmatter.loads(p.read_text())
     assert "## Content" in post.content
     assert "full article paragraph" in post.content

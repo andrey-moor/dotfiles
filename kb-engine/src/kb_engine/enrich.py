@@ -16,12 +16,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import frontmatter
-
 from kb_engine.config import Config
 from kb_engine.llm import LLM
 from kb_engine.models import Note
-from kb_engine.vault import iter_notes, write_post_atomic
+from kb_engine.vault import iter_notes, load_post, write_post_atomic
 
 DEFAULT_LIMIT = 50
 _BODY_CHARS = 6000  # cap the content handed to the LLM
@@ -159,11 +157,13 @@ def _write_note(
 ) -> None:
     """Round-trip via python-frontmatter: body byte-unchanged, key order kept.
 
-    Uses the shared ``write_post_atomic`` (tmp-file + ``os.replace``,
-    ``sort_keys=False``) so untouched fields keep their file order and a crash
-    mid-write can never truncate the note.
+    Uses the shared ``load_post`` (tolerates a ``content`` frontmatter key —
+    backfill's ``content: unavailable`` would crash ``frontmatter.loads``) and
+    ``write_post_atomic`` (tmp-file + ``os.replace``, ``sort_keys=False``) so
+    untouched fields keep their file order and a crash mid-write can never
+    truncate the note.
     """
-    post = frontmatter.loads(path.read_text())
+    post = load_post(path.read_text())
     post["summary"] = summary
     if why is not None:
         post["why"] = why

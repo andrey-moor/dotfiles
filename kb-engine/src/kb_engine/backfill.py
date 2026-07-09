@@ -6,9 +6,11 @@ Markdown under a ``## Content`` heading, so a clip becomes real content.
 
 A candidate is a note whose stripped body is short (< 500 chars), has a ``url``,
 whose ``source`` is fetchable (``article``/``github``/``newsletter``), that is
-not already marked ``content: unavailable``, and that has not already failed
-three times (``content_attempts``). Synthesized ``wiki/`` articles are never
-touched. Inbox notes CAN qualify — they are real captures.
+not already marked ``content: unavailable``, that has not already failed three
+times (``content_attempts``), and whose body carries no ``## Content`` section
+yet (a short extraction must not re-qualify and re-append). Synthesized
+``wiki/`` articles are never touched. Inbox notes CAN qualify — they are real
+captures.
 
 Fetching follows redirects with a 30s timeout and a polite per-domain >=2s
 spacing (a monotonic-clock dict). On success the extracted Markdown, capped at
@@ -43,6 +45,7 @@ _USER_AGENT = "kb-engine/0.1"
 _FETCHABLE_SOURCES = frozenset({"article", "github", "newsletter"})
 
 _CONTENT_HEADER = "\n\n## Content\n\n"
+_CONTENT_HEADING = "## Content"  # already backfilled — short extractions must not re-qualify
 _TRUNCATION_MARKER = "\n\n…truncated — full text at {url}\n"
 
 _WORD_RE = re.compile(r"\S+")
@@ -82,6 +85,8 @@ def _is_candidate(note: Note) -> bool:
         return False
     if _attempts(fm) >= _MAX_ATTEMPTS:
         return False
+    if _CONTENT_HEADING in note.body:
+        return False  # already backfilled — short extractions must not re-qualify
     return len(note.body.strip()) < _BODY_MAX_CHARS
 
 
