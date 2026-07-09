@@ -41,9 +41,9 @@ as KB tags.
 - **W06 stale-wiki**: Wiki article whose `last_compiled` is older than the newest source note for its topic. For tag-based topics: search by tag. For freeform topics (topic field is not a valid tag): search by topic keywords in content/summary, same as synthesize step 2
 - **W07 stale-index**: `_system/index.md` `last_updated` > 14 days old, or its Stats counts diverge from the live note counts
 - **W08 stub-body**: Reference note whose body contains "Pending processing" or "Content not yet fetched"
-- **W: summary-stub note** — body under ~500 chars, has a `url`, and no
+- **W09: summary-stub note** — body under ~500 chars, has a `url`, and no
   `content: unavailable` marker: candidate for `kb-engine backfill-content`.
-- **W: stale auto-provenance** — `provenance: auto` older than 30 days (never
+- **W10: stale auto-provenance** — `provenance: auto` older than 30 days (never
   confirmed): list for the next review pass.
 
 **INFO (suggestions):**
