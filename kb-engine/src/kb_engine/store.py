@@ -723,14 +723,26 @@ class Store:
                 (int(ok), json.dumps(counts or {}), json.dumps(errors or []), run_id),
             )
 
-    def last_run(self, command: str | None = None) -> dict | None:
+    def last_run(
+        self, command: str | None = None, finished_only: bool = False
+    ) -> dict | None:
+        """The newest run row (by id), or None.
+
+        ``finished_only`` skips runs still in flight (NULL ``finished_at``) so a
+        caller mid-pipeline reads the last COMPLETED run, not its own row.
+        """
         sql = "SELECT command, tier, started_at, finished_at, ok, counts, errors FROM runs"
-        params: tuple = ()
+        clauses: list[str] = []
+        params: list = []
         if command is not None:
-            sql += " WHERE command = ?"
-            params = (command,)
+            clauses.append("command = ?")
+            params.append(command)
+        if finished_only:
+            clauses.append("finished_at IS NOT NULL")
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY id DESC LIMIT 1"
-        row = self._conn.execute(sql, params).fetchone()
+        row = self._conn.execute(sql, tuple(params)).fetchone()
         if row is None:
             return None
         return {

@@ -296,6 +296,26 @@ def test_health_dashes_when_no_pipeline_run(tmp_path):
     s.close()
 
 
+def test_health_reads_last_finished_run_not_current(tmp_path):
+    # The finished run holds the real metrics; a later start_run (the in-progress
+    # pipeline writing this very digest) has NULL counts. Health must read the
+    # finished run, not the current unfinished one, or it renders "—" for both.
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    rid = s.start_run("pipeline", tier="weekly")
+    s.finish_run(rid, ok=True, counts={
+        "eval": "recall@5 1.00 (8/8) · MRR 0.66",
+        "sync": "0 added · 0 changed · 0 deleted · 3 unchanged · 0 evicted · 0 unreadable",
+    })
+    s.start_run("pipeline")  # current run, still in flight (NULL counts)
+    text = build_digest(s, vault_path=tmp_path, inbox_count=0, unfiled=[])
+    assert "recall@5 1.00" in text
+    assert "evicted 0" in text
+    assert "recall@5 —" not in text
+    assert "evicted —" not in text
+    s.close()
+
+
 def test_health_recall_and_evicted_dash_when_absent(tmp_path):
     s = Store(tmp_path / "t.db")
     s.init_schema()

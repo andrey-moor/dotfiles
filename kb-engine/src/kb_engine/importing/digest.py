@@ -261,7 +261,9 @@ def _health_section(
     store: Store, inbox_count: int, unfiled: list[str], n_with_area: int, n_total: int
 ) -> list[str]:
     """Render the single-line ``## Health`` dashboard."""
-    run = store.last_run("pipeline")
+    # finished_only: mid-pipeline our own unfinished run is newest by id; the
+    # health metrics live on the last COMPLETED run.
+    run = store.last_run("pipeline", finished_only=True)
     counts = run["counts"] if run else {}
     recall = _parse_metric(counts.get("eval", ""), r"recall@5 ([0-9.]+)")
     evicted = _parse_metric(counts.get("sync", ""), r"(\d+) evicted")
