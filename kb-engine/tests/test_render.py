@@ -2,13 +2,16 @@ import numpy as np
 
 from kb_engine.models import Area, Topic, TopicMember
 from kb_engine.store import Store
+from kb_engine.topics.areas_registry import seed_areas
 from kb_engine.topics.render import (
     PROPOSALS_END,
     PROPOSALS_START,
     RenderResult,
     _render_topic_moc,
+    _render_unfiled_by_area,
     _render_unfiled_by_category,
     _splice_proposals,
+    render_tags_base,
     render_topics,
 )
 
@@ -41,8 +44,20 @@ def _store_with_topics(tmp_path):
     s.set_members(
         "llm", [TopicMember(note_path="Knowledge/c.md", score=0.8, source="auto")]
     )
-    # Area membership is composed from topics.area now (registry, not clustering).
-    s.save_areas([Area(slug="ai", label="AI", topic_slugs=())])
+    # No areas seeded here → the pre-cutover world (render keeps today's behavior).
+    return s
+
+
+def _store_with_areas(tmp_path):
+    """Post-cutover fixture: the topics store plus a seeded area registry.
+
+    ``ai`` owns both topics (membership composed from ``topics.area``). Tests
+    that need the pre-cutover (no-areas) world use ``_store_with_topics``.
+    """
+    s = _store_with_topics(tmp_path)
+    s.save_areas(
+        [Area(slug="ai", label="AI", topic_slugs=(), description="LLMs and agents")]
+    )
     s.set_topic_area("rust-macros", "ai")
     s.set_topic_area("llm", "ai")
     return s
@@ -358,3 +373,173 @@ def test_render_writes_unfiled_by_category_file(tmp_path):
     before = by_cat.read_text()
     render_topics(s, vault_path=tmp_path)
     assert by_cat.read_text() == before  # idempotent
+
+
+# --- v2 (post-cutover, areas registry seeded) --------------------------------
+
+
+def test_render_no_areas_preserves_human_taxonomy(tmp_path):
+    # The gate: with NO areas seeded, render behaves exactly as today. The human
+    # _taxonomy.md is preserved (proposals-splice only), and none of the v2
+    # artifacts (tags.base, area pages, unfiled-by-area) are produced.
+    s = _store_with_topics(tmp_path)  # no areas
+    sysdir = tmp_path / "_system"
+    sysdir.mkdir(parents=True, exist_ok=True)
+    (sysdir / "_taxonomy.md").write_text(
+        "# Knowledge Base Taxonomy\n\n## Categories\n### AI\n"
+        "- **AI/LLMs** — Large language models\n"
+    )
+    out = render_topics(s, vault_path=tmp_path)
+    text = (sysdir / "_taxonomy.md").read_text()
+    # human content preserved — NOT regenerated into the v2 registry body
+    assert "## Categories" in text
+    assert "- **AI/LLMs** — Large language models" in text
+    assert "## Areas" not in text  # v2 registry header absent
+    # proposals still spliced in
+    assert PROPOSALS_START in text and "rust-macros" in text
+    # v2 artifacts NOT produced
+    assert not (tmp_path / "Knowledge" / "tags.base").exists()
+    assert not (tmp_path / "_system" / "topics" / "area-ai.md").exists()
+    assert out.area_paths == ()
+    assert out.tags_base_path == ""
+    # old-path unfiled file, not by-area
+    assert out.unfiled_path == "_system/topics/_unfiled-by-category.md"
+    assert (tmp_path / "_system" / "topics" / "_unfiled-by-category.md").exists()
+    assert not (tmp_path / "_system" / "topics" / "_unfiled-by-area.md").exists()
+
+
+def test_render_v2_taxonomy_has_areas_and_topics_tables(tmp_path):
+    import frontmatter
+
+    s = _store_with_areas(tmp_path)
+    render_topics(s, vault_path=tmp_path)
+    text = (tmp_path / "_system" / "_taxonomy.md").read_text()
+    # generated frontmatter marks it a taxonomy registry
+    post = frontmatter.loads(text)
+    assert post["type"] == "taxonomy"
+    assert post["version"] == "generated"
+    assert post["status"] == "active"
+    # Areas table: slug | label | description | topics count
+    assert "## Areas" in text
+    assert "| ai | AI | LLMs and agents | 2 |" in text
+    # Topics table carries the area column (slug | label | area | kind/status | notes)
+    assert "## Topics" in text
+    assert "| rust-macros | Rust Macros | ai | discovered/proposed | 2 |" in text
+    # Facets section — the four hardcoded facet tags
+    assert "## Facets" in text
+    assert "**Tutorials**" in text and "**Tools**" in text
+    # proposals splice block still present; the discovered topic is listed there
+    assert PROPOSALS_START in text and PROPOSALS_END in text
+    block = text.split(PROPOSALS_START)[1].split(PROPOSALS_END)[0]
+    assert "rust-macros" in block
+
+
+def test_render_v2_taxonomy_idempotent(tmp_path):
+    s = _store_with_areas(tmp_path)
+    render_topics(s, vault_path=tmp_path)
+    taxonomy = tmp_path / "_system" / "_taxonomy.md"
+    once = taxonomy.read_text()
+    render_topics(s, vault_path=tmp_path)
+    assert taxonomy.read_text() == once  # regenerated deterministically
+
+
+def test_render_v2_writes_area_pages(tmp_path):
+    s = _store_with_areas(tmp_path)
+    out = render_topics(s, vault_path=tmp_path)
+    page = tmp_path / "_system" / "topics" / "area-ai.md"
+    assert page.exists()
+    text = page.read_text()
+    assert "# AI" in text
+    assert "LLMs and agents" in text  # description
+    assert "[[_system/topics/rust-macros]] — Rust Macros (2 notes)" in text
+    assert out.area_paths == ("_system/topics/area-ai.md",)
+
+
+def test_render_v2_empty_area_page_says_none_yet(tmp_path):
+    # Every registry area gets a page, even ones with no topics assigned.
+    s = _store_with_topics(tmp_path)
+    seed_areas(s)  # 9 registry areas, no topic assigned to any of them
+    render_topics(s, vault_path=tmp_path)
+    page = (tmp_path / "_system" / "topics" / "area-gamedev.md").read_text()
+    assert "# GameDev" in page
+    assert "_None yet._" in page
+
+
+def test_render_v2_index_links_area_pages(tmp_path):
+    s = _store_with_areas(tmp_path)
+    render_topics(s, vault_path=tmp_path)
+    index = (tmp_path / "_system" / "topics" / "index.md").read_text()
+    assert "## [[_system/topics/area-ai|AI]]" in index
+
+
+def test_render_v2_unfiled_by_area_groups_by_area_tag(tmp_path):
+    s = _store_with_areas(tmp_path)
+    # two topicless notes: one area-tagged, one bare
+    s.upsert_note(path="Knowledge/dev-note.md", title="Dev", sha256="h", tags=["area/dev"])
+    s.upsert_note(path="Knowledge/orphan.md", title="Orphan", sha256="h", tags=[])
+    out = render_topics(s, vault_path=tmp_path)
+    by_area = (tmp_path / "_system" / "topics" / "_unfiled-by-area.md").read_text()
+    assert "## area/dev" in by_area and "[[Knowledge/dev-note.md]]" in by_area
+    assert "## (no area)" in by_area and "[[Knowledge/orphan.md]]" in by_area
+    assert out.unfiled_path == "_system/topics/_unfiled-by-area.md"
+    before = by_area
+    render_topics(s, vault_path=tmp_path)
+    assert (tmp_path / "_system" / "topics" / "_unfiled-by-area.md").read_text() == before
+
+
+def test_render_v2_removes_old_unfiled_by_category(tmp_path):
+    # One-time cleanup: the retired _unfiled-by-category.md is deleted when present.
+    s = _store_with_areas(tmp_path)
+    topics_dir = tmp_path / "_system" / "topics"
+    topics_dir.mkdir(parents=True, exist_ok=True)
+    stale = topics_dir / "_unfiled-by-category.md"
+    stale.write_text("# stale\n")
+    render_topics(s, vault_path=tmp_path)
+    assert not stale.exists()
+    assert (topics_dir / "_unfiled-by-area.md").exists()
+
+
+def test_render_v2_writes_tags_base_with_nine_views(tmp_path):
+    s = _store_with_topics(tmp_path)
+    seed_areas(s)  # 9 registry areas
+    out = render_topics(s, vault_path=tmp_path)
+    base_path = tmp_path / "Knowledge" / "tags.base"
+    assert base_path.exists()
+    base = base_path.read_text()
+    assert base.count("- type: table") == 9  # one view per area
+    assert 'file.hasTag("area/ai")' in base
+    assert 'file.inFolder("Knowledge")' in base
+    assert out.tags_base_path == "Knowledge/tags.base"
+
+
+def test_render_tags_base_view_format():
+    out = render_tags_base(
+        [Area(slug="ai", label="AI", topic_slugs=(), description="x")]
+    )
+    assert out.startswith("views:\n")
+    assert "  - type: table" in out
+    assert "    name: AI" in out
+    assert '        - file.inFolder("Knowledge")' in out
+    assert '        - file.ext == "md"' in out
+    assert '        - file.hasTag("area/ai")' in out
+    assert "      - property: date_added" in out
+    assert "        direction: DESC" in out
+
+
+def test_unfiled_by_area_groups_by_area_tag():
+    out = _render_unfiled_by_area(
+        {"Knowledge/x.md": ["area/dev"], "Knowledge/y.md": []},
+        {"Knowledge/x.md": {"area/dev", "Tutorials"}},
+    )
+    assert "## area/dev" in out and "[[Knowledge/x.md]]" in out
+    assert "## (no area)" in out and "[[Knowledge/y.md]]" in out
+
+
+def test_unfiled_by_area_frontmatter_is_system():
+    import frontmatter
+
+    post = frontmatter.loads(
+        _render_unfiled_by_area({"Knowledge/x.md": []}, {})
+    )
+    assert post["type"] == "system"
+    assert post["generated"] is True
