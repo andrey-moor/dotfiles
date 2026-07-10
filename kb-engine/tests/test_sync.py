@@ -132,6 +132,22 @@ def test_sync_backfills_url_message_id_for_unchanged_note(tmp_path):
     assert store.existing_message_ids(), "message_id must be repopulated after sha-unchanged sync"
 
 
+def test_sync_indexes_date_added_from_frontmatter(tmp_path):
+    # YAML parses `date_added: 2026-03-29` as a datetime.date; sync must stringify
+    # it. Undated notes contribute no date_added row.
+    k = tmp_path / "Knowledge"
+    k.mkdir()
+    (k / "d.md").write_text("---\ntitle: D\ndate_added: 2026-03-29\n---\nbody")
+    (k / "n.md").write_text("---\ntitle: N\n---\nno date")
+    cfg = Config(vault_path=tmp_path, db_path=tmp_path / "t.db")
+    store = Store(cfg.db_path)
+    sync(cfg, store, FakeEmbedder(dim=16))
+    dates = store.note_dates()
+    assert dates["Knowledge/d.md"] == "2026-03-29"  # date object stringified
+    assert "Knowledge/n.md" not in dates  # undated note omitted
+    store.close()
+
+
 def test_index_note_embeds_summary_and_ftss_full_body(tmp_path):
     store = Store(tmp_path / "kb.db")
     store.init_schema()

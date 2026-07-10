@@ -42,11 +42,15 @@ def _index_note(store: Store, note: Note, embedder: Embedder) -> None:
     # Semantic vector = title + summary (one clean vector). FTS = full body.
     vector = embedder.embed_passages([embedding_text(note)])[0]
     url, message_id = _url_msgid(note)
+    # YAML parses ISO dates to datetime.date; ALWAYS stringify (blank/missing → None).
+    raw_date = note.frontmatter.get("date_added")
+    date_added = str(raw_date) if raw_date else None
     store.upsert_note(
         path=note.path, title=note.title, sha256=note.sha256,
         tags=list(note.tags), summary=summary_of(note),
         url=url,
         message_id=message_id,
+        date_added=date_added,
     )
     store.replace_chunks(note.path, [(0, fts_text(note), vector)])
 

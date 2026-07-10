@@ -13,7 +13,7 @@ from kb_engine.topics._math import frozen_centroid
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
   path TEXT PRIMARY KEY, title TEXT, sha256 TEXT NOT NULL, tags TEXT, summary TEXT,
-  url TEXT, message_id TEXT
+  url TEXT, message_id TEXT, date_added TEXT
 );
 CREATE TABLE IF NOT EXISTS chunks (
   id INTEGER PRIMARY KEY, note_path TEXT NOT NULL, ordinal INTEGER NOT NULL,
@@ -141,6 +141,8 @@ class Store:
         self._ensure_column("areas", "description", "TEXT")
         # Backfill for databases created before growth-gated re-derive (Phase 6).
         self._ensure_column("topics", "threshold_derived_n", "INTEGER")
+        # Backfill for databases created before date_added tracking (Phase 6, digest v2).
+        self._ensure_column("notes", "date_added", "TEXT")
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -157,16 +159,19 @@ class Store:
         summary: str = "",
         url: str | None = None,
         message_id: str | None = None,
+        date_added: str | None = None,
     ) -> None:
         self._conn.execute(
             """
-            INSERT INTO notes(path, title, sha256, tags, summary, url, message_id)
-            VALUES(?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO notes(path, title, sha256, tags, summary, url, message_id, date_added)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET title=excluded.title,
                 sha256=excluded.sha256, tags=excluded.tags, summary=excluded.summary,
-                url=excluded.url, message_id=excluded.message_id
+                url=excluded.url, message_id=excluded.message_id,
+                date_added=excluded.date_added
             """,
-            (path, title, sha256, json.dumps(list(tags)), summary, url, message_id),
+            (path, title, sha256, json.dumps(list(tags)), summary, url, message_id,
+             date_added),
         )
         self._conn.commit()
 
@@ -677,6 +682,26 @@ class Store:
             ).fetchone()
         return int(row[0])
 
+    def event_top_paths(
+        self, kind: str | None = "search", limit: int | None = 5
+    ) -> list[str]:
+        """Recent event ``top_path``s, most-recent-first (NULL/blank skipped).
+
+        ``kind=None`` spans every event kind; ``limit=None`` returns them all.
+        Feeds the digest's resurfacing seeds (recent search hits) and its
+        "never resurfaced" exclusion set (all top_paths ever).
+        """
+        sql = "SELECT top_path FROM events WHERE top_path IS NOT NULL AND top_path != ''"
+        params: list = []
+        if kind is not None:
+            sql += " AND kind = ?"
+            params.append(kind)
+        sql += " ORDER BY id DESC"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        return [row[0] for row in self._conn.execute(sql, params).fetchall()]
+
     def start_run(self, command: str, tier: str | None = None) -> int:
         with self._conn:
             cur = self._conn.execute(
@@ -723,6 +748,29 @@ class Store:
 
     def count_chunks(self) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+
+    def note_dates(self) -> dict[str, str]:
+        """Return ``{path: date_added}`` for dated notes (NULL/blank omitted)."""
+        rows = self._conn.execute(
+            "SELECT path, date_added FROM notes "
+            "WHERE date_added IS NOT NULL AND date_added != ''"
+        ).fetchall()
+        return {path: date_added for path, date_added in rows}
+
+    def content_coverage(self, min_chars: int = 500) -> tuple[int, int]:
+        """Return ``(notes_with_substantial_content, total_notes)``.
+
+        A note "has content" when it owns a chunk whose text length ≥
+        ``min_chars`` (one chunk per note in practice); total counts every
+        indexed note. Feeds the digest's Health "content %" figure.
+        """
+        total = self._conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
+        row = self._conn.execute(
+            "SELECT COUNT(DISTINCT c.note_path) FROM chunks c "
+            "JOIN notes n ON n.path = c.note_path WHERE length(c.text) >= ?",
+            (min_chars,),
+        ).fetchone()
+        return int(row[0]), int(total)
 
     def drop_all(self) -> None:
         self._conn.executescript(

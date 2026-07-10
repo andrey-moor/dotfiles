@@ -17,6 +17,7 @@ everything else is engine-cache plus a regenerable ``_system/kb-digest.md``.
 
 import os
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Callable
 
@@ -253,7 +254,7 @@ def run_pipeline(
     digest_path: Path | None = None
     try:
         status = DigestStatus(tier=tier, ok=ok, outcomes=tuple(outcomes))
-        digest_path = write_digest(cfg, store, status=status)
+        digest_path = write_digest(cfg, store, status=status, today=date.today())
     finally:
         store.finish_run(
             run_id,

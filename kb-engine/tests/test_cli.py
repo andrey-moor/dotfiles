@@ -619,7 +619,7 @@ def test_digest_cli_writes_system_file_and_reports_json(tmp_path, monkeypatch):
     assert out["digest_path"] == "_system/kb-digest.md"
     digest_file = v / "_system" / "kb-digest.md"
     assert digest_file.exists()
-    assert "Inbox" in digest_file.read_text()
+    assert "## Health" in digest_file.read_text()  # digest v2 always renders Health
 
 
 def test_digest_cli_idempotent_file(tmp_path, monkeypatch):

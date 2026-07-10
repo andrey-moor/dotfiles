@@ -390,3 +390,83 @@ def test_topic_area_roundtrip_and_default_none(tmp_path):
     store.set_topic_area("t1", None)
     assert store.load_topics()[0].area is None
     store.close()
+
+
+def test_note_dates_returns_dated_notes_only(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.upsert_note("Knowledge/a.md", "A", "h", [], date_added="2026-03-29")
+    store.upsert_note("Knowledge/b.md", "B", "h", [])  # no date → NULL, omitted
+    store.upsert_note("Knowledge/c.md", "C", "h", [], date_added="")  # blank, omitted
+    assert store.note_dates() == {"Knowledge/a.md": "2026-03-29"}
+    store.close()
+
+
+def test_date_added_updated_on_conflict(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.upsert_note("Knowledge/a.md", "A", "h", [], date_added="2026-01-01")
+    store.upsert_note("Knowledge/a.md", "A", "h", [], date_added="2026-02-02")
+    assert store.note_dates()["Knowledge/a.md"] == "2026-02-02"
+    store.close()
+
+
+def test_init_schema_adds_date_added_to_legacy_notes_table(tmp_path):
+    db = tmp_path / "legacy.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE notes (path TEXT PRIMARY KEY, title TEXT, sha256 TEXT NOT NULL, tags TEXT)"
+    )
+    conn.commit()
+    conn.close()
+    store = Store(db)
+    store.init_schema()  # must not raise
+    cols = {r[1] for r in store._conn.execute("PRAGMA table_info(notes)")}
+    assert "date_added" in cols
+    store.close()
+
+
+def test_content_coverage_counts_notes_with_substantial_chunks(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.upsert_note("Knowledge/big.md", "Big", "h", [])
+    store.upsert_note("Knowledge/small.md", "Small", "h", [])
+    store.upsert_note("Knowledge/none.md", "None", "h", [])  # no chunks at all
+    store.replace_chunks("Knowledge/big.md", [(0, "x" * 600, np.ones(4, np.float32))])
+    store.replace_chunks("Knowledge/small.md", [(0, "short", np.ones(4, np.float32))])
+    n_with, total = store.content_coverage(min_chars=500)
+    assert (n_with, total) == (1, 3)  # only big.md clears the bar; total = all notes
+    store.close()
+
+
+def test_content_coverage_empty_store(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    assert store.content_coverage() == (0, 0)
+    store.close()
+
+
+def test_event_top_paths_most_recent_first_skips_null(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.record_event("search", query="q1", top_path="Knowledge/a.md")
+    store.record_event("search", query="q2", top_path=None)  # no hit → skipped
+    store.record_event("search", query="q3", top_path="Knowledge/b.md")
+    assert store.event_top_paths(kind="search") == ["Knowledge/b.md", "Knowledge/a.md"]
+    store.close()
+
+
+def test_event_top_paths_limit_and_kind_filter(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.record_event("search", top_path="Knowledge/s.md")
+    store.record_event("open", top_path="Knowledge/o.md")
+    # kind filter isolates search events; limit caps the result.
+    assert store.event_top_paths(kind="search", limit=5) == ["Knowledge/s.md"]
+    assert store.event_top_paths(kind="search", limit=0) == []
+    # kind=None + limit=None spans all kinds, most-recent-first.
+    assert store.event_top_paths(kind=None, limit=None) == [
+        "Knowledge/o.md",
+        "Knowledge/s.md",
+    ]
+    store.close()

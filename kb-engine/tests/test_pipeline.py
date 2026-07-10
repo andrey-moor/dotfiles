@@ -50,10 +50,9 @@ def test_unfiled_excludes_inbox_but_keeps_topicless_notes(tmp_path):
     finally:
         store.close()
 
-    assert "Knowledge/a.md" in unfiled  # filed but topicless → listed
+    assert "Knowledge/a.md" in unfiled  # filed but topicless → counted
     assert "Knowledge/inbox/x.md" not in unfiled
-    assert "[[Knowledge/a.md]]" in digest_text  # digest unfiled list mirrors it
-    assert "Knowledge/inbox/x.md" not in digest_text
+    assert "Knowledge/inbox/x.md" not in digest_text  # inbox never leaks into the digest
 
 
 def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
