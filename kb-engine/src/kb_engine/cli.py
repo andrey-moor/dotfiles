@@ -1368,11 +1368,13 @@ def import_things(
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
 def digest(cfg: Config, as_json: bool) -> None:
-    """Write a deterministic KB state digest to ``_system/kb-digest.md``.
+    """Write the KB state digest to ``_system/kb-digest.md``.
 
-    Reports inbox backlog, topic proposals awaiting review, topic/area counts,
-    and unfiled notes. Idempotent — the body has no timestamps, so re-running
-    rewrites an identical file.
+    Sections: This week, Review queue, Resurfacing, Health, and Synthesize.
+    Passes ``today`` so the time-based This week/Resurfacing sections render
+    (matching the pipeline's digest). Idempotent within a day — the body is keyed
+    off ``today`` with no finer timestamp, so re-running the same day rewrites an
+    identical file.
     """
     store = Store(cfg.db_path)
     try:
@@ -1384,6 +1386,7 @@ def digest(cfg: Config, as_json: bool) -> None:
             vault_path=cfg.vault_path,
             inbox_count=inbox_count,
             unfiled=unfiled,
+            today=date.today(),
         )
         topics = store.load_topics()
         n_proposals = sum(

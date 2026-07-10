@@ -15,7 +15,7 @@ silently mis-tagged. This command is the **human half**: the naming and judgment
 deliberately omits.
 
 The digest at `Main/_system/kb-digest.md` is the **entry point**. Read it first; its
-"Needs review" checklist drives the pass. `kb-engine` is on `PATH` (the Nix wrapper) and
+sections drive the pass. `kb-engine` is on `PATH` (the Nix wrapper) and
 the vault is the iCloud `Main` dir; pass `--json` to engine commands and parse the output.
 
 ## Instructions
@@ -30,12 +30,16 @@ show stale counts, so refresh the live counts first. It is fast and LLM-free:
 kb-engine --vault "<Main>" digest --json   # heavier full refresh: pipeline --json
 ```
 
-Then `mcp__obsidian__read_note` on `Main/_system/kb-digest.md` (now current). It reports:
-- **Inbox backlog** — unprocessed `Knowledge/inbox/` stubs
-- **Topic proposals awaiting review** — discovered clusters needing a name/approval
-- **Unfiled notes** — notes in no topic
+Then `mcp__obsidian__read_note` on `Main/_system/kb-digest.md` (now current). Its sections:
+- **Status** — the last pipeline run's per-step outcomes
+- **This week** — fresh captures (last 7 days) grouped by area
+- **Review queue** — borderline notes awaiting a topic decision (see step 7)
+- **Resurfacing** — a few gentle nudges toward older notes
+- **Health** — one-line dashboard; unfiled notes surface as [[_system/topics/_unfiled-by-area]]
+- **Synthesize** — topics with enough notes to seed a wiki article
 
-If the checklist is `- [x] Nothing to review.`, tell the user there's nothing to do and stop.
+If nothing needs review (no inbox backlog, no proposals, empty queue), tell the user there's
+nothing to do and stop.
 
 ### 2. Process new inbox items (if backlog > 0)
 
@@ -115,7 +119,7 @@ the human confirm each pair. Never delete a note.**
 The weekly pass queues notes whose best topic score sits just under that topic's
 bar — each is one human call the engine won't make alone.
 
-For each `## Borderline queue` line (`[[note]] → topic-a (0.52), topic-b (0.48)`):
+For each `## Review queue` line (`[[note]] → topic-a (0.52), topic-b (0.48)`):
 - **Agree with a candidate:** `kb-engine --vault "<Main>" topics confirm <slug> "<note path>"`
   — records a user-pinned primary (auto passes will never fight it).
 - **None fit:** leave it. The queue is rewritten every weekly pass; if it keeps

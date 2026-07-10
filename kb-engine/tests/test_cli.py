@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 import numpy as np
 from click.testing import CliRunner
@@ -644,6 +645,26 @@ def test_digest_cli_human_output(tmp_path, monkeypatch):
     r = CliRunner().invoke(main, args + ["digest"])
     assert r.exit_code == 0, r.output
     assert "inbox" in r.output.lower()
+
+
+def test_digest_cli_renders_time_sections(tmp_path, monkeypatch):
+    # Regression: the standalone `digest` command must pass today= so the
+    # time-based sections render — otherwise /kb:review's step-1 refresh
+    # overwrites the pipeline's digest with one missing This week/Resurfacing.
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    v = _vault(tmp_path)
+    (v / "Knowledge" / "fresh.md").write_text(
+        f"---\ntitle: Fresh\ndate_added: {date.today().isoformat()}\n---\ncaptured today"
+    )
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    r = CliRunner().invoke(main, args + ["digest"])
+    assert r.exit_code == 0, r.output
+    text = (v / "_system" / "kb-digest.md").read_text()
+    assert "## Health" in text  # always renders
+    assert "## This week" in text  # renders only when today= is passed
+    assert "Knowledge/fresh.md" in text  # today's capture is grouped under This week
 
 
 def test_synthesis_candidates_cli_json(tmp_path):
