@@ -48,8 +48,10 @@ from kb_engine.inbox_check import check_inbox
 from kb_engine.topics.apply import apply_topic_tags
 from kb_engine.topics.render import render_topics
 from kb_engine.topics.taxonomy import diff_taxonomy, parse_taxonomy_tags
+from kb_engine.topics.cutover import apply_cutover
 from kb_engine.topics.migration import (
     build_migration_proposal,
+    parse_migration_proposal,
     render_migration_proposal,
 )
 
@@ -714,6 +716,55 @@ def topics_propose_migration(cfg: Config, as_json: bool) -> None:
         as_json,
         f"Wrote {out_path} ({len(proposal.dispositions)} tags, "
         f"{len(proposal.topic_areas)} topic-area rows). Review + edit decisions.",
+    )
+
+
+@topics.command("migrate")
+@click.option(
+    "--proposal",
+    "proposal_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="The human-approved _system/migration-proposal.md.",
+)
+@click.option("--apply", "apply_changes", is_flag=True,
+              help="Execute. Default is dry-run (prints the diff, writes nothing).")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.pass_obj
+def topics_migrate(cfg, proposal_path, apply_changes, as_json):
+    """Apply the approved taxonomy migration (dry-run by default)."""
+    try:
+        proposal = parse_migration_proposal(proposal_path.read_text())
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    store = Store(cfg.db_path)
+    try:
+        store.init_schema()
+        result = apply_cutover(
+            store, cfg.vault_path, proposal, dry_run=not apply_changes
+        )
+    finally:
+        store.close()
+    payload = {
+        "dry_run": not apply_changes,
+        "notes_changed": result.notes_changed,
+        "tags_dropped": result.tags_dropped,
+        "topic_tags_added": result.topic_tags_added,
+        "area_tags_added": result.area_tags_added,
+        "topics_created": list(result.topics_created),
+        "skipped_unreadable": list(result.skipped_unreadable),
+        "diff": list(result.diff_lines),
+    }
+    if as_json:
+        click.echo(json.dumps(payload))
+        return
+    for line in result.diff_lines:
+        click.echo(line)
+    click.echo(
+        f"{'DRY-RUN — nothing written' if not apply_changes else 'APPLIED'}: "
+        f"{result.notes_changed} notes · {result.tags_dropped} tags dropped · "
+        f"{result.topic_tags_added} topic tags · {result.area_tags_added} area tags · "
+        f"{len(result.topics_created)} new topic(s)"
     )
 
 

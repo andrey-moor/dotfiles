@@ -7,6 +7,12 @@ from kb_engine.cli import main
 from kb_engine.models import QueueEntry, Topic, TopicMember
 from kb_engine.store import Store
 from kb_engine.topics.areas_registry import seed_areas
+from kb_engine.topics.migration import (
+    MigrationProposal,
+    TagDisposition,
+    TopicArea,
+    render_migration_proposal,
+)
 
 
 def _seed_topic(store, slug, n_members):
@@ -903,3 +909,75 @@ def test_topics_propose_migration_writes_artifact(tmp_path, monkeypatch):
     assert payload["tags"] == 1
     text = artifact.read_text()
     assert "## Tag dispositions" in text and "Dev/Rust" in text
+
+
+def _write_migrate_vault(tmp_path):
+    db = tmp_path / "t.db"
+    k = tmp_path / "Knowledge"
+    k.mkdir()
+    (k / "rust.md").write_text(
+        '---\ntitle: Rust\ntags: ["Dev/Rust", "Reference"]\n---\nbody\n'
+    )
+    (k / "fit.md").write_text('---\ntitle: Fit\ntags: ["Personal/Fitness"]\n---\nbody\n')
+    store = Store(db)
+    store.init_schema()
+    seed_areas(store)
+    store.add_manual_topic("rust-learning", "Rust", "d", np.ones(4, np.float32))
+    store.upsert_note("Knowledge/rust.md", "Rust", "sha1", ["Dev/Rust", "Reference"])
+    store.upsert_note("Knowledge/fit.md", "Fit", "sha2", ["Personal/Fitness"])
+    store.close()
+    proposal = MigrationProposal(
+        topic_areas=(TopicArea("rust-learning", "dev", "ev"),),
+        dispositions=(
+            TagDisposition("Dev/Rust", 1, "dev", None, 0.0, "map:rust-learning"),
+            TagDisposition("Personal/Fitness", 1, "personal", None, 0.0, "area"),
+        ),
+    )
+    ppath = tmp_path / "migration-proposal.md"
+    ppath.write_text(render_migration_proposal(proposal))
+    return db, k, ppath
+
+
+def test_topics_migrate_cli_dry_run_then_apply(tmp_path, monkeypatch):
+    db, k, ppath = _write_migrate_vault(tmp_path)
+    before = (k / "rust.md").read_text()
+
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db), "topics", "migrate",
+                 "--proposal", str(ppath), "--json"], monkeypatch)
+    assert r.exit_code == 0, r.output
+    payload = json.loads(r.output)
+    assert payload["dry_run"] is True
+    assert payload["notes_changed"] == 2
+    assert (k / "rust.md").read_text() == before  # dry-run wrote nothing
+
+    r2 = _invoke(["--vault", str(tmp_path), "--db", str(db), "topics", "migrate",
+                  "--proposal", str(ppath), "--apply", "--json"], monkeypatch)
+    assert r2.exit_code == 0, r2.output
+    payload2 = json.loads(r2.output)
+    assert payload2["dry_run"] is False
+    assert payload2["notes_changed"] == 2
+    text = (k / "rust.md").read_text()
+    assert "Dev/Rust" not in text
+    assert "topic/rust-learning" in text
+    assert "area/dev" in text
+    assert "Personal/Fitness" not in (k / "fit.md").read_text()
+
+
+def test_topics_migrate_cli_rejects_corrupted_proposal(tmp_path, monkeypatch):
+    db = tmp_path / "t.db"
+    store = Store(db)
+    store.init_schema()
+    seed_areas(store)
+    store.close()
+    proposal = MigrationProposal(
+        topic_areas=(),
+        dispositions=(TagDisposition("Personal/Fitness", 1, "personal", None, 0.0, "area"),),
+    )
+    ppath = tmp_path / "prop.md"
+    ppath.write_text(
+        render_migration_proposal(proposal).replace("| — | area |", "| — | yolo |")
+    )
+    r = _invoke(["--vault", str(tmp_path), "--db", str(db), "topics", "migrate",
+                 "--proposal", str(ppath)], monkeypatch)
+    assert r.exit_code != 0
+    assert "Personal/Fitness" in r.output
