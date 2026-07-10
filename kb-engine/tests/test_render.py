@@ -615,3 +615,49 @@ def test_unfiled_by_area_frontmatter_is_system():
     )
     assert post["type"] == "system"
     assert post["generated"] is True
+
+
+# --- thin generated _system/index.md overview (one overview truth) -----------
+
+_EXPECTED_OVERVIEW = """\
+---
+type: system
+generated: true
+---
+# Knowledge Base
+
+- **Today:** [[_system/kb-digest]] — status, this week, review queue, resurfacing
+- **Browse:** [[_system/topics/index]] — areas → topics map
+- **Loose ends:** [[_system/topics/_unfiled-by-area]]
+- **Vocabulary:** [[_system/_taxonomy]] — areas, topics, facets
+"""
+
+
+def test_render_v2_writes_thin_overview_with_exact_content(tmp_path):
+    # Post-cutover: the vault-level _system/index.md becomes a thin GENERATED
+    # pointer, not a stats page — stats live in the digest (one overview truth).
+    # Content is pinned verbatim; note this is NOT _system/topics/index.md.
+    s = _store_with_areas(tmp_path)
+    out = render_topics(s, vault_path=tmp_path)
+    overview = tmp_path / "_system" / "index.md"
+    assert overview.read_text() == _EXPECTED_OVERVIEW
+    assert out.overview_path == "_system/index.md"
+
+
+def test_render_no_areas_does_not_write_overview(tmp_path):
+    # Pre-cutover (no areas seeded): render must NOT write the vault-level
+    # _system/index.md — the hand-maintained file is left untouched (the write
+    # lives strictly inside the seeded-areas gate).
+    s = _store_with_topics(tmp_path)  # no areas
+    out = render_topics(s, vault_path=tmp_path)
+    assert not (tmp_path / "_system" / "index.md").exists()
+    assert out.overview_path == ""
+
+
+def test_render_v2_overview_idempotent(tmp_path):
+    s = _store_with_areas(tmp_path)
+    render_topics(s, vault_path=tmp_path)
+    overview = tmp_path / "_system" / "index.md"
+    before = overview.read_text()
+    render_topics(s, vault_path=tmp_path)
+    assert overview.read_text() == before  # deterministic, no timestamps

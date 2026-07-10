@@ -12,8 +12,25 @@ PROPOSALS_END = "<!-- KB-PROPOSALS:END -->"
 
 _TOPICS_RELDIR = Path("_system") / "topics"
 _TAXONOMY_RELPATH = Path("_system") / "_taxonomy.md"
+_OVERVIEW_RELPATH = Path("_system") / "index.md"
 _TAGS_BASE_RELPATH = Path("Knowledge") / "tags.base"
 _TOPIC_LINK_PREFIX = "_system/topics"
+
+# The vault-level overview: a thin, generated pointer — NOT a stats page. Stats
+# live in the digest (one overview truth). Static, so pinned verbatim as a
+# constant (no frontmatter writer, to keep key order deterministic).
+_OVERVIEW = """\
+---
+type: system
+generated: true
+---
+# Knowledge Base
+
+- **Today:** [[_system/kb-digest]] — status, this week, review queue, resurfacing
+- **Browse:** [[_system/topics/index]] — areas → topics map
+- **Loose ends:** [[_system/topics/_unfiled-by-area]]
+- **Vocabulary:** [[_system/_taxonomy]] — areas, topics, facets
+"""
 
 _TAXONOMY_INTRO = (
     "One hierarchy: areas → topics. Tags: `area/<slug>`, `topic/<slug>`; "
@@ -38,6 +55,7 @@ class RenderResult:
     unfiled_path: str  # vault-relative posix
     area_paths: tuple[str, ...] = ()  # vault-relative posix (v2 area pages)
     tags_base_path: str = ""  # vault-relative posix ("" pre-cutover)
+    overview_path: str = ""  # vault-relative posix ("" pre-cutover)
 
 
 def _topics_by_slug(topics: list[Topic]) -> dict[str, Topic]:
@@ -528,6 +546,18 @@ def _render_post_cutover(
     )
 
 
+def _write_overview(vault_path: Path) -> str:
+    """Write the thin generated vault overview (``_system/index.md``).
+
+    A pointer, not a stats page — one overview truth, stats live in the digest.
+    Returns the vault-relative posix path.
+    """
+    overview_path = vault_path / _OVERVIEW_RELPATH
+    overview_path.parent.mkdir(parents=True, exist_ok=True)
+    overview_path.write_text(_OVERVIEW)
+    return _OVERVIEW_RELPATH.as_posix()
+
+
 def render_topics(store: Store, vault_path: Path) -> RenderResult:
     """Render topic/area MOCs to ``_system/topics/`` + the ``_taxonomy.md`` registry.
 
@@ -566,11 +596,13 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
         unfiled_relpath, area_paths, tags_base_path = _render_post_cutover(
             store, vault_path, topics_dir, areas, topics, members_by_slug
         )
+        # Only post-cutover; pre-cutover vaults keep their hand-maintained file.
+        overview_path = _write_overview(vault_path)
     else:
         unfiled_relpath = _render_pre_cutover(
             store, vault_path, topics_dir, topics, members_by_slug
         )
-        area_paths, tags_base_path = [], ""
+        area_paths, tags_base_path, overview_path = [], "", ""
 
     return RenderResult(
         n_topics=len(topics),
@@ -581,4 +613,5 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
         unfiled_path=unfiled_relpath,
         area_paths=tuple(area_paths),
         tags_base_path=tags_base_path,
+        overview_path=overview_path,
     )
