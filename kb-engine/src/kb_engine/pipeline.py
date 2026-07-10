@@ -24,6 +24,7 @@ from kb_engine.config import Config
 from kb_engine.embeddings import Embedder
 from kb_engine.importing.digest import DigestStatus, write_digest
 from kb_engine.importing.mail_notes import run_import_mail
+from kb_engine.llm import LLM
 from kb_engine.store import Store
 from kb_engine.sync import sync
 from kb_engine.topics.apply import apply_topic_tags
@@ -123,7 +124,11 @@ def _backfill_step(cfg: Config, store: Store) -> str:
 
 
 def _topics_step(cfg: Config, store: Store, clusterer: Clusterer) -> str:
-    annotate = _build_annotate(cfg) if os.environ.get("ANTHROPIC_API_KEY") else None
+    annotate = None
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        from kb_engine.llm import AnthropicLLM
+
+        annotate = _build_annotate(AnthropicLLM(model=cfg.llm_model))
     r = weekly_topic_pass(store, clusterer, annotate=annotate)
     return (
         f"{r.reanchored} reanchored · {r.thresholds_set} thresholds · "
@@ -132,17 +137,17 @@ def _topics_step(cfg: Config, store: Store, clusterer: Clusterer) -> str:
     )
 
 
-def _build_annotate(cfg: Config) -> Callable[[str, tuple], str]:
+def _build_annotate(llm: LLM) -> Callable[[str, tuple], str]:
     """LLM closure that annotates a borderline reason with the model's pick.
 
-    Built only when ``ANTHROPIC_API_KEY`` is set (mirrors ``_enrich_step``'s
-    lazy import), so ``weekly_topic_pass`` stays LLM-free by default. The pick's
-    score is clamped to [0, 1] before display (raw cosines can drift outside it).
+    The ``llm`` is injected so the caller owns key-gating (the closure is built
+    only when ``ANTHROPIC_API_KEY`` is set, keeping ``weekly_topic_pass``
+    LLM-free by default). The pick's score is clamped to [0, 1] before display
+    (raw cosines can drift outside it). Any per-call model failure is swallowed
+    and the unannotated reason is returned — a cosmetic annotation must never
+    abort the topics step after its assignments have committed.
     """
-    from kb_engine.llm import AnthropicLLM
     from kb_engine.topics.classify import annotate_queue_reason
-
-    llm = AnthropicLLM(model=cfg.llm_model)
 
     def annotate(reason: str, candidates: tuple[tuple[str, float], ...]) -> str:
         if not candidates:
@@ -152,12 +157,15 @@ def _build_annotate(cfg: Config) -> Callable[[str, tuple], str]:
             "Reply with ONLY the slug."
         )
         user = "Candidates:\n" + "\n".join(f"- {slug}" for slug, _ in candidates)
-        pick = llm.complete(system, user).strip()
-        scores = dict(candidates)
-        if pick not in scores:
-            pick = candidates[0][0]
-        confidence = max(0.0, min(1.0, scores[pick]))
-        return annotate_queue_reason(reason, pick, confidence)
+        try:
+            pick = llm.complete(system, user).strip()
+            scores = dict(candidates)
+            if pick not in scores:
+                pick = candidates[0][0]
+            confidence = max(0.0, min(1.0, scores[pick]))
+            return annotate_queue_reason(reason, pick, confidence)
+        except Exception:  # noqa: BLE001 — cosmetic annotation must not abort topics
+            return reason
 
     return annotate
 

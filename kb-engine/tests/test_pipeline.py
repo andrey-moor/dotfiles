@@ -6,8 +6,14 @@ from kb_engine.cli import main
 from kb_engine.config import Config
 from kb_engine.embeddings import FakeEmbedder
 from kb_engine.importing.digest import write_digest
+from kb_engine.llm import FakeLLM
 from kb_engine.models import TopicMember
-from kb_engine.pipeline import PipelineResult, run_pipeline, unfiled_notes
+from kb_engine.pipeline import (
+    PipelineResult,
+    _build_annotate,
+    run_pipeline,
+    unfiled_notes,
+)
 from kb_engine.store import Store
 from kb_engine.sync import sync
 from kb_engine.topics.clustering import FakeClusterer
@@ -195,3 +201,59 @@ def test_pipeline_cli_human_output(tmp_path, monkeypatch):
     assert r.exit_code == 0, r.output
     assert "pipeline" in r.output.lower()  # the trailing summary line
     assert "✅ sync —" in r.output  # one marked line per step outcome
+
+
+# --- _build_annotate closure (borderline reason annotation) -------------------
+
+
+class _RaisingLLM:
+    """LLM double whose complete() always raises — exercises the closure's
+    best-effort guard around a mid-pass model failure."""
+
+    def complete(self, system: str, user: str, max_tokens: int = 1024) -> str:
+        raise RuntimeError("model unavailable mid-pass")
+
+
+def test_annotate_valid_pick_renders_reason():
+    # The LLM names a real candidate; its in-range score renders verbatim and
+    # the chosen (non-first) slug is honoured.
+    annotate = _build_annotate(FakeLLM(reply="python"))
+    reason = annotate("borderline", (("rust-learning", 0.6), ("python", 0.42)))
+    assert reason == "borderline; llm: python (0.42)"
+
+
+def test_annotate_clamps_high_candidate_score():
+    # The picked candidate's cosine can drift above 1.0; display clamps to 1.00.
+    annotate = _build_annotate(FakeLLM(reply="rust-learning"))
+    reason = annotate("borderline", (("rust-learning", 1.7), ("python", 0.3)))
+    assert reason == "borderline; llm: rust-learning (1.00)"
+
+
+def test_annotate_clamps_low_candidate_score():
+    # A negative cosine clamps to 0.00 rather than surfacing a negative score.
+    annotate = _build_annotate(FakeLLM(reply="rust-learning"))
+    reason = annotate("borderline", (("rust-learning", -0.2), ("python", 0.3)))
+    assert reason == "borderline; llm: rust-learning (0.00)"
+
+
+def test_annotate_unknown_pick_falls_back_to_first_candidate():
+    # The LLM names a slug absent from candidates → fall back to candidates[0][0].
+    annotate = _build_annotate(FakeLLM(reply="not-a-candidate"))
+    reason = annotate("borderline", (("rust-learning", 0.6), ("python", 0.4)))
+    assert reason == "borderline; llm: rust-learning (0.60)"
+
+
+def test_annotate_empty_candidates_returns_reason_unchanged():
+    # No candidates → nothing to annotate; the reason passes through and the LLM
+    # is never called.
+    llm = FakeLLM(reply="rust-learning")
+    annotate = _build_annotate(llm)
+    assert annotate("borderline", ()) == "borderline"
+    assert llm.calls == []
+
+
+def test_annotate_llm_error_returns_reason_unchanged():
+    # A mid-pass LLM failure is cosmetic: swallow it and return the unannotated
+    # reason so the topics step never aborts after assignment already committed.
+    annotate = _build_annotate(_RaisingLLM())
+    assert annotate("borderline", (("rust-learning", 0.6),)) == "borderline"
