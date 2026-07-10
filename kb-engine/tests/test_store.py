@@ -259,10 +259,35 @@ def test_topic_thresholds_roundtrip_and_default_none(tmp_path):
     store.add_manual_topic("t1", "T1", "d", np.ones(2, np.float32))
     assert store.load_topics()[0].threshold_high is None
     assert store.load_topics()[0].threshold_secondary is None
-    store.set_topic_thresholds("t1", 0.61, 0.53)
+    assert store.load_topics()[0].threshold_derived_n is None
+    store.set_topic_thresholds("t1", 0.61, 0.53, derived_n=7)
     loaded = store.load_topics()[0]
     assert loaded.threshold_high == pytest.approx(0.61)
     assert loaded.threshold_secondary == pytest.approx(0.53)
+    assert loaded.threshold_derived_n == 7
+    store.close()
+
+
+def test_existing_db_gains_threshold_derived_n_column(tmp_path):
+    """init_schema on a pre-Phase-6 topics table backfills threshold_derived_n."""
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        "CREATE TABLE topics (slug TEXT PRIMARY KEY, label TEXT, keywords TEXT,"
+        " centroid BLOB NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL,"
+        " anchor_source TEXT NOT NULL DEFAULT 'label',"
+        " threshold_high REAL, threshold_secondary REAL, area TEXT);"
+    )
+    conn.execute(
+        "INSERT INTO topics(slug, label, keywords, centroid, kind, status)"
+        " VALUES ('old', 'Old', '[]', ?, 'manual', 'active')",
+        (np.ones(2, np.float32).tobytes(),),
+    )
+    conn.commit()
+    conn.close()
+    store = Store(db)
+    store.init_schema()
+    assert store.load_topics()[0].threshold_derived_n is None
     store.close()
 
 

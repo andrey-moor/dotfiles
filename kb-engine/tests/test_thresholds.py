@@ -66,6 +66,64 @@ def test_persist_writes_columns(tmp_path, real_vectors):
     loaded = store.load_topics()[0]
     assert loaded.threshold_high == pytest.approx(stats[0].high)
     assert loaded.threshold_secondary == pytest.approx(stats[0].secondary)
+    assert loaded.threshold_derived_n == stats[0].n_members
+    store.close()
+
+
+def test_persist_only_grown_writes_never_derived(tmp_path, real_vectors):
+    """A topic that has never been derived (threshold_derived_n is None) is
+    always written under only_grown, stamping derived_n."""
+    members = real_vectors.by_group("topic:")[:3]
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    _seed_topic(store, "t1", members)
+    stats = derive_thresholds(store)
+    assert store.load_topics()[0].threshold_derived_n is None
+    n = persist_thresholds(store, stats, only_grown=True)
+    assert n == 1
+    loaded = store.load_topics()[0]
+    assert loaded.threshold_high == pytest.approx(stats[0].high)
+    assert loaded.threshold_derived_n == stats[0].n_members
+    store.close()
+
+
+def test_persist_only_grown_skips_shrunk(tmp_path, real_vectors):
+    """When membership has shrunk below the recorded derived_n, only_grown
+    leaves BOTH the thresholds and derived_n untouched (no self-tightening)."""
+    members = real_vectors.by_group("topic:")[:3]
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    _seed_topic(store, "t1", members)
+    # Simulate a prior derivation over a LARGER membership.
+    store.set_topic_thresholds("t1", 0.90, 0.82, derived_n=99)
+    stats = derive_thresholds(store)
+    assert stats[0].n_members == 3 and stats[0].n_members < 99
+    n = persist_thresholds(store, stats, only_grown=True)
+    assert n == 0
+    loaded = store.load_topics()[0]
+    assert loaded.threshold_high == pytest.approx(0.90)
+    assert loaded.threshold_secondary == pytest.approx(0.82)
+    assert loaded.threshold_derived_n == 99
+    store.close()
+
+
+def test_persist_only_grown_rewrites_grown(tmp_path, real_vectors):
+    """When membership has grown past the recorded derived_n, only_grown
+    re-derives, overwriting thresholds and stamping the new count."""
+    members = real_vectors.by_group("topic:")[:3]
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    _seed_topic(store, "t1", members)
+    # Simulate a prior derivation over a SMALLER membership.
+    store.set_topic_thresholds("t1", 0.90, 0.82, derived_n=1)
+    stats = derive_thresholds(store)
+    assert stats[0].n_members > 1
+    n = persist_thresholds(store, stats, only_grown=True)
+    assert n == 1
+    loaded = store.load_topics()[0]
+    assert loaded.threshold_high == pytest.approx(stats[0].high)
+    assert loaded.threshold_high != pytest.approx(0.90)
+    assert loaded.threshold_derived_n == stats[0].n_members
     store.close()
 
 

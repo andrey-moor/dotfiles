@@ -76,7 +76,9 @@ def weekly_topic_pass(
 
     reanchor_result = reanchor_topics(store)
     stats = derive_thresholds(store)
-    persist_thresholds(store, stats)
+    # Growth-gated: re-derive a topic's bar only when its membership grew, so a
+    # quartile shed can never self-tighten into shedding again next pass.
+    thresholds_written = persist_thresholds(store, stats, only_grown=True)
 
     pinned = store.user_primary_paths()
     assignable_vectors = {
@@ -122,7 +124,7 @@ def weekly_topic_pass(
 
     return WeeklyTopicsResult(
         reanchored=len(reanchor_result.reanchored),
-        thresholds_set=len(stats),
+        thresholds_set=thresholds_written,
         assigned=len(assigned),
         queued=len(borderline),
         new_topics=n_new_topics,

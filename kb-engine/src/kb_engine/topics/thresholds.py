@@ -66,8 +66,26 @@ def derive_thresholds(
     return out
 
 
-def persist_thresholds(store: Store, stats: list[TopicThresholdStats]) -> int:
-    """Write derived thresholds to the topics table; returns rows written."""
+def persist_thresholds(
+    store: Store,
+    stats: list[TopicThresholdStats],
+    only_grown: bool = False,
+) -> int:
+    """Write derived thresholds to the topics table; returns rows written.
+
+    When ``only_grown`` is True, a topic's thresholds are rewritten only if it
+    has never been derived (stored ``threshold_derived_n`` is None) or its
+    member count strictly exceeds the recorded one. This makes the weekly pass
+    monotone: a quartile shed can never re-tighten the bar (which would shed
+    again next pass), while genuine growth still re-derives. Every write stamps
+    ``derived_n = stat.n_members``.
+    """
+    stored_n = {t.slug: t.threshold_derived_n for t in store.load_topics()}
+    written = 0
     for s in stats:
-        store.set_topic_thresholds(s.slug, s.high, s.secondary)
-    return len(stats)
+        prior = stored_n.get(s.slug)
+        if only_grown and prior is not None and s.n_members <= prior:
+            continue
+        store.set_topic_thresholds(s.slug, s.high, s.secondary, s.n_members)
+        written += 1
+    return written

@@ -40,6 +40,64 @@ def _store_with_topicked_corpus(tmp_path, real_vectors):
     return store
 
 
+def _store_with_wide_topics(tmp_path, real_vectors):
+    """Two manual topics each seeded from THREE related fixture groups (6 members
+    apiece) — a spread wide enough that the first derive's p25 bar sheds each
+    topic's bottom quartile on pass 1. Six members keep the survivors >= 3, so
+    re-anchoring stays stable and the threshold is the only contraction lever."""
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    seeds = {
+        "aiwide": ("topic:ai-agents", "topic:ai-industry", "topic:ai-memory-mcp"),
+        "bookswide": ("topic:books-ml-ai", "topic:books-writing", "topic:career-ai"),
+    }
+    for slug, groups in seeds.items():
+        members = [mv for g in groups for mv in real_vectors.by_group(g)]
+        anchor = np.mean([v for _, v in members], axis=0)
+        store.add_manual_topic(
+            slug, slug.upper(), "d", (anchor / np.linalg.norm(anchor)).astype(np.float32)
+        )
+        rows = []
+        for path, vec in members:
+            store.upsert_note(path, path, f"sha-{path}", [])
+            store.replace_chunks(path, [(0, path, vec)])
+            rows.append(TopicMember(note_path=path, score=0.8, source="auto"))
+        store.set_members(slug, rows)
+    for path, vec in real_vectors.by_group("unfiled"):
+        store.upsert_note(path, path, f"sha-{path}", [])
+        store.replace_chunks(path, [(0, path, vec)])
+    return store
+
+
+def _member_snapshot(store):
+    return {
+        t.slug: sorted(m.note_path for m in store.topic_members(t.slug))
+        for t in store.load_topics()
+    }
+
+
+def test_weekly_pass_does_not_contract_membership(tmp_path, real_vectors):
+    """The no-contraction property (the whole point of growth-gated re-derive):
+    two consecutive passes over an UNCHANGED corpus assign the SAME notes. The
+    first pass's derive tightens the bar and sheds each topic's bottom quartile;
+    the second pass must NOT re-derive off the shrunken membership and shed
+    again — assignment is a fixed point after pass 1."""
+    store = _store_with_wide_topics(tmp_path, real_vectors)
+
+    result1 = weekly_topic_pass(store, NoiseClusterer())
+    snap1 = _member_snapshot(store)
+
+    result2 = weekly_topic_pass(store, NoiseClusterer())
+    snap2 = _member_snapshot(store)
+
+    # Pass 1 genuinely tightened: each seeded topic shed from its 6 seeds.
+    assert all(len(snap1[slug]) < 6 for slug in ("aiwide", "bookswide"))
+    # No further shed on pass 2 — same count, same exact note-sets per topic.
+    assert result2.assigned == result1.assigned
+    assert snap2 == snap1
+    store.close()
+
+
 def test_weekly_pass_end_to_end(tmp_path, real_vectors):
     store = _store_with_topicked_corpus(tmp_path, real_vectors)
     n_notes = store.count_notes()

@@ -42,6 +42,7 @@ class Topic:
     threshold_high: float | None = None  # per-topic primary bar; None = use global
     threshold_secondary: float | None = None  # per-topic cross-link bar; None = global
     area: str | None = None  # registry area slug; None = unassigned
+    threshold_derived_n: int | None = None  # member count the derivation saw; None = never derived
 
 
 @dataclass(frozen=True)

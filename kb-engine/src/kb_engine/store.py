@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS topics (
   kind TEXT NOT NULL, status TEXT NOT NULL,
   anchor_source TEXT NOT NULL DEFAULT 'label',
   threshold_high REAL, threshold_secondary REAL,
-  area TEXT
+  area TEXT,
+  threshold_derived_n INTEGER
 );
 CREATE TABLE IF NOT EXISTS topic_members (
   topic_slug TEXT NOT NULL, note_path TEXT NOT NULL, score REAL, source TEXT,
@@ -138,6 +139,8 @@ class Store:
         # Backfill for databases created before the areas→topics hierarchy (Phase 5).
         self._ensure_column("topics", "area", "TEXT")
         self._ensure_column("areas", "description", "TEXT")
+        # Backfill for databases created before growth-gated re-derive (Phase 6).
+        self._ensure_column("topics", "threshold_derived_n", "INTEGER")
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -362,8 +365,9 @@ class Store:
                 self._conn.execute(
                     """
                     INSERT INTO topics(slug, label, keywords, centroid, kind, status,
-                        anchor_source, threshold_high, threshold_secondary, area)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        anchor_source, threshold_high, threshold_secondary, area,
+                        threshold_derived_n)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         slug,
@@ -376,6 +380,7 @@ class Store:
                         topic.threshold_high,
                         topic.threshold_secondary,
                         topic.area,
+                        topic.threshold_derived_n,
                     ),
                 )
                 for member in members_by_slug.get(topic.slug, []):
@@ -391,7 +396,7 @@ class Store:
     def load_topics(self) -> list[Topic]:
         rows = self._conn.execute(
             "SELECT slug, label, keywords, centroid, kind, status, anchor_source, "
-            "threshold_high, threshold_secondary, area "
+            "threshold_high, threshold_secondary, area, threshold_derived_n "
             "FROM topics ORDER BY slug"
         ).fetchall()
         return [
@@ -406,10 +411,11 @@ class Store:
                 threshold_high=threshold_high,
                 threshold_secondary=threshold_secondary,
                 area=area,
+                threshold_derived_n=threshold_derived_n,
             )
             for (
                 slug, label, keywords, centroid, kind, status, anchor_source,
-                threshold_high, threshold_secondary, area,
+                threshold_high, threshold_secondary, area, threshold_derived_n,
             ) in rows
         ]
 
@@ -423,13 +429,19 @@ class Store:
                 (_to_blob(centroid), anchor_source, slug),
             )
 
-    def set_topic_thresholds(self, slug: str, high: float, secondary: float) -> None:
-        """Persist a topic's derived assignment thresholds."""
+    def set_topic_thresholds(
+        self, slug: str, high: float, secondary: float, derived_n: int
+    ) -> None:
+        """Persist a topic's derived assignment thresholds.
+
+        ``derived_n`` records the member count the derivation saw, so a later
+        pass can gate re-derivation on membership growth (see persist_thresholds).
+        """
         with self._conn:
             self._conn.execute(
-                "UPDATE topics SET threshold_high = ?, threshold_secondary = ? "
-                "WHERE slug = ?",
-                (high, secondary, slug),
+                "UPDATE topics SET threshold_high = ?, threshold_secondary = ?, "
+                "threshold_derived_n = ? WHERE slug = ?",
+                (high, secondary, derived_n, slug),
             )
 
     def set_topic_area(self, slug: str, area: str | None) -> None:

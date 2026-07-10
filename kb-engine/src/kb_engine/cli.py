@@ -1095,7 +1095,9 @@ def topics_thresholds(cfg: Config, dry_run: bool, as_json: bool) -> None:
     """Derive per-topic assignment thresholds from member-sim distributions.
 
     high = max(0.45, p25 of member cosines to the current anchor);
-    secondary = high - 0.08. Persists unless --dry-run."""
+    secondary = high - 0.08. Persists unless --dry-run. Re-derives every topic
+    unconditionally (the manual reset tool); the weekly pass, by contrast, only
+    re-derives a topic on member growth to avoid self-tightening contraction."""
     store = Store(cfg.db_path)
     try:
         store.init_schema()
