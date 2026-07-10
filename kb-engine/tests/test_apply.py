@@ -312,3 +312,148 @@ def test_apply_area_tag_is_idempotent(tmp_path):
     fm = frontmatter.load(tmp_path / "Knowledge" / "a.md")
     assert fm["tags"].count("area/dev") == 1  # not duplicated on re-run
     assert res2.n_changed == 0  # nothing to do on the second pass
+
+
+def _store_with_secondary_area_topic(tmp_path, area="dev"):
+    """Active topic 'ml' assigned to a registry area whose only member note is a
+    SECONDARY (is_primary=False) — the note is the primary of no topic, so no
+    existing writer (primary path / classifier mop-up) covers it."""
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.add_manual_topic("ml", "ML", "ml", np.array([1, 0, 0], np.float32))
+    s.set_topic_area("ml", area)
+    s.set_members(
+        "ml",
+        [TopicMember(note_path="Knowledge/b.md", score=0.7, source="auto", is_primary=False)],
+    )
+    return s
+
+
+def test_apply_fills_area_for_secondary_only_note(tmp_path):
+    # A note whose ONLY membership is secondary in an areaed topic gains that area
+    # (appended). It has no primary anywhere, so no prior writer set an area for it.
+    s = _store_with_secondary_area_topic(tmp_path, area="dev")
+    _note(tmp_path, "Knowledge/b.md", "---\ntitle: B\ntags: [Dev/Rust]\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
+    assert "area/dev" in fm["tags"]
+    assert fm["tags"].count("area/dev") == 1
+    assert "topic/ml" in fm["tags"]  # topic tag still applied alongside the fill
+    assert "primary_topic" not in fm.metadata  # secondary-only: no primary field
+
+
+def test_apply_fill_does_not_replace_existing_area(tmp_path):
+    # FILL-ONLY: a secondary-only note that ALREADY carries an area/* keeps it —
+    # unlike the primary path, the fill path never swaps an existing area tag.
+    s = _store_with_secondary_area_topic(tmp_path, area="dev")
+    _note(
+        tmp_path, "Knowledge/b.md",
+        "---\ntitle: B\ntags: [Dev/Rust, area/ai]\n---\nbody",
+    )
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
+    assert "area/ai" in fm["tags"]  # pre-existing area preserved exactly
+    assert "area/dev" not in fm["tags"]  # fill did NOT replace it
+
+
+def test_apply_fill_excludes_note_with_primary_elsewhere(tmp_path):
+    # A note that is secondary in an areaed topic but PRIMARY in another (arealess)
+    # topic is governed by the primary path, so the fill must not touch it: the
+    # primary carries no area, so the note ends up with NO area tag at all.
+    s = _store_with_secondary_area_topic(tmp_path, area="dev")  # b -> ml, secondary
+    s.add_manual_topic("core", "Core", "core", np.array([0, 1, 0], np.float32))
+    s.set_members(
+        "core",
+        [TopicMember(note_path="Knowledge/b.md", score=0.9, source="auto", is_primary=True)],
+    )
+    _note(tmp_path, "Knowledge/b.md", "---\ntitle: B\ntags: [Dev/Rust]\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
+    assert not any(t.startswith("area/") for t in fm["tags"])  # fill excluded
+    assert fm["primary_topic"] == "core"  # primary path governs the note
+    assert "topic/ml" in fm["tags"]  # still a secondary member of ml
+    assert "topic/core" in fm["tags"]
+
+
+def test_apply_no_fill_when_secondary_topic_has_no_area(tmp_path):
+    # Secondary-only membership but the topic has NO registry area → nothing to
+    # fill: the note gets its topic tag but no area/*.
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.add_manual_topic("ml", "ML", "ml", np.array([1, 0, 0], np.float32))  # no area
+    s.set_members(
+        "ml",
+        [TopicMember(note_path="Knowledge/b.md", score=0.7, source="auto", is_primary=False)],
+    )
+    _note(tmp_path, "Knowledge/b.md", "---\ntitle: B\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
+    assert "topic/ml" in fm["tags"]
+    assert not any(t.startswith("area/") for t in fm["tags"])
+
+
+def test_apply_fill_picks_best_scoring_secondary_area(tmp_path):
+    # Two areaed secondary memberships → the higher-scoring topic's area wins,
+    # and only one area tag is written.
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.add_manual_topic("ml", "ML", "ml", np.array([1, 0, 0], np.float32))
+    s.set_topic_area("ml", "research")
+    s.add_manual_topic("rust", "Rust", "rust", np.array([0, 1, 0], np.float32))
+    s.set_topic_area("rust", "dev")
+    s.set_members("ml", [TopicMember("Knowledge/b.md", 0.6, "auto", is_primary=False)])
+    s.set_members("rust", [TopicMember("Knowledge/b.md", 0.9, "auto", is_primary=False)])
+    _note(tmp_path, "Knowledge/b.md", "---\ntitle: B\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
+    assert "area/dev" in fm["tags"]  # rust (0.9) beats ml (0.6)
+    assert "area/research" not in fm["tags"]
+    assert fm["tags"].count("area/dev") == 1
+
+
+def test_apply_fill_breaks_score_ties_by_slug(tmp_path):
+    # Equal scores → the smallest topic slug wins (deterministic selection).
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.add_manual_topic("aaa", "AAA", "a", np.array([1, 0, 0], np.float32))
+    s.set_topic_area("aaa", "alpha")
+    s.add_manual_topic("bbb", "BBB", "b", np.array([0, 1, 0], np.float32))
+    s.set_topic_area("bbb", "beta")
+    s.set_members("aaa", [TopicMember("Knowledge/b.md", 0.8, "auto", is_primary=False)])
+    s.set_members("bbb", [TopicMember("Knowledge/b.md", 0.8, "auto", is_primary=False)])
+    _note(tmp_path, "Knowledge/b.md", "---\ntitle: B\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
+    assert "area/alpha" in fm["tags"]  # slug 'aaa' < 'bbb' wins the tie
+    assert "area/beta" not in fm["tags"]
+
+
+def test_apply_fill_area_is_idempotent(tmp_path):
+    s = _store_with_secondary_area_topic(tmp_path, area="dev")
+    _note(tmp_path, "Knowledge/b.md", "---\ntitle: B\ntags: [Dev/Rust]\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    res2 = apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "b.md")
+    assert fm["tags"].count("area/dev") == 1  # not duplicated on re-run
+    assert res2.n_changed == 0  # nothing to do on the second pass
+
+
+def test_apply_to_note_fill_appends_area_when_absent(tmp_path):
+    # Unit: fill_area_slug appends area/<slug> when the note has no area/* tag,
+    # and counts no TOPIC tags (fill is area-only).
+    note = tmp_path / "n.md"
+    note.write_text("---\ntitle: N\ntags: [old]\n---\nbody\n")
+    changed, added = _apply_to_note(note, [], None, None, fill_area_slug="dev")
+    assert (changed, added) == (True, 0)
+    fm = frontmatter.load(note)
+    assert "area/dev" in fm["tags"]
+    assert "old" in fm["tags"]
+
+
+def test_apply_to_note_fill_noop_when_area_present(tmp_path):
+    # Unit: an existing area/* blocks the fill entirely — no write, no change.
+    note = tmp_path / "n.md"
+    note.write_text("---\ntitle: N\ntags: [area/ai]\n---\nbody\n")
+    changed, added = _apply_to_note(note, [], None, None, fill_area_slug="dev")
+    assert (changed, added) == (False, 0)
+    assert note.read_text().count("area/") == 1  # untouched

@@ -86,6 +86,48 @@ def _area_by_note(store: Store, only_status: tuple[str, ...]) -> dict[str, str]:
     return {note: area for note, area in by_note.items() if area is not None}
 
 
+def _secondary_fill_by_note(
+    store: Store, only_status: tuple[str, ...]
+) -> dict[str, str]:
+    """Map each secondary-only note to the area of its best-scoring areaed topic.
+
+    A "secondary-only" note has ≥1 membership among ``only_status`` topics yet is
+    the primary of none of them, so neither existing writer (the primary path here,
+    nor the classifier mop-up over topicless notes) assigns it an area. Scope
+    matches ``_primary_by_note``: only ``only_status`` topics are consulted, so a
+    note primaried solely in an out-of-status topic still counts as secondary-only.
+
+    Among such a note's secondary memberships in topics that carry a registry
+    ``area``, the best wins by (score desc, then slug asc); its area is the fill
+    value. Iterating topics in slug order and replacing only on a strictly-greater
+    score yields that ordering. Notes with no areaed secondary topic are absent, so
+    apply then leaves their ``area/*`` tags alone.
+    """
+    wanted = set(only_status)
+    has_primary: set[str] = set()
+    best_score: dict[str, float] = {}
+    fill: dict[str, str] = {}
+    for topic in sorted(store.load_topics(), key=lambda t: t.slug):
+        if topic.status not in wanted:
+            continue
+        for member in store.topic_members(topic.slug):
+            if member.is_primary:
+                has_primary.add(member.note_path)
+                continue
+            if topic.area is None:
+                continue
+            note = member.note_path
+            if note not in best_score or member.score > best_score[note]:
+                best_score[note] = member.score
+                fill[note] = topic.area
+    return {note: area for note, area in fill.items() if note not in has_primary}
+
+
+def _has_area_tag(tags: list[str]) -> bool:
+    """True if any tag is an ``area/*`` tag (the fill path must never overwrite one)."""
+    return any(tag.startswith("area/") for tag in tags)
+
+
 def _with_area_tag(tags: list[str], area_slug: str) -> list[str]:
     """Return ``tags`` carrying exactly one ``area/<slug>``.
 
@@ -114,13 +156,21 @@ def _apply_to_note(
     slugs: list[str],
     primary_slug: str | None,
     area_slug: str | None = None,
+    fill_area_slug: str | None = None,
 ) -> tuple[bool, int]:
-    """Add missing ``topic/<slug>`` tags, own the ``area/<slug>`` tag, and set
+    """Add missing ``topic/<slug>`` tags, own/fill the ``area/<slug>`` tag, and set
     ``primary_topic`` on one note.
 
+    Two mutually exclusive area behaviors: ``area_slug`` (the primary path) OWNS the
+    area vocabulary — it replaces any stale ``area/*`` in place; ``fill_area_slug``
+    (the secondary-only path) is ADD-ONLY — it appends ``area/<slug>`` solely when
+    the note carries no ``area/*`` yet, and never replaces one. The primary path
+    takes precedence; the two are disjoint by construction (a note with a primary is
+    never in the fill map).
+
     Returns ``(changed, tags_added)``: ``changed`` is True if the file was
-    rewritten (topic tags added, the sole ``area/*`` tag added/replaced, and/or
-    the ``primary_topic`` field newly set/changed); ``tags_added`` counts only
+    rewritten (topic tags added, the ``area/*`` tag added/replaced, and/or the
+    ``primary_topic`` field newly set/changed); ``tags_added`` counts only
     newly-written topic tags (area edits never count).
     """
     post = load_post(note_path.read_text())
@@ -131,6 +181,8 @@ def _apply_to_note(
     tags_after = existing + to_add
     if area_slug is not None:
         tags_after = _with_area_tag(tags_after, area_slug)
+    elif fill_area_slug is not None and not _has_area_tag(existing):
+        tags_after = tags_after + [f"area/{fill_area_slug}"]
 
     primary_changed = (
         primary_slug is not None and post.get("primary_topic") != primary_slug
@@ -146,6 +198,51 @@ def _apply_to_note(
     return (True, len(to_add))
 
 
+def _apply_members(
+    vault_path: Path,
+    by_note: dict[str, list[str]],
+    primary_by_note: dict[str, str],
+    area_by_note: dict[str, str],
+    secondary_fill: dict[str, str],
+) -> ApplyResult:
+    """Execute the per-note plan: apply tags to each member in deterministic order,
+    skipping (and reporting) notes missing on disk or escaping the vault.
+
+    A member path like ``../outside.md`` is never written — the engine only mutates
+    files inside ``vault_path``.
+    """
+    vault_resolved = vault_path.resolve()
+    n_changed = 0
+    n_tags_added = 0
+    skipped_missing: list[str] = []
+    skipped_outside_vault: list[str] = []
+    for note_rel in sorted(by_note):
+        resolved = (vault_path / note_rel).resolve()
+        if not resolved.is_relative_to(vault_resolved):
+            skipped_outside_vault.append(note_rel)
+            continue
+        if not resolved.is_file():
+            skipped_missing.append(note_rel)
+            continue
+        changed, added = _apply_to_note(
+            resolved,
+            by_note[note_rel],
+            primary_by_note.get(note_rel),
+            area_by_note.get(note_rel),
+            secondary_fill.get(note_rel),
+        )
+        if changed:
+            n_changed += 1
+        n_tags_added += added
+
+    return ApplyResult(
+        n_changed=n_changed,
+        n_tags_added=n_tags_added,
+        skipped_missing=tuple(skipped_missing),
+        skipped_outside_vault=tuple(skipped_outside_vault),
+    )
+
+
 def apply_topic_tags(
     store: Store,
     vault_path: Path,
@@ -159,40 +256,18 @@ def apply_topic_tags(
     member also gets a ``primary_topic: <slug>`` field, and — when that primary topic
     has a registry area — exactly one ``area/<slug>`` tag (apply owns the ``area/*``
     vocabulary for topicked notes: the single sanctioned tag removal, replacing any
-    stale area tag). All writes are idempotent; body/other frontmatter preserved.
+    stale area tag).
+
+    A secondary-only note (member of ``only_status`` topics but primary of none)
+    gets an ADD-ONLY area fill from its best-scoring areaed topic, applied solely
+    when it carries no ``area/*`` yet (never replaced) — the primary and fill sets
+    are disjoint by construction. All writes are idempotent; body/other frontmatter
+    preserved.
     """
-    by_note = _slugs_to_add_by_note(store, only_status)
-    primary_by_note = _primary_by_note(store, only_status)
-    area_by_note = _area_by_note(store, only_status)
-    vault_resolved = vault_path.resolve()
-
-    n_changed = 0
-    n_tags_added = 0
-    skipped_missing: list[str] = []
-    skipped_outside_vault: list[str] = []
-    for note_rel in sorted(by_note):
-        resolved = (vault_path / note_rel).resolve()
-        # Never write outside the vault: a member path like "../outside.md" is
-        # skipped and reported, not applied.
-        if not resolved.is_relative_to(vault_resolved):
-            skipped_outside_vault.append(note_rel)
-            continue
-        if not resolved.is_file():
-            skipped_missing.append(note_rel)
-            continue
-        changed, added = _apply_to_note(
-            resolved,
-            by_note[note_rel],
-            primary_by_note.get(note_rel),
-            area_by_note.get(note_rel),
-        )
-        if changed:
-            n_changed += 1
-        n_tags_added += added
-
-    return ApplyResult(
-        n_changed=n_changed,
-        n_tags_added=n_tags_added,
-        skipped_missing=tuple(skipped_missing),
-        skipped_outside_vault=tuple(skipped_outside_vault),
+    return _apply_members(
+        vault_path,
+        _slugs_to_add_by_note(store, only_status),
+        _primary_by_note(store, only_status),
+        _area_by_note(store, only_status),
+        _secondary_fill_by_note(store, only_status),
     )
