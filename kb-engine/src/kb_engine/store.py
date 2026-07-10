@@ -323,6 +323,16 @@ class Store:
             p: np.mean(vs, axis=0).astype(np.float32) for p, vs in out.items()
         }
 
+    def summaries_for(self, paths: list[str]) -> dict[str, str]:
+        """Stored summaries for just ``paths`` (empty/NULL summaries omitted)."""
+        if not paths:
+            return {}
+        marks = ",".join("?" for _ in paths)
+        rows = self._conn.execute(
+            f"SELECT path, summary FROM notes WHERE path IN ({marks})", list(paths)
+        )
+        return {path: summary for path, summary in rows if summary}
+
     def note_texts(self) -> dict[str, str]:
         """Return ``{note_path: "title summary"}`` for keyword (c-TF-IDF) labeling.
 

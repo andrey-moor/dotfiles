@@ -218,6 +218,27 @@ def test_note_vectors_for_returns_only_requested(tmp_path):
     store.close()
 
 
+def test_summaries_for_returns_only_nonempty_requested(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.upsert_note("Knowledge/a.md", "A", "h", [], summary="Summary of A.")
+    store.upsert_note("Knowledge/b.md", "B", "h", [], summary="")  # empty → omitted
+    store.upsert_note("Knowledge/c.md", "C", "h", [], summary="Summary of C.")
+    got = store.summaries_for(
+        ["Knowledge/a.md", "Knowledge/b.md", "Knowledge/c.md", "Knowledge/missing.md"]
+    )
+    assert got == {"Knowledge/a.md": "Summary of A.", "Knowledge/c.md": "Summary of C."}
+    store.close()
+
+
+def test_summaries_for_empty_input_returns_empty(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.upsert_note("Knowledge/a.md", "A", "h", [], summary="Summary of A.")
+    assert store.summaries_for([]) == {}
+    store.close()
+
+
 def test_topic_anchor_source_roundtrip(tmp_path):
     store = Store(tmp_path / "t.db")
     store.init_schema()

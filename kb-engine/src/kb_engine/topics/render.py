@@ -85,44 +85,92 @@ def _render_index(
     return frontmatter.dumps(post) + "\n"
 
 
-def _render_topic_moc(topic: Topic, members: list[TopicMember]) -> str:
-    """Render one topic MOC, splitting primary (home) from secondary members.
+_ONE_LINER_CAP = 120
 
-    Primary members are listed under ``## Notes``; secondary (cross-link) members
-    under ``## Also relevant``. A section is omitted when it has no members, so an
-    all-secondary topic shows no empty ``## Notes`` placeholder; a topic with no
-    members at all still gets a ``## Notes`` section. Each section is sorted by
-    score desc, then path, for deterministic output.
+
+def _one_liner(summary: str) -> str:
+    """First sentence of ``summary``, hard-capped at ``_ONE_LINER_CAP`` chars.
+
+    The sentence is ``summary.split(". ")[0]``; a longer one is cut to the cap
+    with a ``…`` marker appended. A sentence exactly at the cap keeps no marker.
     """
-    keywords = ", ".join(topic.keywords)
-    lines = [
-        f"# {topic.label}",
-        "",
-        f"- slug: `{topic.slug}`",
-        f"- kind/status: {topic.kind}/{topic.status}",
-        f"- keywords: {keywords}",
-        "",
+    first = summary.split(". ")[0]
+    if len(first) > _ONE_LINER_CAP:
+        return first[:_ONE_LINER_CAP] + "…"
+    return first
+
+
+def _member_line(member: TopicMember, summaries: dict[str, str]) -> str:
+    """A MOC body line: ``- [[path]] — one-liner``, or link-only if no summary."""
+    summary = summaries.get(member.note_path)
+    if summary:
+        return f"- [[{member.note_path}]] — {_one_liner(summary)}"
+    return f"- [[{member.note_path}]]"
+
+
+def _details_block(
+    topic: Topic, primary: list[TopicMember], secondary: list[TopicMember]
+) -> list[str]:
+    """The collapsed ``<details>`` block: slug/kind/anchor, keywords, scores.
+
+    Scores list primaries then secondaries (secondaries carry a ``(secondary)``
+    marker), matching the body's ``## Notes`` → ``## Also relevant`` order.
+    """
+    scores = [f"{Path(m.note_path).name} {m.score:.2f}" for m in primary]
+    scores += [
+        f"{Path(m.note_path).name} {m.score:.2f} (secondary)" for m in secondary
     ]
+    return [
+        "<details>",
+        "<summary>Details</summary>",
+        "",
+        f"- slug: `{topic.slug}` · kind/status: {topic.kind}/{topic.status} · "
+        f"anchor: {topic.anchor_source}",
+        f"- keywords: {', '.join(topic.keywords)}",
+        f"- scores: {' · '.join(scores)}",
+        "",
+        "</details>",
+    ]
+
+
+def _render_topic_moc(
+    topic: Topic, members: list[TopicMember], summaries: dict[str, str]
+) -> str:
+    """Render one topic MOC as a map: summary one-liners + a collapsed details block.
+
+    Primary members list under ``## Notes``, secondary under ``## Also relevant``;
+    a section is omitted when empty, but a member-less topic still gets a
+    ``## Notes`` placeholder. Each member line is ``[[path]] — <one-liner>`` (or
+    link-only when the note has no summary). Scores/keywords/slug metadata move
+    into the collapsed ``<details>`` block. Deterministic (score desc, then path).
+    """
+    def by_score(items: list[TopicMember]) -> list[TopicMember]:
+        return sorted(items, key=lambda m: (-m.score, m.note_path))
+
+    primary = by_score([m for m in members if m.is_primary])
+    secondary = by_score([m for m in members if not m.is_primary])
+
+    keywords = ", ".join(topic.keywords)
+    lines = [f"# {topic.label}", ""]
+    if keywords:
+        lines += [keywords, ""]
 
     def block(header: str, items: list[TopicMember]) -> None:
         lines.extend([header, ""])
-        ordered = sorted(items, key=lambda m: (-m.score, m.note_path))
-        if ordered:
-            lines.extend(f"- [[{m.note_path}]] ({m.score:.2f})" for m in ordered)
+        if items:
+            lines.extend(_member_line(m, summaries) for m in items)
         else:
             lines.append("_None._")
         lines.append("")
 
-    primary = [m for m in members if m.is_primary]
-    secondary = [m for m in members if not m.is_primary]
     if primary:
         block("## Notes", primary)
     if secondary:
         block("## Also relevant", secondary)
     if not primary and not secondary:
-        # A topic with no members at all still gets a Notes section placeholder.
         block("## Notes", [])
 
+    lines += _details_block(topic, primary, secondary)
     body = "\n".join(lines).rstrip() + "\n"
     post = frontmatter.Post(body, type="system", generated=True)
     return frontmatter.dumps(post) + "\n"
@@ -405,6 +453,7 @@ def _write_mocs(
     topics_dir_resolved: Path,
     topics: list[Topic],
     members_by_slug: dict[str, list[TopicMember]],
+    summaries: dict[str, str],
 ) -> list[str]:
     """Write each topic MOC (traversal-guarded); return vault-relative posix paths."""
     topic_paths: list[str] = []
@@ -415,7 +464,7 @@ def _write_mocs(
         if not moc_path.is_relative_to(topics_dir_resolved):
             continue
         moc_path.write_text(
-            _render_topic_moc(topic, members_by_slug.get(topic.slug, []))
+            _render_topic_moc(topic, members_by_slug.get(topic.slug, []), summaries)
         )
         # Vault-relative posix (Phase 3 contract: consistent with note paths).
         topic_paths.append(moc_path.relative_to(vault_resolved).as_posix())
@@ -494,6 +543,11 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
     members_by_slug = {
         topic.slug: store.topic_members(topic.slug) for topic in topics
     }
+    # One fetch over every member path feeds the MOC one-liners (deterministic).
+    all_member_paths = sorted(
+        {m.note_path for members in members_by_slug.values() for m in members}
+    )
+    summaries = store.summaries_for(all_member_paths)
 
     vault_resolved = vault_path.resolve()
     topics_dir = vault_path / _TOPICS_RELDIR
@@ -504,7 +558,8 @@ def render_topics(store: Store, vault_path: Path) -> RenderResult:
         _render_index(areas, topics, members_by_slug)
     )
     topic_paths = _write_mocs(
-        topics_dir, vault_resolved, topics_dir_resolved, topics, members_by_slug
+        topics_dir, vault_resolved, topics_dir_resolved, topics, members_by_slug,
+        summaries,
     )
 
     if areas:

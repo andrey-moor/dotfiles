@@ -7,6 +7,7 @@ from kb_engine.topics.render import (
     PROPOSALS_END,
     PROPOSALS_START,
     RenderResult,
+    _one_liner,
     _render_topic_moc,
     _render_unfiled_by_area,
     _render_unfiled_by_category,
@@ -310,7 +311,7 @@ def test_topic_moc_splits_primary_and_secondary():
         TopicMember("Knowledge/p.md", 0.9, "auto", is_primary=True),
         TopicMember("Knowledge/s.md", 0.6, "auto", is_primary=False),
     ]
-    out = _render_topic_moc(topic, members)
+    out = _render_topic_moc(topic, members, {})
     assert "## Notes" in out and "## Also relevant" in out
     notes_block, also_block = out.split("## Also relevant", 1)
     assert "[[Knowledge/p.md]]" in notes_block and "[[Knowledge/p.md]]" not in also_block
@@ -321,7 +322,7 @@ def test_topic_moc_omits_also_relevant_when_no_secondaries():
     topic = Topic(slug="rust", label="Rust", keywords=("rust",),
                   centroid=np.ones(8, np.float32), kind="manual", status="active")
     members = [TopicMember("Knowledge/p.md", 0.9, "auto", is_primary=True)]
-    out = _render_topic_moc(topic, members)
+    out = _render_topic_moc(topic, members, {})
     assert "## Notes" in out
     assert "## Also relevant" not in out  # no secondary members → section omitted
 
@@ -335,10 +336,81 @@ def test_topic_moc_all_secondary_omits_empty_notes_section():
         TopicMember("Knowledge/s1.md", 0.8, "auto", is_primary=False),
         TopicMember("Knowledge/s2.md", 0.6, "auto", is_primary=False),
     ]
-    out = _render_topic_moc(topic, members)
+    out = _render_topic_moc(topic, members, {})
     assert "## Also relevant" in out
     assert "[[Knowledge/s1.md]]" in out and "[[Knowledge/s2.md]]" in out
     assert "## Notes" not in out  # no primary members → no Notes section at all
+
+
+# --- MOC v3: summary one-liners + collapsed details block --------------------
+
+
+def _moc_topic() -> Topic:
+    return Topic(
+        slug="rust", label="Rust", keywords=("rust", "macros"),
+        centroid=np.ones(4, np.float32), kind="manual", status="active",
+    )
+
+
+def test_one_liner_takes_first_sentence():
+    assert _one_liner("First sentence. Second sentence.") == "First sentence"
+
+
+def test_one_liner_exact_120_gets_no_marker():
+    sentence = "x" * 120
+    assert _one_liner(sentence) == sentence  # exactly at the cap → no marker
+
+
+def test_one_liner_over_120_truncates_with_marker():
+    out = _one_liner("y" * 121)
+    assert out == "y" * 120 + "…"  # capped at 120 chars, … appended
+    assert len(out) == 121
+
+
+def test_topic_moc_member_line_shows_summary_one_liner_or_link_only():
+    members = [
+        TopicMember("Knowledge/withsum.md", 0.9, "auto", is_primary=True),
+        TopicMember("Knowledge/nosum.md", 0.7, "auto", is_primary=True),
+    ]
+    summaries = {"Knowledge/withsum.md": "A crisp gist. More detail here."}
+    out = _render_topic_moc(_moc_topic(), members, summaries)
+    # member WITH a summary → "[[path]] — first sentence"
+    assert "- [[Knowledge/withsum.md]] — A crisp gist" in out
+    # member WITHOUT a summary → link only, no dash
+    assert "- [[Knowledge/nosum.md]]\n" in out
+    assert "[[Knowledge/nosum.md]] —" not in out
+
+
+def test_topic_moc_scores_and_keywords_live_in_details_not_body():
+    members = [
+        TopicMember("Knowledge/p.md", 0.87, "auto", is_primary=True),
+        TopicMember("Knowledge/s.md", 0.42, "auto", is_primary=False),
+    ]
+    summaries = {"Knowledge/p.md": "Primary gist.", "Knowledge/s.md": "Secondary gist."}
+    out = _render_topic_moc(_moc_topic(), members, summaries)
+    body, sep, details = out.partition("<details>")
+    assert sep == "<details>"  # the collapsed block exists
+    # scores moved out of the member lines into the details block
+    assert "0.87" not in body and "0.42" not in body
+    assert "0.87" in details and "0.42" in details
+    # metadata line: slug · kind/status · anchor (anchor_source default "label")
+    assert "- slug: `rust` · kind/status: manual/active · anchor: label" in details
+    # labeled keywords line + the secondary marker both live in details
+    assert "- keywords: rust, macros" in details
+    assert "s.md 0.42 (secondary)" in details
+    # body keeps section headers + the summary one-liner
+    assert "## Notes" in body and "## Also relevant" in body
+    assert "- [[Knowledge/p.md]] — Primary gist" in body
+
+
+def test_topic_moc_render_is_deterministic():
+    members = [
+        TopicMember("Knowledge/p.md", 0.9, "auto", is_primary=True),
+        TopicMember("Knowledge/s.md", 0.6, "auto", is_primary=False),
+    ]
+    summaries = {"Knowledge/p.md": "Gist p.", "Knowledge/s.md": "Gist s."}
+    first = _render_topic_moc(_moc_topic(), members, summaries)
+    assert first == _render_topic_moc(_moc_topic(), members, summaries)
 
 
 def test_unfiled_by_category_groups_by_taxonomy_tag():
