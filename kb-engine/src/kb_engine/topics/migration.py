@@ -20,7 +20,10 @@ from kb_engine.topics.taxonomy import diff_taxonomy
 MAP_OVERLAP_MIN = 0.20
 NEW_TOPIC_MIN_COUNT = 8
 _VALID_AREAS = {a.slug for a in SEEDED_AREAS}
-_DECISION_RE = re.compile(r"^(map:[a-z0-9-]+|topic:[a-z0-9-]+|area)$")
+# Slug part mirrors the store's SLUG_PATTERN (^[a-z0-9][a-z0-9-]*$): leading
+# alnum, no leading hyphen, empty rejected. Keeps parser accept-set ⊆ store's,
+# so an approved map:/topic: slug can never be minted-then-rejected downstream.
+_DECISION_RE = re.compile(r"^(map:[a-z0-9][a-z0-9-]*|topic:[a-z0-9][a-z0-9-]*|area)$")
 _DIVIDER_CELL_RE = re.compile(r"^:?-+:?$")
 
 _TOPIC_HEADING = "## Topic → area"

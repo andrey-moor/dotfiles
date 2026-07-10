@@ -170,6 +170,70 @@ def test_parse_rejects_topic_row_with_too_few_cells(tmp_path):
     store.close()
 
 
+# --- slug-grammar guards: parser accept-set must be a subset of the store's ---
+# The store's SLUG_PATTERN is ^[a-z0-9][a-z0-9-]*$: leading char alnum (no
+# leading hyphen), trailing hyphen allowed, empty rejected. The parser must not
+# accept a slug the store would reject — else the cutover mints a dangling tag
+# and a false topics_created count on a human typo. These pin parser ⊆ store.
+
+
+def test_parse_rejects_leading_hyphen_topic_slug(tmp_path):
+    """A leading-hyphen slug (store rejects it) must be rejected AT PARSE TIME,
+    naming the row — not swallowed by the cutover's already-exists guard."""
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace(
+        "map:rust-learning", "topic:-foo"
+    )
+    with pytest.raises(ValueError, match=r"Dev/Rust.*invalid decision"):
+        parse_migration_proposal(text)
+    store.close()
+
+
+def test_parse_rejects_leading_hyphen_map_slug(tmp_path):
+    """Same guard on the map: side — a leading-hyphen target fails the grammar
+    (before the known-topic check), naming the row."""
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace(
+        "map:rust-learning", "map:-foo"
+    )
+    with pytest.raises(ValueError, match=r"Dev/Rust.*invalid decision"):
+        parse_migration_proposal(text)
+    store.close()
+
+
+def test_parse_accepts_trailing_hyphen_slug(tmp_path):
+    """No over-tightening: the store accepts a trailing hyphen (``foo-`` matches
+    SLUG_PATTERN), so the parser must too — keeping parser accept-set == store's
+    for single segments (consistent, no dangling possible)."""
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal).replace(
+        "map:rust-learning", "topic:foo-"
+    )
+    parsed = parse_migration_proposal(text)
+    decision = {d.tag: d.decision for d in parsed.dispositions}["Dev/Rust"]
+    assert decision == "topic:foo-"
+    store.close()
+
+
+def test_parse_accepts_valid_single_segment_slugs(tmp_path):
+    """No over-tightening: the common valid forms still parse — ``map:<known>``
+    (unchanged) and a single-char ``topic:a``."""
+    store = _seed(tmp_path)
+    proposal = build_migration_proposal(store, {"Dev/Rust"})
+    text = render_migration_proposal(proposal)
+    assert {d.tag: d.decision for d in parse_migration_proposal(text).dispositions}[
+        "Dev/Rust"
+    ] == "map:rust-learning"
+    text_a = text.replace("map:rust-learning", "topic:a")
+    assert {d.tag: d.decision for d in parse_migration_proposal(text_a).dispositions}[
+        "Dev/Rust"
+    ] == "topic:a"
+    store.close()
+
+
 def test_parse_rejects_duplicate_section(tmp_path):
     """A duplicated ## Tag dispositions section would silently merge its rows
     into the cutover (over-inclusion); the parser rejects it outright. The extra
