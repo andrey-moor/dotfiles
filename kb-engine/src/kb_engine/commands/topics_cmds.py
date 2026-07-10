@@ -1,3 +1,4 @@
+"""The ``topics`` command group — discover, govern, assign, and render the topic/area model."""
 import json
 from pathlib import Path
 

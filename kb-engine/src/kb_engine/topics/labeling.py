@@ -1,3 +1,10 @@
+"""Derive human-readable labels and slugs for discovered topic clusters.
+
+``top_keywords`` ranks each cluster's most distinctive terms c-TF-IDF style
+(term frequency within the cluster ÷ number of clusters containing the term),
+and ``slugify`` normalizes a label into a tag-safe slug. A small built-in
+stopword set keeps labels meaningful without pulling in an NLP dependency.
+"""
 import re
 from collections import Counter
 

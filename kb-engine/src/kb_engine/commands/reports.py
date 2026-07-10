@@ -1,3 +1,4 @@
+"""Reporting commands: synthesis-candidates, dedup-report, related, doctor, digest."""
 import json
 import sys
 from dataclasses import asdict

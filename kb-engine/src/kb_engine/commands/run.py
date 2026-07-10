@@ -1,3 +1,4 @@
+"""The ``pipeline`` command — run the full KB pipeline for a tier (daily/weekly)."""
 import json
 
 import click

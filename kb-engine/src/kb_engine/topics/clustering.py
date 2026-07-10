@@ -1,3 +1,11 @@
+"""Cluster note embeddings into candidate topics.
+
+Defines the ``Clusterer`` protocol (``vectors → one int label per row``, ``-1`` =
+noise) with two implementations: ``UmapHdbscanClusterer``, the real UMAP→HDBSCAN
+pipeline (lazily imported, ``min_cluster_size`` adaptive to corpus size, pinned
+random state for reproducibility), and ``FakeClusterer`` for deterministic tests
+that need no ML dependencies.
+"""
 from typing import Protocol
 
 import numpy as np

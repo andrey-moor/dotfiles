@@ -1,3 +1,10 @@
+"""Surface latent mini-themes by clustering only the topicless residual.
+
+``suggest_from_residual`` re-clusters the notes NOT already in any topic — with a
+lower ``min_cluster_size`` so coherent two-note themes below the normal floor can
+surface — and returns them as a ``DiscoverResult`` of proposals. It does not
+persist; the caller decides whether to save.
+"""
 import numpy as np
 
 from kb_engine.topics.clustering import Clusterer

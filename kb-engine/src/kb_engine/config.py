@@ -3,7 +3,6 @@ from pathlib import Path
 
 DEFAULT_MODEL = "jinaai/jina-embeddings-v3"
 DEFAULT_EMBED_DIM = 1024
-DEFAULT_CHUNK_TOKENS = 512
 DEFAULT_LLM_MODEL = "claude-haiku-4-5-20251001"
 
 
@@ -17,7 +16,6 @@ class Config:
     db_path: Path = field(default=None)  # type: ignore[assignment]
     model_name: str = DEFAULT_MODEL
     embed_dim: int = DEFAULT_EMBED_DIM
-    chunk_tokens: int = DEFAULT_CHUNK_TOKENS
     llm_model: str = DEFAULT_LLM_MODEL
 
     def __post_init__(self) -> None:

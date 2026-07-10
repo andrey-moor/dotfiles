@@ -1,3 +1,11 @@
+"""Reconcile discovered topics against the hand-maintained ``_taxonomy.md`` tags.
+
+Parses declared ``Category/Sub`` and bolded single-word tags out of the taxonomy
+file, then diffs them against discovered topics by Jaccard overlap of their
+member sets — producing a ``TaxonomyDiff`` of per-tag topic mappings, topics
+already covered by a tag, brand-new topics no tag aligns with, and orphan tags no
+topic matches. Read-only analysis: it proposes, the human decides.
+"""
 import re
 from dataclasses import dataclass
 from pathlib import Path

@@ -1,3 +1,12 @@
+"""Shape a clustering of note vectors into proposed topics.
+
+``build_topics`` maps cluster labels to ``Topic`` objects — each with a
+unit-normalized centroid and a keyword-derived label/slug — alongside their
+members, and collects the noise cluster (label ``-1``) as the unfiled residual.
+Output is ordered by cluster size then slug for determinism. The clustering
+itself lives in ``clustering.py``; this module only turns its result into the
+topic model.
+"""
 from dataclasses import dataclass
 
 import numpy as np

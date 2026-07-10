@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-import frontmatter
+from kb_engine.vault import load_post, write_post_atomic
 
 _VALID_STATUSES = frozenset({"reference", "archived"})
 _PLACEHOLDER_MARKER = "Pending processing"
@@ -52,10 +52,12 @@ def apply_dispositions(
        (guards against symlink attacks) → else ``skipped_invalid``.
     4. ``src`` not a file → ``skipped_missing``.
     5. ``dst`` already exists → ``skipped_collision`` (never overwrite).
-    6. Load ``src`` via ``frontmatter.load``; set ``tags``, ``summary``, ``status``
-       (all other keys preserved). Replace body when empty/whitespace or contains
-       "Pending processing"; otherwise leave body unchanged.
-    7. If ``dry_run``: count but write nothing. Else write ``dst`` and unlink ``src``.
+    6. Load ``src`` via ``load_post`` (tolerates a ``content`` frontmatter key);
+       set ``tags``, ``summary``, ``status`` (all other keys preserved). Replace
+       body when empty/whitespace or contains "Pending processing"; otherwise
+       leave body unchanged.
+    7. If ``dry_run``: count but write nothing. Else write ``dst`` atomically and
+       unlink ``src``.
     """
     vault_resolved = vault_path.resolve()
 
@@ -126,7 +128,7 @@ def apply_dispositions(
             continue
 
         # 6. Load and mutate frontmatter (never mutate in-place — build new post state)
-        post = frontmatter.load(src)
+        post = load_post(src.read_text(encoding="utf-8"))
         post["tags"] = tags
         post["summary"] = summary
         post["status"] = status
@@ -144,8 +146,8 @@ def apply_dispositions(
         if dry_run:
             continue
 
-        # Fix 5: Add encoding="utf-8" to write_text
-        dst.write_text(frontmatter.dumps(post) + "\n", encoding="utf-8")
+        # Write dst atomically (house I/O) before unlinking src — order matters.
+        write_post_atomic(dst, post)
         src.unlink()
 
     return FileResult(

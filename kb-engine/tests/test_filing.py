@@ -174,6 +174,27 @@ def test_other_frontmatter_fields_preserved(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# content: frontmatter key tolerated (backfill's `content: unavailable`)
+# ---------------------------------------------------------------------------
+
+def test_apply_tolerates_content_frontmatter_key(tmp_path):
+    """An inbox note carrying backfill's `content: unavailable` must still file —
+    frontmatter.load() crashes on that key; the house load_post doesn't."""
+    vault = _make_vault(tmp_path)
+    src = _write_inbox_note(vault, "note.md", extra_frontmatter="content: unavailable")
+    disp = [_disposition("note.md", summary="A summary.")]
+
+    result = apply_dispositions(vault, disp, dry_run=False)
+
+    assert result.n_filed == 1
+    assert not src.exists()
+    dst = vault / "Knowledge" / "note.md"
+    assert dst.is_file()
+    text = dst.read_text()
+    assert "content: unavailable" in text  # backfill key preserved through the move
+
+
+# ---------------------------------------------------------------------------
 # collision → skipped_collision (src untouched)
 # ---------------------------------------------------------------------------
 

@@ -1,3 +1,12 @@
+"""Assign notes to manual topics by cosine similarity to their centroids.
+
+Each note gets one primary topic — the highest-scoring topic whose high bar it
+clears — plus up to two secondary cross-links; a note that clears nothing but
+ranks inside a topic's ``[low, high)`` band lands in the borderline review queue
+for a human decision. Per-topic thresholds (``Topic.threshold_high`` /
+``threshold_secondary``) override the global fallbacks when set, degrading
+exactly to the old global behavior when they are absent.
+"""
 from dataclasses import dataclass
 from typing import Mapping
 

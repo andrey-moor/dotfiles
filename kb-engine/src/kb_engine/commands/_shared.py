@@ -1,3 +1,4 @@
+"""Shared command helpers: env-driven embedder/clusterer builders and JSON/human emit."""
 import json
 import os
 

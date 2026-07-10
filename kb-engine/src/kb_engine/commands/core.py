@@ -1,3 +1,4 @@
+"""Core commands: sync, search, log-event, eval, status, rebuild."""
 import json
 from datetime import datetime, timezone
 

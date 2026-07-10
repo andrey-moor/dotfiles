@@ -14,11 +14,12 @@ build on top of the cache and search this engine provides).
 ## How it works
 
 - **Ingest:** vault `.md` → notes (frontmatter, tags, inline `#tags`, `[[wikilinks]]`,
-  sha256) → section-aware, token-budgeted chunks.
-- **Embed:** chunks → jina-v3 embeddings (local; via the `[ml]` optional extra)
-  → float32 BLOBs in SQLite, with the chunk text mirrored into an FTS5 index.
-- **Search:** cosine similarity (best chunk per note) ∪ FTS5 BM25, fused via RRF,
-  scoped to the `Knowledge/` tree (excluding `Knowledge/inbox/`).
+  sha256).
+- **Embed:** each note → one jina-v3 vector over its `title + summary + why` gist
+  (local; via the `[ml]` optional extra) → a float32 BLOB in SQLite, with
+  `title + body` mirrored into an FTS5 index for keyword recall.
+- **Search:** cosine similarity (the note-level gist vector) ∪ FTS5 BM25, fused via
+  RRF, scoped to the `Knowledge/` tree (excluding `Knowledge/inbox/`).
 - **Sync:** hash-based incremental — embed new/changed notes, drop deleted ones.
   The cache is always rebuildable from the vault, so the markdown files remain
   the single source of truth.
@@ -104,10 +105,10 @@ and running `sync` (or `rebuild`) reconstructs it exactly.
 ## Topics
 
 `topics discover` clusters the synced note vectors into topics. Each note's
-chunk vectors are mean-pooled, reduced with **UMAP** (`metric="cosine"`), and
-clustered with **HDBSCAN**; unclustered notes are reported as an explicit
+gist vector is reduced with **UMAP** (`metric="cosine"`) and clustered with
+**HDBSCAN**; unclustered notes are reported as an explicit
 **unfiled** residual. Per topic the engine computes a unit-normalized centroid
-and a keyword label (a simple c-TF-IDF over note titles + first chunks). Topics
+and a keyword label (a simple c-TF-IDF over member note text). Topics
 and their members persist in the SQLite cache; re-running `discover` replaces the
 previously discovered topics.
 
@@ -123,18 +124,21 @@ kb-engine --vault "<vault>" topics discover --json
 
 ### Areas
 
-`topics areas` groups discovered topics into broader **areas** by agglomerative
-clustering (`scikit-learn`, `metric="cosine"`, `linkage="average"`) over the
-topic centroids. The cut is tunable with `--threshold` (default `0.3`); a higher
-threshold yields fewer, broader areas. Each run replaces the stored areas.
+Areas are the **coarse tier** of one aboutness hierarchy — **areas → topics**. The
+registry is **seeded, not clustered**: nine areas mirror the taxonomy's categories.
+Each topic belongs to at most one area (`Topic.area`), so a note ends up with both
+an `area/<slug>` and a `topic/<slug>` tag; four cross-cutting **facets** (Tutorials,
+Reference, Inspiration, Tools) combine freely on top.
 
 ```bash
-# Group the current topics into areas (run `topics discover` first)
-kb-engine --vault "<vault>" topics areas
-kb-engine --vault "<vault>" topics areas --threshold 0.4 --json
+kb-engine --vault "<vault>" topics seed-areas               # seed the 9 areas (idempotent replace)
+kb-engine --vault "<vault>" topics areas                    # list areas + member topics (or --json)
+kb-engine --vault "<vault>" topics set-area rust-async dev  # assign a topic to an area
 ```
 
-`--json` emits `{n_areas, areas:[{slug, label, topics:[slug...]}]}`.
+`topics areas --json` emits `{areas:[{slug, label, description, topics:[slug...]}]}`.
+Area membership is **composed at read time** from each topic's `area` — `set-area`
+records it and there is no separate membership table to keep in sync.
 
 ### Manual topics
 
@@ -184,11 +188,13 @@ judgment live in the `kb` skill layer** (Claude), and **note mutation is gated**
 an explicit `apply`. The full lifecycle:
 
 1. **`sync`** — index the vault so topics reflect current notes.
-2. **`topics discover --sticky`** — sticky re-discovery: notes scoring `>= --high`
-   (default `0.55`) against an existing **active** topic stay fixed as its members; only
-   the **residual** is clustered into new `discovered`/`proposed` topics. This preserves
-   approved structure across re-runs (plain `discover` replaces all discovered topics).
-   Manual topics (`topics add`) always survive.
+2. **weekly topic pass** — either `pipeline --tier weekly`, or the pieces by hand:
+   `topics reanchor` (recompute each manual topic's anchor from its members) →
+   `topics thresholds` (derive per-topic assignment bars) → `topics assign --apply`
+   (primary + up to two secondaries per note; the borderline band lands in the review
+   queue). The **residual** is then clustered into fresh `proposed` topics. Active
+   structure is preserved and manual topics (`topics add`) always survive. (The old
+   `discover --sticky` single-mode is retired — `weekly` is the successor.)
 3. **`topics diff-taxonomy`** — compare discovered topic membership against the tags
    declared in `_system/_taxonomy.md` using Jaccard set overlap over note paths. Emits
    `{mapping, new_topics, orphan_tags, covered_topics}`: `new_topics` is structure the
@@ -203,9 +209,15 @@ an explicit `apply`. The full lifecycle:
    area names, and presents the restructure diff to the user for approval.
 5. **`topics render`** — render-not-append, idempotent. Writes the MOCs and splices a
    proposals table into `_taxonomy.md` (see below). Safe to re-run.
-6. **`topics apply`** — the **only note-mutating command**; running it IS the gate (there
-   is no implicit apply elsewhere). Writes `topic/<slug>` tags into member notes (see
-   below).
+6. **`topics apply`** — the routine note-mutating command in this loop; running it IS the
+   gate for tag writes (no implicit apply elsewhere). Writes `area/<slug>` + `topic/<slug>`
+   tags into member notes (see below).
+
+Review + one-off governance verbs layer on top: **`topics confirm <slug> <note>`** (the
+`/kb:review` verb — pin a borderline note as a topic's human-decided primary, then run
+`apply`), and the taxonomy migration path **`topics propose-migration`** → edit the
+generated `_system/migration-proposal.md` → **`topics migrate --proposal <path>`** (dry-run
+by default; `--apply` executes the mass-retag cutover).
 
 #### `_system/topics/` MOCs (render)
 
@@ -232,21 +244,24 @@ kb-engine --vault "<vault>" topics render --json
 
 `--json` emits `{n_topics, n_areas, index_path, taxonomy_path}`.
 
-#### `topic/<slug>` tag convention (apply)
+#### `area/<slug>` + `topic/<slug>` tag convention (apply)
 
-`topics apply` writes membership back into notes as frontmatter tags namespaced under
-`topic/` — e.g. a note in topic `rust-async-tokio` gains the tag `topic/rust-async-tokio`.
-This namespace keeps machine-assigned topic tags distinct from the human taxonomy
+`topics apply` writes membership back into notes as frontmatter tags: a `topic/<slug>`
+per membership, the note's home `area/<slug>` (from its primary topic's area, falling
+back to a best-scoring secondary's area), and `primary_topic` set to the home topic.
+This namespace keeps machine-assigned tags distinct from the human taxonomy
 (`Dev/Rust`, `AI/RAG`, …). It defaults to `--status active`, so `proposed` topics stay
-proposed until promoted; only members of topics with the given status are tagged. Tags are
-de-duplicated, the note body and other frontmatter are preserved, and member files missing
-on disk are skipped and reported (`skipped_missing`). Re-running adds nothing new.
+proposed until promoted; only members of topics with the given status are tagged. Writes
+go through the atomic house I/O, tags are de-duplicated, the body and other frontmatter
+are preserved, and member files that are missing on disk (`skipped_missing`) or resolve
+outside the vault (`skipped_outside_vault`) are skipped and reported. Re-running adds
+nothing new.
 
 ```bash
 kb-engine --vault "<vault>" topics apply --status active --json
 ```
 
-`--json` emits `{status, n_changed, n_tags_added, skipped_missing}`.
+`--json` emits `{status, n_changed, n_tags_added, skipped_missing, skipped_outside_vault}`.
 
 ## Importing from Things
 
@@ -299,9 +314,13 @@ body — ready to flow through the normal inbox-processing pipeline.
 ## Digest
 
 `digest` writes a deterministic KB state report to `<vault>/_system/kb-digest.md`
-— a single glance at what needs attention: inbox backlog, topic proposals
-awaiting naming/approval, topic/area counts, and unfiled notes (with a "needs
-review" checklist). The body contains **no timestamps**, so re-running rewrites a
+— the weekly review entry point. Sections: **This week** (recent captures grouped
+by area, one-liner each), **Review queue** (borderline notes awaiting a topic
+decision), **Resurfacing** (notes related to recent work, plus aging/anniversary
+nudges), **Health** (a one-line strip: recall@5 · areas · content% · inbox ·
+unfiled · evicted), and **Synthesize** (topics big enough to be worth a wiki). A
+**Status** header is prepended when the pipeline writes it. The body is keyed off
+`today` with no finer timestamp, so re-running the same day rewrites a
 byte-identical file (idempotent); `_system/` lives outside `Knowledge/`, so it is
 never embedded.
 
@@ -315,26 +334,31 @@ kb-engine --vault "<vault>" digest --json
 ## Scheduled pipeline
 
 `pipeline` is the **deterministic, LLM-free** maintenance command that runs
-unattended. It composes the already-tested steps into one pass:
+unattended, in two tiers:
 
-1. **`sync`** — embed new/changed notes, drop deleted (cache follows the vault).
-2. **`topics apply --status active`** — write `topic/<slug>` tags, **but only for
-   approved (active) topics**. Discovered proposals stay `proposed`, so an
-   unattended run **never silently mis-tags** notes. (With no active topics yet,
-   this is a no-op — `applied=0`.)
-3. **sticky discover** — cluster the residual into new `proposed` topics,
-   preserving any approved structure.
-4. **`digest`** — write `<vault>/_system/kb-digest.md`, the review entry point.
+- **`--tier daily`** — `import-mail` → `enrich` → `sync` → `digest`.
+- **`--tier weekly`** (default) — the daily steps, plus **`topics apply --status
+  active`** (write `area/<slug>` + `topic/<slug>` tags, **only for approved
+  topics** — proposals stay `proposed`, so an unattended run never silently
+  mis-tags), the **weekly topic pass** (re-anchor → growth-gated thresholds →
+  assign → queue the borderline band → cluster the residual into `proposed`
+  topics), and a retrieval **eval**.
+
+Each step is isolated so one failure never aborts the run; the digest (with a
+status header) is written even on failure and every run is recorded. Enrichment
+only runs with `ANTHROPIC_API_KEY` set — otherwise it skips, keeping the run
+LLM-free.
 
 ```bash
-kb-engine --vault "<vault>" pipeline          # one-line summary
-kb-engine --vault "<vault>" pipeline --json
+kb-engine --vault "<vault>" pipeline                  # weekly tier, one-line summary
+kb-engine --vault "<vault>" pipeline --tier daily --json
 ```
 
-`--json` emits `{synced, applied, proposals, unfiled, digest_path}`. Everything it
-touches is either the rebuildable engine cache or the regenerable `_system/`
-digest — except the gated `apply`, which only ever writes tags for topics you have
-already approved. That safety property is what makes it sound to run on a schedule.
+`--json` emits `{tier, ok, outcomes:[{name, ok, detail}], counts:{inbox, proposals,
+unfiled, queue}, digest_path}`. Everything it touches is either the rebuildable engine
+cache or the regenerable `_system/` digest — except the gated `apply`, which only ever
+writes tags for topics you have already approved. That safety property is what makes it
+sound to run on a schedule.
 
 ### Weekly cadence
 
@@ -375,6 +399,19 @@ kb-engine --vault "<vault>" synthesis-candidates --min 3 --json
 ```
 
 `--json` emits `{candidates:[{slug, label, size}]}`.
+
+## Dedup report
+
+`dedup-report` lists near-duplicate note pairs — gist-vector cosine `>= --threshold`
+(default `0.95`) — so accidental re-captures surface for review. It is **read-only**:
+merging is a human decision (the `/kb:review` merge flow), never automatic.
+
+```bash
+kb-engine --vault "<vault>" dedup-report                    # pairs >= 0.95
+kb-engine --vault "<vault>" dedup-report --threshold 0.9 --json
+```
+
+`--json` emits `{threshold, pairs:[{a, b, cosine}]}`, highest cosine first.
 
 ## Proactive surfacing (related)
 

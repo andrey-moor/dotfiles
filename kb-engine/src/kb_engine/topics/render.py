@@ -1,3 +1,12 @@
+"""Render the topic/area model into the Markdown pages the vault reads.
+
+Writes the areas→topics index MOC, per-topic and per-area pages, the
+``_taxonomy.md`` vocabulary, the ``_unfiled-by-area`` loose-ends page, a
+``tags.base`` Obsidian Bases view, and the thin ``_system/index.md`` pointer —
+all deterministic (no timestamps in the body) so re-renders are idempotent.
+Discovered-topic proposals are spliced into a marked block so hand-edits around
+them survive. This is the read-side projection; the store stays the record.
+"""
 import re
 from dataclasses import dataclass
 from pathlib import Path

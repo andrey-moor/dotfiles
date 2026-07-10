@@ -1,3 +1,11 @@
+"""Write topic assignments back into note frontmatter (the vault is the record).
+
+For every member note of an in-status topic, apply adds ``topic/<slug>`` tags,
+sets ``primary_topic`` to the note's home topic, and fills the ``area/<slug>``
+tag from that primary's registry area — falling back to the best-scoring
+secondary topic's area for notes that are nobody's primary. Writes go through the
+house atomic I/O and skip notes missing from disk or resolving outside the vault.
+"""
 from dataclasses import dataclass
 from pathlib import Path
 
