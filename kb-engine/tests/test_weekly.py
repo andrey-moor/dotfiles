@@ -84,3 +84,19 @@ def test_weekly_pass_queues_borderline(tmp_path, real_vectors):
         assert entry.reason == "borderline"
         assert entry.candidates
     store.close()
+
+
+def test_weekly_pass_annotates_queue_reason_when_hook_given(tmp_path, real_vectors):
+    # The pipeline supplies an LLM closure only when a key is set; here a fake
+    # hook stands in — each borderline reason passes through it.
+    store = _store_with_topicked_corpus(tmp_path, real_vectors)
+    weekly_topic_pass(
+        store,
+        NoiseClusterer(),
+        annotate=lambda reason, cands: f"{reason}; llm: x (0.90)",
+    )
+    queue = store.load_review_queue()
+    assert queue  # this corpus reliably produces borderline entries
+    for entry in queue:
+        assert entry.reason == "borderline; llm: x (0.90)"
+    store.close()

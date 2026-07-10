@@ -13,13 +13,17 @@ notes or the store (that wiring lives downstream).
 """
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
+from kb_engine.config import Config
 from kb_engine.llm import LLM
 from kb_engine.models import Area
 from kb_engine.store import Store
 from kb_engine.topics._math import cosine
+from kb_engine.topics.areas_registry import SEEDED_AREAS
+from kb_engine.vault import load_post, write_post_atomic
 
 AUTO_AREA_MIN_LLM_CONF = 0.8
 AUTO_AREA_MIN_EMBED_COS = 0.55
@@ -35,6 +39,18 @@ class AreaCandidate:
     slug: str
     confidence: float
     source: str  # "llm" | "embedding"
+
+
+@dataclass(frozen=True)
+class AreaAssignStats:
+    """Outcome of the weekly area mop-up over topicless, area-less notes."""
+
+    assigned: int
+    skipped_low_confidence: int
+    no_signal: int
+    # (path, area) for each assigned note, capped at the run's limit — surfaced
+    # in the digest's Status section for spot-veto.
+    assigned_paths: tuple[tuple[str, str], ...] = ()
 
 
 def area_centroids(store: Store) -> dict[str, np.ndarray]:
@@ -76,6 +92,100 @@ def classify_area(
 def annotate_queue_reason(reason: str, pick: str, confidence: float) -> str:
     """Append the classifier's pick to a queue reason for human review."""
     return f"{reason}; llm: {pick} ({confidence:.2f})"
+
+
+def assign_areas(
+    cfg: Config,
+    store: Store,
+    llm: LLM | None,
+    limit: int = 50,
+) -> AreaAssignStats:
+    """Weekly mop-up: assign an area to topicless, area-less notes.
+
+    Targets notes with NO topic membership and no ``area/*`` tag (sorted, up to
+    ``limit``). Each is classified with its stored vector; a candidate that clears
+    its source's bar (llm ≥ 0.8, embedding ≥ 0.55, compared against the RAW
+    confidence) gets ``area/<slug>`` + ``area_provenance: auto`` written to the
+    note via house I/O. No key → ``llm`` is None → the embedding path still runs
+    (that fallback IS the no-LLM path).
+    """
+    targets = _area_targets(store, limit)
+    vectors = store.note_vectors_for(targets)
+    texts = store.note_texts()
+    areas = list(SEEDED_AREAS)
+    centroids = area_centroids(store)
+    vault_resolved = cfg.vault_path.resolve()
+
+    assigned = 0
+    skipped_low = 0
+    no_signal = 0
+    assigned_paths: list[tuple[str, str]] = []
+    for path in targets:
+        resolved = (cfg.vault_path / path).resolve()
+        if not resolved.is_relative_to(vault_resolved) or not resolved.is_file():
+            continue
+        candidate = classify_area(
+            texts.get(path, ""), vectors.get(path), areas, centroids, llm
+        )
+        if candidate is None:
+            no_signal += 1
+            continue
+        if not _clears_bar(candidate):
+            skipped_low += 1
+            continue
+        _write_area_tag(resolved, candidate.slug)
+        assigned += 1
+        if len(assigned_paths) < limit:
+            assigned_paths.append((path, candidate.slug))
+    return AreaAssignStats(
+        assigned=assigned,
+        skipped_low_confidence=skipped_low,
+        no_signal=no_signal,
+        assigned_paths=tuple(assigned_paths),
+    )
+
+
+def _area_targets(store: Store, limit: int) -> list[str]:
+    """Sorted topicless note paths carrying no ``area/*`` tag (≤ ``limit``)."""
+    area_tagged = {
+        path
+        for tag, paths in store.notes_by_tag().items()
+        if tag.startswith("area/")
+        for path in paths
+    }
+    topicless = store.notes_without_topic()
+    return sorted(p for p in topicless if p not in area_tagged)[:limit]
+
+
+def _clears_bar(candidate: AreaCandidate) -> bool:
+    """True if the candidate's RAW confidence meets its source's threshold."""
+    bar = (
+        AUTO_AREA_MIN_LLM_CONF
+        if candidate.source == "llm"
+        else AUTO_AREA_MIN_EMBED_COS
+    )
+    return candidate.confidence >= bar
+
+
+def _write_area_tag(note_path: Path, area_slug: str) -> None:
+    """Append ``area/<slug>`` once and stamp ``area_provenance: auto`` (house I/O)."""
+    post = load_post(note_path.read_text())
+    tags = _normalize_tags(post.get("tags"))
+    wanted = f"area/{area_slug}"
+    if wanted not in tags:
+        tags.append(wanted)
+    post["tags"] = tags
+    post["area_provenance"] = "auto"
+    write_post_atomic(note_path, post)
+
+
+def _normalize_tags(value: object) -> list[str]:
+    """Coerce a frontmatter ``tags`` value (absent/scalar/list) to a list of strings."""
+    if value is None:
+        return []
+    if isinstance(value, (str, int, float)):
+        return [str(value)]
+    return [str(item) for item in value]
 
 
 def _llm_candidate(

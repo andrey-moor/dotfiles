@@ -6,12 +6,14 @@ real primary + up-to-2-secondaries semantics with per-topic thresholds; the
 borderline band lands in the persisted review_queue for /kb:review.
 """
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 
 from kb_engine.models import QueueEntry, TopicMember
 from kb_engine.store import Store
 from kb_engine.topics.assignment import (
+    Borderline,
     DEFAULT_ASSIGN_HIGH,
     DEFAULT_ASSIGN_LOW,
     DEFAULT_ASSIGN_SECONDARY,
@@ -33,12 +35,28 @@ class WeeklyTopicsResult:
     unfiled: int
 
 
+def _annotated_queue(
+    borderline: Borderline,
+    annotate: Callable[[str, tuple[tuple[str, float], ...]], str] | None,
+) -> list[QueueEntry]:
+    """Build queue entries; when ``annotate`` is given, each reason passes through
+    it (``annotate(reason, candidates)``). Default None → plain ``"borderline"``."""
+    entries: list[QueueEntry] = []
+    for path, candidates in borderline:
+        reason = "borderline"
+        if annotate is not None:
+            reason = annotate(reason, candidates)
+        entries.append(QueueEntry(path, candidates, reason))
+    return entries
+
+
 def weekly_topic_pass(
     store: Store,
     clusterer: Clusterer,
     high: float = DEFAULT_ASSIGN_HIGH,
     secondary: float = DEFAULT_ASSIGN_SECONDARY,
     low: float = DEFAULT_ASSIGN_LOW,
+    annotate: Callable[[str, tuple[tuple[str, float], ...]], str] | None = None,
 ) -> WeeklyTopicsResult:
     """One unattended weekly maintenance pass over the topic layer.
 
@@ -47,6 +65,10 @@ def weekly_topic_pass(
     replaced wholesale each pass — one primary per note per pass, no
     cross-run staleness. The residual (unassigned, non-borderline) is
     clustered into fresh ``discovered`` proposals exactly as before.
+
+    ``annotate`` is an optional LLM-free-by-default hook: when supplied (the
+    pipeline passes a closure only when ``ANTHROPIC_API_KEY`` is set), each
+    borderline queue entry's reason is annotated with the model's pick.
     """
     note_vectors = dict(store.note_vectors())
     if not note_vectors:
@@ -79,9 +101,7 @@ def weekly_topic_pass(
     for topic in active:
         store.replace_auto_members(topic.slug, members_by_slug.get(topic.slug, []))
 
-    store.replace_review_queue(
-        [QueueEntry(path, candidates, "borderline") for path, candidates in borderline]
-    )
+    store.replace_review_queue(_annotated_queue(borderline, annotate))
 
     queued_paths = {path for path, _ in borderline}
     residual_paths = sorted(

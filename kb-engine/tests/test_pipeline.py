@@ -12,7 +12,9 @@ from kb_engine.store import Store
 from kb_engine.sync import sync
 from kb_engine.topics.clustering import FakeClusterer
 
-_WEEKLY_STEPS = ["import-mail", "enrich", "backfill", "sync", "topics", "apply-topics", "eval"]
+_WEEKLY_STEPS = [
+    "import-mail", "enrich", "backfill", "sync", "topics", "apply-topics", "areas", "eval",
+]
 
 
 def _vault(tmp_path):
@@ -70,6 +72,8 @@ def test_pipeline_runs_steps_and_summarizes(tmp_path, monkeypatch):
     assert "skipped: no FASTMAIL_API_TOKEN" == by_name["import-mail"].detail
     assert by_name["apply-topics"].detail.startswith("0 changed")  # no active topics
     assert "1 new topic(s)" in by_name["topics"].detail  # one proposal from the cluster
+    # every note landed in the proposed topic, so the mop-up has no topicless targets
+    assert by_name["areas"].detail == "0 areas assigned · 0 low-conf · 0 no-signal"
     assert "skipped: no probes.yaml" == by_name["eval"].detail
     assert res.digest_path is not None and res.digest_path.name == "kb-digest.md"
     assert (cfg.vault_path / "_system" / "kb-digest.md").exists()

@@ -66,28 +66,80 @@ def _primary_by_note(store: Store, only_status: tuple[str, ...]) -> dict[str, st
     return primary
 
 
+def _area_by_note(store: Store, only_status: tuple[str, ...]) -> dict[str, str]:
+    """Map each note to its primary topic's area slug, for topics in ``only_status``.
+
+    Selects the SAME primary as ``_primary_by_note`` (sorted by slug, last wins on
+    a data inconsistency), then reports that primary topic's ``area`` — so a note's
+    area always matches its chosen primary. Notes whose selected primary has no
+    area (``Topic.area is None``) are absent, so apply leaves their ``area/*`` tags
+    untouched.
+    """
+    wanted = set(only_status)
+    by_note: dict[str, str | None] = {}
+    for topic in sorted(store.load_topics(), key=lambda t: t.slug):
+        if topic.status not in wanted:
+            continue
+        for member in store.topic_members(topic.slug):
+            if member.is_primary:
+                by_note[member.note_path] = topic.area
+    return {note: area for note, area in by_note.items() if area is not None}
+
+
+def _with_area_tag(tags: list[str], area_slug: str) -> list[str]:
+    """Return ``tags`` carrying exactly one ``area/<slug>``.
+
+    An existing ``area/*`` tag is replaced in place (its position preserved, any
+    further ``area/*`` tags dropped); if none is present, ``area/<slug>`` is
+    appended. Idempotent when ``tags`` already holds only ``area/<slug>``.
+    """
+    wanted = f"area/{area_slug}"
+    out: list[str] = []
+    placed = False
+    for tag in tags:
+        if tag.startswith("area/"):
+            if not placed:
+                out.append(wanted)
+                placed = True
+            # else: drop a stale/duplicate area tag (apply owns the area vocabulary)
+        else:
+            out.append(tag)
+    if not placed:
+        out.append(wanted)
+    return out
+
+
 def _apply_to_note(
-    note_path: Path, slugs: list[str], primary_slug: str | None
+    note_path: Path,
+    slugs: list[str],
+    primary_slug: str | None,
+    area_slug: str | None = None,
 ) -> tuple[bool, int]:
-    """Add missing ``topic/<slug>`` tags and set ``primary_topic`` on one note.
+    """Add missing ``topic/<slug>`` tags, own the ``area/<slug>`` tag, and set
+    ``primary_topic`` on one note.
 
     Returns ``(changed, tags_added)``: ``changed`` is True if the file was
-    rewritten (tags added and/or the ``primary_topic`` field newly set/changed);
-    ``tags_added`` counts only newly-written topic tags.
+    rewritten (topic tags added, the sole ``area/*`` tag added/replaced, and/or
+    the ``primary_topic`` field newly set/changed); ``tags_added`` counts only
+    newly-written topic tags (area edits never count).
     """
     post = load_post(note_path.read_text())
     existing = _as_tag_list(post.get("tags"))
     new_tags = [f"{_TOPIC_TAG_PREFIX}/{slug}" for slug in slugs]
     to_add = [tag for tag in new_tags if tag not in existing]
 
+    tags_after = existing + to_add
+    if area_slug is not None:
+        tags_after = _with_area_tag(tags_after, area_slug)
+
     primary_changed = (
         primary_slug is not None and post.get("primary_topic") != primary_slug
     )
-    if not to_add and not primary_changed:
+    if tags_after == existing and not primary_changed:
         return (False, 0)
 
-    if to_add:
-        post["tags"] = existing + to_add
+    if tags_after != existing:
+        post["tags"] = tags_after
     if primary_changed:
         post["primary_topic"] = primary_slug
     write_post_atomic(note_path, post)
@@ -101,16 +153,17 @@ def apply_topic_tags(
 ) -> ApplyResult:
     """Write ``topic/<slug>`` tags into member notes' frontmatter (gated, idempotent).
 
-    The only note-mutating operation in the engine. For each topic whose status
-    is in ``only_status`` (default ``active`` — proposed topics are skipped), each
-    member note gets its ``topic/<slug>`` tag added if absent. Notes whose membership
-    includes a primary (``is_primary=True``) entry also get a
-    ``primary_topic: <slug>`` frontmatter field. Both writes are idempotent.
-    Body and other frontmatter are preserved; member files missing on disk are skipped
-    and reported. Re-running adds nothing new.
+    The only note-mutating operation in the engine. For each topic whose status is
+    in ``only_status`` (default ``active`` — proposed topics are skipped), each member
+    note gets its ``topic/<slug>`` tag added if absent. A primary (``is_primary=True``)
+    member also gets a ``primary_topic: <slug>`` field, and — when that primary topic
+    has a registry area — exactly one ``area/<slug>`` tag (apply owns the ``area/*``
+    vocabulary for topicked notes: the single sanctioned tag removal, replacing any
+    stale area tag). All writes are idempotent; body/other frontmatter preserved.
     """
     by_note = _slugs_to_add_by_note(store, only_status)
     primary_by_note = _primary_by_note(store, only_status)
+    area_by_note = _area_by_note(store, only_status)
     vault_resolved = vault_path.resolve()
 
     n_changed = 0
@@ -128,7 +181,10 @@ def apply_topic_tags(
             skipped_missing.append(note_rel)
             continue
         changed, added = _apply_to_note(
-            resolved, by_note[note_rel], primary_by_note.get(note_rel)
+            resolved,
+            by_note[note_rel],
+            primary_by_note.get(note_rel),
+            area_by_note.get(note_rel),
         )
         if changed:
             n_changed += 1

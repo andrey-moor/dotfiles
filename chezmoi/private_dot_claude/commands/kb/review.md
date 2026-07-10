@@ -123,6 +123,21 @@ For each `## Borderline queue` line (`[[note]] → topic-a (0.52), topic-b (0.48
 
 After a confirm batch: `kb-engine --vault "<Main>" topics apply` writes the tags.
 
+### 8. Vet auto-assigned areas (spot-check the digest's picks)
+
+The weekly `areas` mop-up classifies **topicless** notes into one of the nine registry
+areas when it's confident (LLM ≥ 0.80, or embedding cosine ≥ 0.55). Each such note gets an
+`area/<slug>` tag plus frontmatter `area_provenance: auto`, and the assigned `path→area`
+pairs surface in the digest's `## Status` line for the `areas` step — so you can spot-veto
+without hunting. (Notes that already sit in a topic get their area from apply instead, which
+owns the `area/*` tag for topicked notes; those carry no `area_provenance`.)
+
+To **veto** a wrong pick, set the correct area yourself — replace the tag with your own
+`area/<slug>` (drop the `area_provenance: auto` line, or set it to `confirmed`). A **bare
+delete is not enough**: a topicless note with no `area/*` tag is a target again on the next
+weekly run, and the same pick gets re-proposed. What makes the veto stick is giving the note
+the right `area/<slug>` — or filing it into a topic.
+
 ## Report
 
 ```

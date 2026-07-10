@@ -7,7 +7,7 @@ table.
 
 Tiers:
 - ``daily``:  import-mail → enrich → sync → digest
-- ``weekly``: import-mail → enrich → backfill → sync → topics → apply-topics → eval → digest
+- ``weekly``: import-mail → enrich → backfill → sync → topics → apply-topics → areas → eval → digest
 
 Enrichment (summaries/whys/titles) runs only when ``ANTHROPIC_API_KEY`` is set;
 without it the step is a no-op skip so the pipeline stays LLM-free by default.
@@ -123,12 +123,69 @@ def _backfill_step(cfg: Config, store: Store) -> str:
 
 
 def _topics_step(cfg: Config, store: Store, clusterer: Clusterer) -> str:
-    r = weekly_topic_pass(store, clusterer)
+    annotate = _build_annotate(cfg) if os.environ.get("ANTHROPIC_API_KEY") else None
+    r = weekly_topic_pass(store, clusterer, annotate=annotate)
     return (
         f"{r.reanchored} reanchored · {r.thresholds_set} thresholds · "
         f"{r.assigned} assigned · {r.queued} queued · "
         f"{r.new_topics} new topic(s) · {r.unfiled} unfiled"
     )
+
+
+def _build_annotate(cfg: Config) -> Callable[[str, tuple], str]:
+    """LLM closure that annotates a borderline reason with the model's pick.
+
+    Built only when ``ANTHROPIC_API_KEY`` is set (mirrors ``_enrich_step``'s
+    lazy import), so ``weekly_topic_pass`` stays LLM-free by default. The pick's
+    score is clamped to [0, 1] before display (raw cosines can drift outside it).
+    """
+    from kb_engine.llm import AnthropicLLM
+    from kb_engine.topics.classify import annotate_queue_reason
+
+    llm = AnthropicLLM(model=cfg.llm_model)
+
+    def annotate(reason: str, candidates: tuple[tuple[str, float], ...]) -> str:
+        if not candidates:
+            return reason
+        system = (
+            "Pick the single best-fitting topic slug for a borderline note. "
+            "Reply with ONLY the slug."
+        )
+        user = "Candidates:\n" + "\n".join(f"- {slug}" for slug, _ in candidates)
+        pick = llm.complete(system, user).strip()
+        scores = dict(candidates)
+        if pick not in scores:
+            pick = candidates[0][0]
+        confidence = max(0.0, min(1.0, scores[pick]))
+        return annotate_queue_reason(reason, pick, confidence)
+
+    return annotate
+
+
+def _areas_step(cfg: Config, store: Store) -> str:
+    """Weekly mop-up: classify topicless, area-less notes into a registry area.
+
+    The LLM path is built only when a key is set (mirrors ``_enrich_step``); the
+    embedding fallback always runs. Up to 5 assigned ``path→area`` pairs trail
+    the counts so they surface in the digest's Status section for spot-veto.
+    """
+    from kb_engine.topics.classify import assign_areas
+
+    llm = None
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        from kb_engine.llm import AnthropicLLM
+
+        llm = AnthropicLLM(model=cfg.llm_model)
+    s = assign_areas(cfg, store, llm)
+    detail = (
+        f"{s.assigned} areas assigned · {s.skipped_low_confidence} low-conf · "
+        f"{s.no_signal} no-signal"
+    )
+    if s.assigned_paths:
+        detail += " — " + ", ".join(f"{p}→{a}" for p, a in s.assigned_paths[:5])
+        if len(s.assigned_paths) > 5:
+            detail += " …"
+    return detail
 
 
 def _eval_step(cfg: Config, store: Store, embedder: Embedder) -> str:
@@ -181,6 +238,7 @@ def run_pipeline(
     if tier == "weekly":
         _run_step("topics", lambda: _topics_step(cfg, store, clusterer), outcomes)
         _run_step("apply-topics", lambda: _apply_step(cfg, store), outcomes)
+        _run_step("areas", lambda: _areas_step(cfg, store), outcomes)
         _run_step("eval", lambda: _eval_step(cfg, store, embedder), outcomes)
 
     ok = all(o.ok for o in outcomes)

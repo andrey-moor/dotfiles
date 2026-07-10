@@ -247,3 +247,68 @@ def test_apply_leaves_no_tmp_file(tmp_path):
     note.write_text("---\ntitle: N\n---\nbody\n")
     _apply_to_note(note, ["t"], None)
     assert list(tmp_path.glob("*.tmp")) == []
+
+
+def _store_with_area_topic(tmp_path, area="dev"):
+    """Active manual topic 'rust-macros' assigned to a registry area, with
+    a primary member note — apply owns its area/<slug> tag."""
+    s = Store(tmp_path / "t.db")
+    s.init_schema()
+    s.upsert_note(path="Knowledge/a.md", title="A", sha256="h", tags=[])
+    s.add_manual_topic(
+        "rust-macros", "Rust Macros", "rust", np.array([1, 0, 0], np.float32)
+    )
+    s.set_topic_area("rust-macros", area)
+    s.set_members(
+        "rust-macros",
+        [TopicMember(note_path="Knowledge/a.md", score=0.9, source="auto", is_primary=True)],
+    )
+    return s
+
+
+def test_apply_adds_area_tag_from_primary_topic_area(tmp_path):
+    # A note whose primary topic carries area "dev" gains exactly one area/dev tag.
+    s = _store_with_area_topic(tmp_path, area="dev")
+    _note(tmp_path, "Knowledge/a.md", "---\ntitle: A\ntags: [Dev/Rust]\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "a.md")
+    assert "area/dev" in fm["tags"]
+    assert "topic/rust-macros" in fm["tags"]  # topic tag still applied alongside
+    assert fm["tags"].count("area/dev") == 1
+
+
+def test_apply_replaces_stale_area_tag(tmp_path):
+    # A pre-existing stale area/ai is the ONE sanctioned removal (scoped to area/*):
+    # apply owns the area vocabulary for topicked notes, so it swaps in area/dev.
+    s = _store_with_area_topic(tmp_path, area="dev")
+    _note(
+        tmp_path, "Knowledge/a.md",
+        "---\ntitle: A\ntags: [Dev/Rust, area/ai]\n---\nbody",
+    )
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "a.md")
+    assert "area/dev" in fm["tags"]
+    assert "area/ai" not in fm["tags"]  # stale area/* removed in place
+    assert "Dev/Rust" in fm["tags"]  # non-area tags untouched
+
+
+def test_apply_leaves_area_tag_when_primary_has_no_area(tmp_path):
+    # The primary topic has NO area → apply must not touch the note's area/* tags.
+    s = _store_with_active_topic(tmp_path)  # rust-macros has no area set
+    _note(
+        tmp_path, "Knowledge/a.md",
+        "---\ntitle: A\ntags: [Dev/Rust, area/ai]\n---\nbody",
+    )
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "a.md")
+    assert "area/ai" in fm["tags"]  # untouched — apply only owns area for areaed topics
+
+
+def test_apply_area_tag_is_idempotent(tmp_path):
+    s = _store_with_area_topic(tmp_path, area="dev")
+    _note(tmp_path, "Knowledge/a.md", "---\ntitle: A\ntags: [Dev/Rust]\n---\nbody")
+    apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    res2 = apply_topic_tags(s, vault_path=tmp_path, only_status=("active",))
+    fm = frontmatter.load(tmp_path / "Knowledge" / "a.md")
+    assert fm["tags"].count("area/dev") == 1  # not duplicated on re-run
+    assert res2.n_changed == 0  # nothing to do on the second pass

@@ -61,6 +61,17 @@ def count_proposals(topics: list[Topic]) -> int:
     )
 
 
+def _count_notes_with_area(store: Store) -> int:
+    """Number of distinct notes carrying any ``area/*`` tag (area coverage)."""
+    tagged = {
+        path
+        for tag, paths in store.notes_by_tag().items()
+        if tag.startswith("area/")
+        for path in paths
+    }
+    return len(tagged)
+
+
 def build_digest(
     store: Store,
     vault_path: Path,
@@ -83,6 +94,8 @@ def build_digest(
     n_topics = len(topics)
     n_areas = len(areas)
     n_unfiled = len(unfiled)
+    n_with_area = _count_notes_with_area(store)
+    n_total = store.count_notes()
 
     lines: list[str] = ["# KB Digest", ""]
     if status is not None:
@@ -95,6 +108,7 @@ def build_digest(
         f"- Topics: {n_topics}",
         f"- Areas: {n_areas}",
         f"- Unfiled notes: {n_unfiled}",
+        f"- Notes with area: {n_with_area}/{n_total}",
     ])
     if queue:
         lines.append(f"- Borderline queue: {len(queue)}")

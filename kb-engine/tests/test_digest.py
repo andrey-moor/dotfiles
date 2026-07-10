@@ -132,3 +132,14 @@ def test_digest_no_queue_section_when_empty(tmp_path):
     text = build_digest(store, vault_path=tmp_path, inbox_count=0, unfiled=[])
     assert "Borderline queue" not in text
     store.close()
+
+
+def test_digest_reports_notes_with_area_coverage(tmp_path):
+    # One of two notes carries an area/* tag → coverage line reads 1/2.
+    store = Store(tmp_path / "t.db")
+    store.init_schema()
+    store.upsert_note(path="Knowledge/a.md", title="A", sha256="h", tags=["area/ai"])
+    store.upsert_note(path="Knowledge/b.md", title="B", sha256="h", tags=[])
+    text = build_digest(store, vault_path=tmp_path, inbox_count=0, unfiled=[])
+    assert "- Notes with area: 1/2" in text
+    store.close()
