@@ -10,8 +10,8 @@ import click
 from kb_engine.config import Config
 from kb_engine.dedup import DEFAULT_DEDUP_THRESHOLD, near_duplicates
 from kb_engine.doctor import run_checks
-from kb_engine.importing.digest import build_digest
-from kb_engine.pipeline import count_inbox, unfiled_notes
+from kb_engine.importing.digest import DigestStatus, build_digest
+from kb_engine.pipeline import StepOutcome, count_inbox, unfiled_notes
 from kb_engine.store import Store
 from kb_engine.surface import related_to_note, related_to_query
 from kb_engine.synthesis import synthesis_candidates
@@ -158,6 +158,30 @@ def doctor(cfg: Config, as_json: bool) -> None:
         sys.exit(1)
 
 
+def _last_run_status(store: Store) -> DigestStatus | None:
+    """Synthesize the ``## Status`` block from the last FINISHED pipeline run.
+
+    Without this a manual/off-cycle ``digest`` refresh would drop the Status
+    section the pipeline wrote — destroying a ``⚠️ FAILED`` banner that the
+    SKILL preflight, ``doctor``, and /kb:review (which refreshes the digest
+    BEFORE reading it) all scan for. ``finished_only`` skips any in-flight run.
+
+    Per-step ``ok`` is not persisted (only run-level ``ok`` and the
+    ``{step: detail}`` counts are), so each ``StepOutcome`` reuses the run-level
+    ``ok`` — an honest approximation: ``_status_section`` renders per-step detail
+    regardless of per-step ``ok``, and only run-level ``ok`` drives the banner.
+    """
+    row = store.last_run("pipeline", finished_only=True)
+    if row is None:
+        return None
+    ok = bool(row["ok"])
+    outcomes = tuple(
+        StepOutcome(name=name, ok=ok, detail=detail)
+        for name, detail in row["counts"].items()
+    )
+    return DigestStatus(tier=row["tier"] or "?", ok=ok, outcomes=outcomes)
+
+
 @click.command()
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.pass_obj
@@ -180,6 +204,7 @@ def digest(cfg: Config, as_json: bool) -> None:
             vault_path=cfg.vault_path,
             inbox_count=inbox_count,
             unfiled=unfiled,
+            status=_last_run_status(store),
             today=date.today(),
         )
         topics = store.load_topics()

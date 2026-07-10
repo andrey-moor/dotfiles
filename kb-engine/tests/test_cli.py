@@ -667,6 +667,50 @@ def test_digest_cli_renders_time_sections(tmp_path, monkeypatch):
     assert "Knowledge/fresh.md" in text  # today's capture is grouped under This week
 
 
+def test_digest_cli_preserves_failed_status_banner(tmp_path, monkeypatch):
+    # A manual/off-cycle `digest` refresh must NOT wipe the ## Status banner the
+    # pipeline wrote: /kb:review step 1 refreshes the digest BEFORE reading it,
+    # and the SKILL preflight + doctor both scan it for ⚠️ FAILED. So the CLI
+    # digest must synthesize Status from the last finished pipeline run.
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    v = _vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    # Record a FINISHED pipeline run that FAILED.
+    store = Store(db)
+    store.init_schema()
+    run_id = store.start_run("pipeline", tier="weekly")
+    store.finish_run(
+        run_id,
+        ok=False,
+        counts={"sync": "1 added", "eval": "recall@5 0.20"},
+        errors=["eval: boom"],
+    )
+    store.close()
+    r = CliRunner().invoke(main, args + ["digest"])
+    assert r.exit_code == 0, r.output
+    text = (v / "_system" / "kb-digest.md").read_text()
+    assert "## Status" in text
+    assert "⚠️ FAILED" in text
+    assert "tier: weekly" in text
+    assert "sync: 1 added" in text  # per-step details carried through
+
+
+def test_digest_cli_no_status_section_without_runs(tmp_path, monkeypatch):
+    # With no finished pipeline run there is nothing to preserve, so the
+    # standalone digest omits ## Status entirely (unchanged behavior).
+    monkeypatch.setenv("KB_FAKE_EMBED", "1")
+    v = _vault(tmp_path)
+    db = tmp_path / "t.db"
+    args = ["--vault", str(v), "--db", str(db)]
+    CliRunner().invoke(main, args + ["sync"])
+    r = CliRunner().invoke(main, args + ["digest"])
+    assert r.exit_code == 0, r.output
+    text = (v / "_system" / "kb-digest.md").read_text()
+    assert "## Status" not in text
+
+
 def test_synthesis_candidates_cli_json(tmp_path):
     (tmp_path / "Knowledge" / "wiki").mkdir(parents=True)
     db = tmp_path / "t.db"

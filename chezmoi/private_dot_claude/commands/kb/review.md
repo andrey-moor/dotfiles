@@ -6,13 +6,17 @@ Run the nudged ~5-minute knowledge base review pass, driven by the weekly digest
 
 ## Background
 
-A weekly **launchd** agent (Nix `modules.dev.kb-engine.schedule`, enabled on behemoth)
-runs the deterministic, **LLM-free** `kb-engine pipeline` — sync → apply active-topic tags
-→ sticky-discover proposals → write `Main/_system/kb-digest.md` — then fires a macOS
-notification ("KB digest ready — N to review"). The pipeline mutates notes **only for
-active (approved) topics**, so freshly discovered clusters stay `proposed` and nothing is
-silently mis-tagged. This command is the **human half**: the naming and judgment the engine
-deliberately omits.
+Two **launchd** tiers (Nix `modules.dev.kb-engine.schedule`, enabled on behemoth) run
+`kb-engine pipeline` and fire a macOS notification ("KB digest ready — N to review"): a
+**daily** pass at 08:00 (import-mail → enrich → sync → write `Main/_system/kb-digest.md`)
+and a **weekly** pass Mon 09:00 that inserts backfill → topic pass → apply → areas → eval
+before the digest. It is **not** LLM-free: several steps are **secrets-fed** and fall back
+to embeddings without a key — `enrich` (summaries/whys/titles) runs daily, while the weekly
+topic pass annotates its borderline queue and an `areas` mop-up classifies topicless notes.
+The weekly topic pass runs reanchor → growth-gated thresholds → assign + queue borderline →
+cluster the residual; `apply` then writes `topic/<slug>` **and** `area/<slug>` tags, but
+only for **active (approved)** topics — freshly discovered clusters stay `proposed`. This
+command is the **human half**: the naming and judgment the engine deliberately omits.
 
 The digest at `Main/_system/kb-digest.md` is the **entry point**. Read it first; its
 sections drive the pass. `kb-engine` is on `PATH` (the Nix wrapper) and
