@@ -18,7 +18,7 @@ let
   pin = builtins.fromJSON (builtins.readFile ./copilot-pin.json);
   base = inputs.copilot-cli-flake.packages.${pkgs.system}.default;
   copilot =
-    if base.version == pin.version then base
+    if builtins.compareVersions base.version pin.version >= 0 then base
     else base.overrideAttrs (_old: {
       version = pin.version;
       src = pkgs.fetchurl {

@@ -15,7 +15,6 @@ in {
       rustup
 
       # Cargo tools
-      cargo-watch
       cargo-edit
       cargo-audit
       cargo-outdated
