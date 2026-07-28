@@ -140,10 +140,10 @@ printf 'wayvnc-rocinante: %s\nwayvnc-stargazer: %s\n' \
   "$(openssl rand -base64 18)" "$(openssl rand -base64 18)" > "$TMP"
 nix shell nixpkgs#sops -c sops --encrypt --input-type yaml --output-type yaml "$TMP" > secrets/wayvnc.yaml
 rm -f "$TMP"
-grep -q 'sops' secrets/wayvnc.yaml && grep -qv 'wayvnc-rocinante: [A-Za-z0-9+/]' secrets/wayvnc.yaml && echo ENCRYPTED-OK
+grep -q 'wayvnc-rocinante: ENC\[' secrets/wayvnc.yaml && grep -q 'wayvnc-stargazer: ENC\[' secrets/wayvnc.yaml && echo ENCRYPTED-OK
 ```
 
-Expected: `ENCRYPTED-OK`. The file must contain only ciphertext + sops metadata.
+Expected: `ENCRYPTED-OK` — both values must appear as `ENC[AES256_GCM,...]` ciphertext (sops encrypts values, not key names). If either value looks like base64 plaintext, STOP: do not commit; delete `secrets/wayvnc.yaml` and redo the step.
 
 - [ ] **Step 8: Rewrite the wayvnc module — passwordFile + runtime render**
 
