@@ -76,3 +76,6 @@ venv/
 target/
 coverage/
 tmp/
+
+# never commit installer credentials
+scripts/archinstall-creds.json
