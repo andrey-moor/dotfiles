@@ -119,6 +119,13 @@ in {
             else "~/.ssh/id_ed25519_sk_rk_linkedin";
         };
 
+        # Behemoth - macOS workstation (Tailscale MagicDNS)
+        # No ForwardAgent: behemoth hosts the 1Password agent that the Linux
+        # boxes borrow, so forwarding an agent *to* it is backwards.
+        "behemoth" = {
+          User = "andreym";
+        };
+
         # Rocinante - Linux workstation (Tailscale MagicDNS)
         "rocinante" = {
           User = "andreym";

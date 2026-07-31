@@ -37,6 +37,19 @@ with lib;
       name = config.user.name;
       home = "/Users/${config.user.name}";
       shell = pkgs.nushell;
+
+      # Inbound SSH from the Linux hosts. Declared here because macOS's
+      # built-in sshd is not otherwise Nix-managed: a rebuild of this host
+      # regenerates /etc/ssh host keys and leaves ~/.ssh/authorized_keys
+      # empty, which silently breaks rocinante -> behemoth until fixed by
+      # hand. nix-darwin renders these to
+      # /etc/ssh/nix_authorized_keys.d/<user> and wires them in via
+      # AuthorizedKeysCommand, so this is additive to ~/.ssh/authorized_keys
+      # rather than a replacement for it.
+      openssh.authorizedKeys.keys = [
+        # 1Password "Personal" -- private half never touches disk.
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICdtwwW6A7j8vesJzYxp06VugC0Go+q1rBCbTXbCzSfs"
+      ];
     };
 
     # macOS system preferences
