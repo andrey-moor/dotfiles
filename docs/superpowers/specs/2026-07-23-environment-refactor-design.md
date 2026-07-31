@@ -192,7 +192,7 @@ Each step independently valuable, reversible, machines usable throughout.
 | 7 | **NixOS install** on 2nd NVMe via nixos-anywhere + disko (by-id!); port `home/` layer; Omarchy-input desktop (§6); backups, tailscale, firewall, builders, llama-swap; **data migration checklist** (~/dev rsync, browser profiles, atuin/shell history, GPG state, rice files off Omarchy disk) | Omarchy as daily driver (disk kept 30 days); nixGL; hand-built packages |
 | 8 | **Work-VM** per spike verdict + **ubuntu-baseline** (NixVirt + autoinstall + standalone HM); enroll; verify compliance + CA + VPN + YubiKey | `intune.nix`, os-release spoof, `packages/{intune-portal,microsoft-identity-broker}`, rosetta hacks |
 | 9 | **stargazer successor** in Parallels (aarch64 NixOS; himmelblau if proven); keep-alive; fire drill; delete old VM | Hand-installed stargazer; the unexercised-fallback fiction |
-| 10 | **Closeout**: reclaim Omarchy disk (becomes scratch/VM storage); docs restructure (`runbooks/` vs `archive/`); README/bootstrap runbooks per host; rollback + restore drills rehearsed | Docs drift; the migration itself |
+| 10 | **Closeout**: reclaim Omarchy disk (becomes scratch/VM storage); docs restructure (`runbooks/` vs `archive/`); README/bootstrap runbooks per host; rollback + restore drills rehearsed; wipe ~/.config/sops/age/keys.txt from the reclaimed Omarchy disk; migrate sops to per-host ssh-to-age keys | Docs drift; the migration itself |
 
 ## 9 · Risks & watch-items
 

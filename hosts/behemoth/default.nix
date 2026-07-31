@@ -10,16 +10,6 @@ with lib;
     # Disable nix-darwin's Nix management (Determinate Nix handles this)
     nix.enable = false;
 
-    # Remote Builder: Stargazer OrbStack VM
-    # Since Determinate Nix manages nix.conf, add this manually:
-    #
-    #   sudo tee -a /etc/nix/nix.conf <<EOF
-    #   builders = ssh://andreym@stargazer@orb aarch64-linux /Users/andreym/.ssh/id_ed25519 4 2 nixos-test,big-parallel
-    #   builders-use-substitutes = true
-    #   EOF
-    #
-    # Or use: just stargazer-builder-setup
-
     networking.hostName = "behemoth";
     networking.computerName = "Behemoth";
 

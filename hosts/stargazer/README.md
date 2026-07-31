@@ -325,6 +325,21 @@ cat /etc/os-release | head -2
 
 ## 8. Apply Home-Manager
 
+### Secrets (sops-nix)
+
+Before switching, copy the sops age key from the admin machine (behemoth:
+`~/Library/Application Support/sops/age/keys.txt`) to
+`~/.config/sops/age/keys.txt` (mode 600) on this host — otherwise the switch
+will fail at sops activation. **As of this writing stargazer has never
+received the key** (see WayVNC note below) — this step must be done before
+the first switch.
+
+```bash
+mkdir -p ~/.config/sops/age
+scp behemoth:'~/Library/Application Support/sops/age/keys.txt' ~/.config/sops/age/keys.txt
+chmod 600 ~/.config/sops/age/keys.txt
+```
+
 ```bash
 cd ~/dotfiles
 nix run home-manager -- switch --flake .#stargazer -b backup
@@ -510,6 +525,10 @@ WayVNC is configured as a user systemd service for remote desktop access.
 - **Username:** `andreym`
 - **Password:** `stargazer`
 - **Config:** `~/.config/wayvnc/config`
+
+> **Note:** this VM is dormant and has not been switched since the P1 VNC
+> password rotation — it still runs with the pre-rotation password above
+> internally until it is next switched or rebuilt.
 
 ### Firewall
 

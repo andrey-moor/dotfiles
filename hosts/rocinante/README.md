@@ -16,7 +16,22 @@ x86_64 Omarchy (Arch Linux) workstation with LUKS2-encrypted NVMe + btrfs.
 git clone https://github.com/andrey-moor/dotfiles ~/dotfiles
 cd ~/dotfiles
 git checkout intune-p11kit  # or main once merged
+```
 
+### Secrets (sops-nix)
+
+Before switching, copy the sops age key from the admin machine (behemoth:
+`~/Library/Application Support/sops/age/keys.txt`) to
+`~/.config/sops/age/keys.txt` (mode 600) on this host — otherwise the switch
+will fail at sops activation.
+
+```bash
+mkdir -p ~/.config/sops/age
+scp behemoth:'~/Library/Application Support/sops/age/keys.txt' ~/.config/sops/age/keys.txt
+chmod 600 ~/.config/sops/age/keys.txt
+```
+
+```bash
 # Install home-manager and switch
 nix run home-manager -- switch --flake .#rocinante -b backup
 

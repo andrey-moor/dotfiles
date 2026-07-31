@@ -135,11 +135,9 @@ creation_rules:
 
 ```bash
 cd /Users/andreym/Documents/dotfiles && mkdir -p secrets
-TMP=$(mktemp)
 printf 'wayvnc-rocinante: %s\nwayvnc-stargazer: %s\n' \
-  "$(openssl rand -base64 18)" "$(openssl rand -base64 18)" > "$TMP"
-nix shell nixpkgs#sops -c sops --encrypt --input-type yaml --output-type yaml "$TMP" > secrets/wayvnc.yaml
-rm -f "$TMP"
+  "$(openssl rand -base64 18)" "$(openssl rand -base64 18)" > secrets/wayvnc.yaml
+nix shell nixpkgs#sops -c sops --encrypt --in-place secrets/wayvnc.yaml
 grep -q 'wayvnc-rocinante: ENC\[' secrets/wayvnc.yaml && grep -q 'wayvnc-stargazer: ENC\[' secrets/wayvnc.yaml && echo ENCRYPTED-OK
 ```
 
