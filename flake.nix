@@ -4,16 +4,11 @@
   inputs = {
     # Core dependencies
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-main.url = "github:nixos/nixpkgs/master";
     
     # Essential modules
     home-manager = {
       url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    agenix = {
-      url = "github:ryantm/agenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     sops-nix = {
