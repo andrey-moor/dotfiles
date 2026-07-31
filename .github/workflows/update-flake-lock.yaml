@@ -1,0 +1,25 @@
+name: update-flake-lock
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/update-flake-lock@main
+        id: update
+        with:
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+          pr-title: "chore: weekly flake.lock update"
+          pr-labels: dependencies
+      - name: Enable auto-merge (waits on required checks)
+        if: steps.update.outputs.pull-request-number != ''
+        run: gh pr merge --auto --squash "${{ steps.update.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ secrets.FLAKE_UPDATE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
