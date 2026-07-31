@@ -102,4 +102,4 @@ echo "     curl -fsSL https://raw.githubusercontent.com/andrey-moor/dotfiles/mai
 echo ""
 echo "  Or if no network, manually run archinstall with the config."
 echo ""
-warn "After install, change the LUKS passphrase from 'temppass' to your own!"
+warn "After install, change the LUKS passphrase from the one you set during install!"

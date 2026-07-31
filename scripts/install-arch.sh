@@ -9,9 +9,9 @@ set -euo pipefail
 
 CONFIG_BASE="${1:-https://raw.githubusercontent.com/andrey-moor/dotfiles/main/scripts}"
 DISK="${DISK:-/dev/sda}"
-LUKS_PASS="${LUKS_PASS:-temppass}"
-USER_PASS="${USER_PASS:-temppass}"
-ROOT_PASS="${ROOT_PASS:-temppass}"
+LUKS_PASS="${LUKS_PASS:?LUKS_PASS must be set (e.g. export LUKS_PASS=\"\$(openssl rand -base64 18)\")}"
+USER_PASS="${USER_PASS:?USER_PASS must be set (e.g. export USER_PASS=\"\$(openssl rand -base64 18)\")}"
+ROOT_PASS="${ROOT_PASS:?ROOT_PASS must be set (e.g. export ROOT_PASS=\"\$(openssl rand -base64 18)\")}"
 
 # Colors
 RED='\033[0;31m'
@@ -175,7 +175,23 @@ log "Downloading archinstall configuration..."
 
 cd /tmp
 curl -fsSL "$CONFIG_BASE/archinstall-config.json" -o config.json
-curl -fsSL "$CONFIG_BASE/archinstall-creds.json" -o creds.json
+
+# creds.json is no longer fetched from the public repo (it held plaintext
+# credentials and was untracked for security). Generate it locally from the
+# required LUKS_PASS/USER_PASS/ROOT_PASS env vars instead.
+log "Generating archinstall credentials file..."
+cat > creds.json <<CREDS
+{
+    "!root-password": "$ROOT_PASS",
+    "!users": [
+        {
+            "username": "user",
+            "!password": "$USER_PASS",
+            "sudo": true
+        }
+    ]
+}
+CREDS
 
 # Fix bootloader value (archinstall expects "Grub" not "grub-install")
 sed -i 's/"grub-install"/"Grub"/g' config.json

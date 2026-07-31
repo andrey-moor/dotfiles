@@ -160,7 +160,8 @@ in {
     systemd.user.services.wayvnc = {
       Unit = {
         Description = "WayVNC - VNC server for Wayland";
-        After = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" "sops-nix.service" ];
+        Wants = [ "sops-nix.service" ];
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
