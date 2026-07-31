@@ -116,29 +116,6 @@ disko-format disko-host:
         github:nix-community/disko \
         -- --mode zap_create_mount ./hosts/{{disko-host}}/disk.nix
 
-# ============================================
-# OrbStack VM (Stargazer) - Build VM
-# ============================================
-# Setup (one-time):
-#   1. just stargazer-create
-#   2. just stargazer-nix-install
-#   3. just stargazer-switch
-#   4. ssh -F ~/.orbstack/ssh/config stargazer@orb "touch ~/.netrc"
-#
-# Note: Uses Ubuntu (not NixOS) for binary compatibility with Bazel downloads
-
-# Create OrbStack Ubuntu VM for builds
-stargazer-create:
-    orbctl create ubuntu:noble stargazer
-
-# Install Nix on Stargazer (first-time setup)
-stargazer-nix-install:
-    ssh -F ~/.orbstack/ssh/config stargazer@orb "curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm"
-
-# Delete OrbStack VM
-stargazer-delete:
-    orbctl delete stargazer -f
-
 # Apply home-manager config to Stargazer
 stargazer-switch:
     ssh -F ~/.orbstack/ssh/config stargazer@orb ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix run home-manager/master -- switch --flake /Users/andreym/Documents/dotfiles#stargazer"

@@ -1,5 +1,10 @@
 # Rocinante
 
+> **⚠️ FROZEN (2026-07): do not run `omarchy-update` or system updates on this install.**
+> This Omarchy system is being replaced by NixOS on the second NVMe
+> (see `docs/superpowers/specs/2026-07-23-environment-refactor-design.md`).
+> It remains the fallback of record until 30 days after cutover.
+
 x86_64 Omarchy (Arch Linux) workstation with LUKS2-encrypted NVMe + btrfs.
 
 **Access:** `ssh rocinante` (Tailscale SSH)
