@@ -42,6 +42,12 @@ with lib;
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
+    sops = {
+      age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+      defaultSopsFile = ../../secrets/wayvnc.yaml;
+      secrets."wayvnc-rocinante" = { };
+    };
+
     # Enable modules
     modules = {
       dotfilesDir = "${config.home.homeDirectory}/dotfiles";
@@ -107,7 +113,7 @@ with lib;
         intune.debug = true;  # Enable verbose logging for debugging
         wayvnc = {
           enable = true;
-          password = "rocinante";
+          passwordFile = config.sops.secrets."wayvnc-rocinante".path;
         };
       };
     };

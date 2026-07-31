@@ -39,6 +39,12 @@ with lib;
       (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
     ];
 
+    sops = {
+      age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+      defaultSopsFile = ../../secrets/wayvnc.yaml;
+      secrets."wayvnc-stargazer" = { };
+    };
+
     # Enable modules
     modules = {
       dotfilesDir = "${config.home.homeDirectory}/dotfiles";
@@ -85,7 +91,7 @@ with lib;
         edge-rosetta.enable = true;
         firefox.enable = true;
         wayvnc.enable = true;
-        wayvnc.password = "stargazer";
+        wayvnc.passwordFile = config.sops.secrets."wayvnc-stargazer".path;
         wayvnc.monitor = "Virtual-1";
         wayvnc.gpu = false;
         wayvnc.renderCursor = true;

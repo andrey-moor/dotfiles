@@ -88,6 +88,7 @@ let
       homeModules = [
         (import homeModulesPath)
       ] ++ (if inputs ? catppuccin then [ inputs.catppuccin.homeModules.catppuccin ] else [])
+        ++ (if inputs ? sops-nix then [ inputs.sops-nix.homeManagerModules.sops ] else [])
         ++ moduleLib.mapModulesRec' homeModulesPath import;
     in
     inputs.darwin.lib.darwinSystem {
@@ -137,6 +138,7 @@ let
       homeModules = [
         (import homeModulesPath)
       ] ++ (if inputs ? catppuccin then [ inputs.catppuccin.homeModules.catppuccin ] else [])
+        ++ (if inputs ? sops-nix then [ inputs.sops-nix.homeManagerModules.sops ] else [])
         ++ moduleLib.mapModulesRec' homeModulesPath import;
     in
     inputs.home-manager.lib.homeManagerConfiguration {

@@ -65,14 +65,32 @@ let
     hyprctl keyword monitor "$MONITOR,$RES,0x0,1"
   '';
 
+  # Render the wayvnc config at service start so the password never
+  # enters the nix store (the config file contains it in plaintext).
+  renderConfig = pkgs.writeShellScript "wayvnc-render-config" ''
+    set -euo pipefail
+    dir="${config.xdg.configHome}/wayvnc"
+    mkdir -p "$dir"
+    umask 077
+    rm -f "$dir/config"
+    {
+      echo "address=${cfg.address}"
+      echo "port=${toString cfg.port}"
+      echo "enable_auth=true"
+      echo "username=${config.home.username}"
+      echo "password=$(cat "${cfg.passwordFile}")"
+      echo "rsa_private_key_file=${config.xdg.configHome}/wayvnc/rsa_key.pem"
+      echo "relax_encryption=true"
+    } > "$dir/config"
+  '';
+
 in {
   options.modules.linux.wayvnc = {
     enable = mkEnableOption "WayVNC server for Wayland remote access";
 
-    password = mkOption {
-      type = types.str;
-      description = "VNC password for authentication";
-      example = "secret";
+    passwordFile = mkOption {
+      type = types.path;
+      description = "Path to a file containing the VNC password (e.g. a sops secret). Read at service start; never enters the nix store.";
     };
 
     port = mkOption {
@@ -131,16 +149,6 @@ in {
       setResolution
     ];
 
-    xdg.configFile."wayvnc/config".text = ''
-      address=${cfg.address}
-      port=${toString cfg.port}
-      enable_auth=true
-      username=${config.home.username}
-      password=${cfg.password}
-      rsa_private_key_file=${config.xdg.configHome}/wayvnc/rsa_key.pem
-      relax_encryption=true
-    '';
-
     # Generate RSA key if missing (traditional format required by wayvnc/nettle)
     home.activation.wayvncKey = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       if [ ! -f "${config.xdg.configHome}/wayvnc/rsa_key.pem" ]; then
@@ -156,6 +164,7 @@ in {
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
+        ExecStartPre = "${renderConfig}";
         ExecStart = "${wayvncPkg}/bin/wayvnc"
           + optionalString cfg.gpu " --gpu"
           + optionalString cfg.renderCursor " --render-cursor"
