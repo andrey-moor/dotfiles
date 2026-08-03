@@ -1,0 +1,5 @@
+# Copy to tenant.nix (gitignored) and fill in. Never commit tenant.nix.
+{
+  # The Entra tenant's primary domain, e.g. "contoso.com"
+  domain = "CHANGE-ME";
+}

@@ -79,3 +79,10 @@ tmp/
 
 # never commit installer credentials
 scripts/archinstall-creds.json
+
+# P2 spike locals — never commit
+spikes/intune/tenant.nix
+spikes/intune/*.key
+spikes/intune/*.key.pub
+spikes/intune/notes/
+spikes/intune/result
