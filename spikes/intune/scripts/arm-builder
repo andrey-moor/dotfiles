@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# Throwaway aarch64-linux QEMU builder VM, run LOCALLY on behemoth
+# (aarch64-darwin) via `-accel hvf` -- native-speed aarch64 Linux guests,
+# no emulation. Built for Task 5 (REVISED) of the P2 Intune spikes to
+# produce packages.aarch64-linux.b4-image without adding anything
+# permanent to behemoth (Determinate Nix install untouched, nix.enable
+# stays false). Full narrative/rationale: task-5-report-REVISED.md.
+#
+# Why a stock NixOS ISO + serial-console bootstrap, not a custom image:
+# building any custom aarch64-linux derivation (even a small ISO with our
+# SSH key baked in) requires an aarch64-linux builder -- which is exactly
+# the chicken-and-egg problem this script exists to solve. So step one
+# must be a pre-built, unmodified artifact (the official NixOS aarch64
+# minimal ISO), bootstrapped into SSH access via its serial console.
+#
+# Usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|verify|status|down|destroy>
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SPIKE_DIR="$REPO_ROOT/spikes/intune"
+DIR="$HOME/spike-arm-builder"
+ISO="$DIR/nixos-minimal-aarch64.iso"
+ISO_URL="https://channels.nixos.org/nixos-unstable/latest-nixos-minimal-aarch64-linux.iso"
+SCRATCH="$DIR/scratch-store.qcow2"   # 90G sparse: /nix/store + build-dir live here, not tmpfs
+EFIVARS="$DIR/efivars.fd"
+SEED="$DIR/seed"                     # FAT passthrough dir -> guest /dev/vdc1: authorized_keys
+PID="$DIR/qemu.pid"
+MON="$DIR/monitor.sock"
+SERIAL_LOG="$DIR/qemu-launch.log"
+SSHPORT=2251
+KEY="$SPIKE_DIR/spike.key"           # NEVER sync this; only spike.key.pub goes to the guest
+PYDRIVE="$(dirname "${BASH_SOURCE[0]}")/serial_drive.py"
+
+QEMU=(nix shell nixpkgs#qemu --command qemu-system-aarch64)
+QIMG=(nix shell nixpkgs#qemu --command qemu-img)
+SSH_OPTS=(-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -i "$KEY" -p "$SSHPORT")
+ssh_c() { ssh "${SSH_OPTS[@]}" root@127.0.0.1 "$@"; }
+
+running() { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }
+qemu_prefix() { nix build nixpkgs#qemu --no-link --print-out-paths; }
+serial_pty() { grep -o '/dev/ttys[0-9]*' "$SERIAL_LOG" | tail -1; }
+
+case "${1:?usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|verify|status|down|destroy>}" in
+  up)
+    running && { echo "already running (pid $(cat "$PID"))"; exit 0; }
+    mkdir -p "$DIR" "$SEED"
+    [ -f "$ISO" ] || curl -L -o "$ISO" "$ISO_URL"
+    QP="$(qemu_prefix)"
+    if [ ! -f "$EFIVARS" ]; then cp "$QP/share/qemu/edk2-arm-vars.fd" "$EFIVARS"; chmod 644 "$EFIVARS"; fi
+    [ -f "$SCRATCH" ] || "${QIMG[@]}" create -f qcow2 "$SCRATCH" 90G
+    cp "$SPIKE_DIR/spike.key.pub" "$SEED/authorized_keys"
+    "${QEMU[@]}" \
+      -M virt -accel hvf -cpu host -smp 8 -m 16384 \
+      -drive if=pflash,format=raw,readonly=on,file="$QP/share/qemu/edk2-aarch64-code.fd" \
+      -drive if=pflash,format=raw,file="$EFIVARS" \
+      -drive file="$ISO",media=cdrom,if=virtio \
+      -drive file="$SCRATCH",if=virtio,format=qcow2 \
+      -drive file=fat:rw:"$SEED",format=raw,if=virtio \
+      -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSHPORT-:22 \
+      -monitor unix:"$MON",server,nowait -serial pty \
+      -display none -daemonize -pidfile "$PID" > "$SERIAL_LOG" 2>&1
+    echo "up: $(cat "$SERIAL_LOG")"
+    echo "next: arm-builder bootstrap (waits for boot, installs SSH key via serial console)" ;;
+
+  bootstrap)
+    # Live ISO auto-logs in as user "nixos" (passwordless) on the serial
+    # console. We disable local echo (else our own typed marker text gets
+    # matched instantly -- see report), then mount the FAT seed drive
+    # (guest device /dev/vdc1 -- it's PARTITIONED, not the raw vdc whole
+    # disk) and install our pubkey into /root/.ssh/authorized_keys.
+    # NOTE: macOS's /usr/bin/expect segfaults on `spawn -open` against this
+    # pty; serial_drive.py is a from-scratch replacement, not a wrapper.
+    PTY="$(serial_pty)"
+    [ -n "$PTY" ] || { echo "no serial pty found in $SERIAL_LOG; run 'up' first" >&2; exit 1; }
+    echo "waiting for boot to settle on $PTY ..."
+    python3 "$PYDRIVE" "$PTY" --drain-quiet 6 --drain-max 150
+    python3 "$PYDRIVE" "$PTY" --send "stty -echo" --drain-quiet 2 --drain-max 5
+    TOKEN="XDONEX$RANDOM$RANDOM"
+    python3 "$PYDRIVE" "$PTY" --marker "$TOKEN" --timeout 30 --send \
+      "sudo bash -c 'mkdir -p /root/.ssh /mnt/seed; mount -t vfat /dev/vdc1 /mnt/seed && cat /mnt/seed/authorized_keys >> /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys; umount /mnt/seed; systemctl is-active sshd'; echo $TOKEN"
+    until ssh_c 'echo READY' 2>/dev/null; do sleep 3; done
+    echo "bootstrap: SSH is up on 127.0.0.1:$SSHPORT"
+    echo "next: arm-builder prep-storage" ;;
+
+  prep-storage)
+    # Live ISO root (/, /nix/.rw-store) is tmpfs -- RAM-backed and far too
+    # small for a himmelblau build. Format the 90G scratch disk (guest
+    # /dev/vdb) and stack a fresh overlayfs on /nix/store whose upperdir
+    # lives on disk, plus point nix's build-dir there too (build-dir
+    # defaults to TMPDIR/tmp, also tmpfs-backed otherwise).
+    ssh_c '
+      set -e
+      mkfs.ext4 -F -L build /dev/vdb
+      mkdir -p /mnt/persist
+      mount /dev/vdb /mnt/persist
+      mkdir -p /mnt/persist/rw-store /mnt/persist/work /mnt/persist/tmp
+      mount -t overlay overlay -o lowerdir=/nix/.ro-store,upperdir=/mnt/persist/rw-store,workdir=/mnt/persist/work /nix/store
+      grep -q "^build-dir" /etc/nix/nix.conf 2>/dev/null || echo "build-dir = /mnt/persist/tmp" >> /etc/nix/nix.conf
+      grep -q "extra-experimental-features" /etc/nix/nix.conf 2>/dev/null || echo "extra-experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+      systemctl restart nix-daemon
+      df -h /nix/store /mnt/persist
+    '
+    echo "next: arm-builder sync && arm-builder build" ;;
+
+  sync)
+    # tenant.nix IS required (b4-himmelblau.nix imports it) and is fine to
+    # sync into this throwaway local VM. spike.key (private) must NEVER
+    # leave behemoth -- excluded explicitly below, never add it back.
+    ssh_c 'mkdir -p /root/flake'
+    rsync -av --delete \
+      --exclude spike.key --exclude notes/ --exclude scripts/ --exclude .gitignore \
+      -e "ssh ${SSH_OPTS[*]}" \
+      "$SPIKE_DIR/" root@127.0.0.1:/root/flake/
+    LEAK="$(ssh_c 'find /root/flake -iname "spike.key" ! -name "*.pub"' 2>/dev/null || true)"
+    [ -z "$LEAK" ] || { echo "LEAK: spike.key present on guest: $LEAK" >&2; exit 1; }
+    echo "sync OK, no private key on guest" ;;
+
+  build)
+    # Rust (himmelblau) -- ~40min on x86_64/rocinante (Task 3). Always run
+    # detached; a single foreground SSH call will exceed most tool
+    # timeouts. Use 'poll' or 'status' to check on it.
+    ssh_c 'cd /root/flake && nohup nix build .#packages.aarch64-linux.b4-image -o /root/result --print-build-logs > /root/build.log 2>&1 & disown; echo "started pid $!"'
+    echo "next: arm-builder poll (blocks until done) or arm-builder status" ;;
+
+  poll)
+    while true; do
+      p="$(ssh_c 'pgrep -f "nix build .#packages.aarch64-linux.b4-image" | head -1' 2>/dev/null || true)"
+      [ -z "$p" ] && { echo "build process ended"; break; }
+      echo "still running, pid=$p"; sleep 60
+    done
+    ssh_c 'tail -c 2000 /root/build.log; ls -la /root/result 2>&1' ;;
+
+  fetch)
+    mkdir -p "$DIR/output"
+    OUT="${2:-$DIR/output/b4-image-aarch64.qcow2}"
+    rsync -av --progress -e "ssh ${SSH_OPTS[*]}" \
+      root@127.0.0.1:/root/result/nixos.qcow2 "$OUT"
+    echo "fetched: $OUT ($(du -h "$OUT" | cut -f1))"
+    echo "next: arm-builder verify $OUT" ;;
+
+  verify)
+    # Independent proof the qcow2 is genuinely aarch64: boot it for real
+    # under -accel hvf (which can ONLY execute same-arch code -- an
+    # x86_64 image would simply fail to boot here, not silently "work").
+    # -snapshot=on means this never mutates the fetched qcow2.
+    QCOW="${2:?usage: arm-builder verify <path-to-qcow2>}"
+    VDIR="$DIR/verify"; mkdir -p "$VDIR"
+    QP="$(qemu_prefix)"
+    cp "$QP/share/qemu/edk2-arm-vars.fd" "$VDIR/efivars.fd"; chmod 644 "$VDIR/efivars.fd"
+    "${QEMU[@]}" -M virt -accel hvf -cpu host -smp 4 -m 4096 \
+      -drive if=pflash,format=raw,readonly=on,file="$QP/share/qemu/edk2-aarch64-code.fd" \
+      -drive if=pflash,format=raw,file="$VDIR/efivars.fd" \
+      -drive file="$QCOW",if=virtio,format=qcow2,snapshot=on \
+      -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2261-:22 \
+      -monitor unix:"$VDIR/monitor.sock",server,nowait -serial file:"$VDIR/serial.log" \
+      -display none -daemonize -pidfile "$VDIR/qemu.pid" > "$VDIR/qemu-launch.log" 2>&1
+    VSSH=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -i "$KEY" -p 2261)
+    until ssh "${VSSH[@]}" root@127.0.0.1 'echo READY' 2>/dev/null; do sleep 3; done
+    ssh "${VSSH[@]}" root@127.0.0.1 'uname -a; nix --extra-experimental-features "nix-command flakes" eval --impure --expr builtins.currentSystem; systemctl is-active himmelblaud; aad-tool status'
+    kill "$(cat "$VDIR/qemu.pid")" 2>/dev/null || true
+    rm -rf "$VDIR"
+    echo "verify done (throwaway snapshot VM torn down, original qcow2 untouched)" ;;
+
+  status)
+    running && echo "RUNNING pid=$(cat "$PID"), ssh 127.0.0.1:$SSHPORT" || echo STOPPED
+    du -sh "$DIR" 2>/dev/null || true ;;
+
+  down)
+    running && kill "$(cat "$PID")"; rm -f "$PID"; echo down ;;
+
+  destroy)
+    # Full teardown, run at P2 close once Task 6 no longer needs a rebuild.
+    running && kill "$(cat "$PID")" || true
+    rm -rf "$DIR"
+    echo "destroyed $DIR (reclaims ~37G: 29G scratch-store.qcow2, 1.8G ISO, output qcow2s)" ;;
+
+  *) echo "usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|verify|status|down|destroy>" >&2; exit 1 ;;
+esac
