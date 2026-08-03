@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# Parallels lifecycle for the aarch64 himmelblau spike VM.
+#
+# Only ever touches the VM named below. Never pass a different name to any
+# prlctl/prl_disk_tool call in this file — this box shares the Mac with a
+# live, domain-joined corporate VM (Nostromo) that must never be mutated.
+set -euo pipefail
+
+VMNAME="spike-himmelblau-arm"
+PVMDIR="$HOME/Parallels/$VMNAME.pvm"
+SRC="$(cd "$(dirname "$0")/.." && pwd)"
+CMD="${1:?usage: spike-parallels <build|create|up|down|reset|destroy|status|ip>}"
+
+QEMU_IMG=(nix shell nixpkgs#qemu --command qemu-img)
+
+# Locate an aarch64 qcow2 to adopt. Prefers a fresh `build` output; falls
+# back to the image Task 5 already built and verified on a throwaway QEMU
+# builder VM (spikes/intune/scripts/arm-builder), since `nix build
+# .#packages.aarch64-linux.b4-image` cannot run directly on behemoth (no
+# linux-builder — Determinate Nix owns the install, nix.enable = false).
+find_qcow() {
+  local q
+  q="$(find -L "$SRC/result-arm" -name '*.qcow2' 2>/dev/null | head -1)"
+  if [ -z "$q" ]; then
+    q="$HOME/spike-arm-builder/output/b4-image-aarch64.qcow2"
+  fi
+  [ -f "$q" ] || { echo "no aarch64 qcow2 found — run 'spike-parallels build' (or spikes/intune/scripts/arm-builder)" >&2; exit 1; }
+  echo "$q"
+}
+
+# Resolve a snapshot name to its ID. `prlctl snapshot-switch` only accepts
+# --id, and plain `snapshot-list` (no --json) doesn't print names at all.
+resolve_snapshot_id() {
+  local name="$1"
+  prlctl snapshot-list "$VMNAME" --json 2>/dev/null | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for k, v in d.items():
+    if v.get('name') == '$name':
+        print(k.strip('{}'))
+        break
+"
+}
+
+get_ip() {
+  # `|| true` on the final stage: no match (VM stopped/still booting) is a
+  # normal, expected outcome here, not a script failure under `set -e`.
+  prlctl list -i "$VMNAME" 2>/dev/null | grep 'IP Addresses' | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 || true
+}
+
+wait_for_ip() {
+  local ip=""
+  for _ in $(seq 1 24); do
+    ip="$(get_ip)"
+    [ -n "$ip" ] && { echo "$ip"; return 0; }
+    sleep 5
+  done
+  return 1
+}
+
+wait_for_stopped() {
+  for _ in $(seq 1 24); do
+    [ "$(prlctl list -a 2>/dev/null | awk -v n="$VMNAME" '$NF==n{print $2}')" = "stopped" ] && return 0
+    sleep 5
+  done
+  return 1
+}
+
+case "$CMD" in
+  build)
+    (cd "$SRC" && nix build .#packages.aarch64-linux.b4-image -o result-arm)
+    ;;
+
+  create)
+    prlctl list "$VMNAME" >/dev/null 2>&1 && { echo "exists — destroy first" >&2; exit 1; }
+    QCOW="$(find_qcow)"
+    echo "adopting image: $QCOW"
+
+    prlctl create "$VMNAME" --distribution linux --no-hdd
+    prlctl set "$VMNAME" --cpus 4 --memsize 8192 --efi-boot on
+
+    # qemu-img's `parallels` writer produces a valid Parallels v2
+    # "expanding" .hds *data* file, but not the DiskDescriptor.xml bundle
+    # wrapper Parallels 26 needs to recognize a .hdd as a disk (confirmed:
+    # a bare qemu-img output + hand-written descriptor was rejected by
+    # prl_disk_tool as "does not contain any virtual hard disk images").
+    # Workaround: let prl_disk_tool create a correctly-sized placeholder
+    # bundle (valid XML + matching-name .hds), then overwrite just the .hds
+    # payload with the qemu-img conversion. Sizes must match exactly in
+    # bytes or the descriptor's geometry (Cylinders/Disk_size) disagrees
+    # with the data file.
+    BYTES="$("${QEMU_IMG[@]}" info --output=json "$QCOW" | sed -n 's/.*"virtual-size": \([0-9]*\).*/\1/p')"
+    SIZE_MB=$((BYTES / 1048576))
+    rm -rf "$PVMDIR/spike.hdd"
+    prl_disk_tool create --hdd "$PVMDIR/spike.hdd" --size "${SIZE_MB}M" --expanding
+    HDS="$(find "$PVMDIR/spike.hdd" -maxdepth 1 -name '*.0.*.hds')"
+    "${QEMU_IMG[@]}" convert -O parallels "$QCOW" "$HDS"
+    prl_disk_tool check --hdd "$PVMDIR/spike.hdd"
+    prlctl set "$VMNAME" --device-add hdd --image "$PVMDIR/spike.hdd"
+
+    # Boot once to prove the doorstep is real before snapshotting it —
+    # a snapshot of an unbooted disk isn't a verified doorstep.
+    prlctl start "$VMNAME"
+    echo "booting, waiting for IP..."
+    IP="$(wait_for_ip)" || { echo "no IP after 120s — check console" >&2; exit 1; }
+    echo "IP: $IP — verifying himmelblaud"
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+      -i "$SRC/spike.key" root@"$IP" \
+      'systemctl is-active himmelblaud && aad-tool status'
+
+    prlctl stop "$VMNAME"
+    wait_for_stopped || { echo "VM did not stop cleanly — snapshot aborted" >&2; exit 1; }
+    prlctl snapshot "$VMNAME" -n doorstep -d "clean pre-enrollment state — himmelblaud healthy, nothing enrolled"
+    echo "doorstep snapshot created"
+    ;;
+
+  up)
+    prlctl start "$VMNAME"
+    ;;
+
+  down)
+    prlctl stop "$VMNAME" --kill
+    ;;
+
+  reset)
+    SNAP="$(resolve_snapshot_id doorstep)"
+    [ -n "$SNAP" ] || { echo "no doorstep snapshot found for $VMNAME" >&2; exit 1; }
+    prlctl snapshot-switch "$VMNAME" --id "$SNAP"
+    ;;
+
+  destroy)
+    prlctl stop "$VMNAME" --kill 2>/dev/null || true
+    prlctl delete "$VMNAME"
+    ;;
+
+  status)
+    prlctl list -i "$VMNAME" | grep -E 'State|IP Addresses'
+    ;;
+
+  ip)
+    ip="$(get_ip)"
+    [ -n "$ip" ] && echo "$ip" || echo "no IP configured — is the VM up? (spike-parallels status)"
+    ;;
+
+  *)
+    echo "usage: spike-parallels <build|create|up|down|reset|destroy|status|ip>" >&2
+    exit 1
+    ;;
+esac
