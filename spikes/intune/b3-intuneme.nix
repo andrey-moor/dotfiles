@@ -1,4 +1,38 @@
 { pkgs, lib, ... }:
+# =============================================================================
+# STATUS (2026-08-03, fix-round-2): B3 PARTIALLY REACHES THE DOORSTEP.
+#
+# `nspawnWrapper` (below) fixes the ORIGINAL blocker: intuneme's `sudo
+# systemd-nspawn -D <rootfs> usermod/groupmod ...` calls (upstream source:
+# internal/provision/provision.go, CreateContainerUser) were failing with
+# `execv(usermod) failed: No such file or directory` because NixOS has no
+# `/usr/sbin` and nspawn's payload exec PATH didn't include it, even though
+# the binary is genuinely present inside the rootfs. Injecting
+# `--setenv=PATH=...` on every nspawn invocation fixed this CLASS of failure:
+# `intuneme init` now completes end-to-end and `intuneme start` boots a live,
+# healthy container (`machinectl list` shows it running; `systemctl
+# is-system-running` inside it reports "running"; both `intune-portal` and
+# `microsoft-edge` are present at their expected paths).
+#
+# It is NOT a full fix, though — the *same class* of bare-FHS-path failure
+# resurfaced one step later during `init`'s optional sudoers-convenience step
+# (`fork/exec /usr/sbin/visudo: no such file or directory`, non-fatal) and
+# again for a few optional `start`-time steps (Nvidia symlink cleanup, udev
+# hotplug rules, sudoers rule, group reconciliation — all logged as
+# warnings, all non-fatal). More significantly: `intuneme open portal` /
+# `open edge` return exit 0 but do not produce any visible process inside the
+# container — this task did not diagnose why (untested: whether it's yet
+# another instance of the same PATH class via a different exec path, or a
+# separate broker-proxy/session-wiring gap). So "UI reachable" is NOT
+# confirmed; "container provisioned and running" IS confirmed. No sign-in was
+# attempted at any point.
+#
+# Full verbatim evidence, the fix's exact mechanism, and the corrected
+# manual-poke tally: `spikes/intune/notes/b3-doorstep.md` (gitignored) and
+# `.superpowers/sdd/2026-08-03-env-refactor-p2-intune-spikes/
+# task-4-report.md` (fix-round-2 section). Read those before treating this
+# module as either a working or a dead candidate — it's neither, cleanly.
+# =============================================================================
 let
   # Step 1 research findings (github:frostyard/intuneme, docs.frostyard.github.io/intuneme,
   # release v0.19.0 — checked 2026-08-03), vs. the brief's guesses:
@@ -57,6 +91,22 @@ let
     '';
     nativeBuildInputs = [ pkgs.installShellFiles ];
   };
+
+  # Fix-round-2 (post-review): intuneme's CreateContainerUser step shells out
+  # to `sudo systemd-nspawn --console=pipe -D <rootfs> usermod ...` (and the
+  # same shape for `groupmod`/`useradd`) without exposing any flag for this.
+  # `--setenv=PATH=...` is systemd-nspawn's own mechanism for setting the
+  # payload process's environment unconditionally, regardless of whatever
+  # ambiguous PATH nspawn would otherwise inherit through sudo -- this
+  # sidesteps the exact mechanism entirely rather than guessing at it.
+  # Since intuneme builds its own nspawn argv, the only way to inject the
+  # flag is a same-named wrapper placed ahead of the real binary on sudo's
+  # command-resolution path (see `security.sudo.extraConfig` below).
+  nspawnWrapper = pkgs.writeShellScript "systemd-nspawn" ''
+    exec ${pkgs.systemd}/bin/systemd-nspawn \
+      --setenv=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+      "$@"
+  '';
 in
 {
   # --- intuneme's real prerequisites ---
@@ -104,6 +154,22 @@ in
     extraGroups = [ "wheel" "podman" "video" "render" "audio" ];
   };
   security.sudo.wheelNeedsPassword = false;
+
+  # Fix-round-2: pin our systemd-nspawn wrapper (see `nspawnWrapper` above)
+  # ahead of the real binary in sudo's own command-resolution path, so
+  # `sudo systemd-nspawn ...` (exactly what intuneme invokes) resolves to the
+  # wrapper deterministically instead of depending on PATH-ordering luck.
+  # `/run/wrappers/bin:/run/current-system/sw/bin` reproduces what already
+  # resolved successfully before this change (confirmed live: `which
+  # systemd-nspawn` -> /run/current-system/sw/bin/systemd-nspawn) so nothing
+  # else sudo already relied on should regress.
+  environment.etc."intuneme-wrappers/systemd-nspawn" = {
+    source = nspawnWrapper;
+    mode = "0755";
+  };
+  security.sudo.extraConfig = ''
+    Defaults secure_path = "/etc/intuneme-wrappers:/run/wrappers/bin:/run/current-system/sw/bin"
+  '';
 
   systemd.services."cage-spike" = {
     description = "Kiosk Wayland session for the intuneme spike (tty1)";
