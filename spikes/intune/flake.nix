@@ -7,22 +7,29 @@
   };
   outputs = { self, nixpkgs, nixos-generators, himmelblau }:
     let
-      mkImage = system: modules: nixos-generators.nixosGenerate {
-        inherit system modules; format = "qcow-efi";
+      # specialArgs (not modules-list `_module.args`) is required here: a module's
+      # own `imports` list is resolved before `_module.args`-provided args exist,
+      # so `imports = [ himmelblauFlake.nixosModules.himmelblau ]` inside
+      # b4-himmelblau.nix hits nixpkgs' documented "infinite recursion" trap if
+      # `himmelblauFlake` is threaded in via `_module.args` (confirmed by an
+      # actual eval attempt -- Task 2's stub-restoration comment suggested
+      # `_module.args`, which does not evaluate). `nixosGenerate` forwards
+      # `specialArgs` straight to `nixosSystem`/`evalModules`, which resolves
+      # `imports` correctly.
+      mkImage = { system, modules, specialArgs ? { } }: nixos-generators.nixosGenerate {
+        inherit system modules specialArgs; format = "qcow-efi";
       };
-      # STUB (Task 2): b4-himmelblau.nix and b3-intuneme.nix don't exist until
-      # Tasks 3/4. b4mods/b3mods temporarily alias ./base.nix so this flake
-      # evaluates and base-image can be built/proven end-to-end. When Tasks
-      # 3/4 land, restore:
-      #   b4mods = [ ./base.nix ./b4-himmelblau.nix { _module.args.himmelblauFlake = himmelblau; } ];
-      # and point b3-image at [ ./base.nix ./b3-intuneme.nix ].
-      b4mods = [ ./base.nix ];
+      # b4mods un-stubbed (Task 3): b4-himmelblau.nix now exists.
+      # b3-image below is STILL STUBBED at [ ./base.nix ] -- that's Task 4's
+      # to restore to [ ./base.nix ./b3-intuneme.nix ] once b3-intuneme.nix exists.
+      b4mods = [ ./base.nix ./b4-himmelblau.nix ];
+      b4specialArgs = { himmelblauFlake = himmelblau; };
     in {
       packages.x86_64-linux = {
-        base-image = mkImage "x86_64-linux" [ ./base.nix ];
-        b4-image   = mkImage "x86_64-linux" b4mods;
-        b3-image   = mkImage "x86_64-linux" [ ./base.nix ];
+        base-image = mkImage { system = "x86_64-linux"; modules = [ ./base.nix ]; };
+        b4-image   = mkImage { system = "x86_64-linux"; modules = b4mods; specialArgs = b4specialArgs; };
+        b3-image   = mkImage { system = "x86_64-linux"; modules = [ ./base.nix ]; };
       };
-      packages.aarch64-linux.b4-image = mkImage "aarch64-linux" b4mods;
+      packages.aarch64-linux.b4-image = mkImage { system = "aarch64-linux"; modules = b4mods; specialArgs = b4specialArgs; };
     };
 }
