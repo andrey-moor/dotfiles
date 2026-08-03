@@ -30,11 +30,22 @@ find_qcow() {
 
 # Resolve a snapshot name to its ID. `prlctl snapshot-switch` only accepts
 # --id, and plain `snapshot-list` (no --json) doesn't print names at all.
+#
+# Two independent guards, because `set -o pipefail` propagates the FIRST
+# non-zero exit in the pipe, not just the last: if the VM doesn't exist (or
+# has no snapshots), `prlctl snapshot-list --json` writes nothing to stdout
+# and exits non-zero (stderr silenced below) — that alone makes the pipeline
+# non-zero even though python exits 0 on empty/invalid input. So (1) python
+# must not raise on bad/empty JSON, and (2) the call site must not let a
+# bare `SNAP="$(...)"` abort the script under `set -e`.
 resolve_snapshot_id() {
   local name="$1"
   prlctl snapshot-list "$VMNAME" --json 2>/dev/null | python3 -c "
 import json, sys
-d = json.load(sys.stdin)
+try:
+    d = json.load(sys.stdin)
+except (json.JSONDecodeError, ValueError):
+    sys.exit(0)
 for k, v in d.items():
     if v.get('name') == '$name':
         print(k.strip('{}'))
@@ -90,11 +101,23 @@ case "$CMD" in
     # bytes or the descriptor's geometry (Cylinders/Disk_size) disagrees
     # with the data file.
     BYTES="$("${QEMU_IMG[@]}" info --output=json "$QCOW" | sed -n 's/.*"virtual-size": \([0-9]*\).*/\1/p')"
-    SIZE_MB=$((BYTES / 1048576))
+    # Round up, don't truncate: the placeholder must describe a disk >= the
+    # qcow2's real virtual size, or DiskDescriptor.xml's geometry
+    # (Disk_size/Cylinders) ends up describing a smaller disk than the
+    # payload qemu-img then writes into the same .hds — silently, for any
+    # future image whose virtual-size isn't an exact MiB multiple.
+    SIZE_MB=$(( (BYTES + 1048575) / 1048576 ))
     rm -rf "$PVMDIR/spike.hdd"
     prl_disk_tool create --hdd "$PVMDIR/spike.hdd" --size "${SIZE_MB}M" --expanding
     HDS="$(find "$PVMDIR/spike.hdd" -maxdepth 1 -name '*.0.*.hds')"
     "${QEMU_IMG[@]}" convert -O parallels "$QCOW" "$HDS"
+    # Assert the conversion actually preserved the source's virtual size —
+    # this is the invariant the descriptor/data-file swap depends on. (Raw
+    # file bytes on disk are deliberately NOT compared here: parallels'
+    # "expanding" format is sparse/compressed, so the .hds file is always
+    # well under the virtual size by design — that's not a mismatch.)
+    CONVERTED_BYTES="$("${QEMU_IMG[@]}" info --output=json "$HDS" | sed -n 's/.*"virtual-size": \([0-9]*\).*/\1/p')"
+    [ "$CONVERTED_BYTES" = "$BYTES" ] || { echo "size mismatch: converted .hds reports virtual-size ${CONVERTED_BYTES}B, source qcow2 is ${BYTES}B — aborting before this becomes a descriptor/data mismatch" >&2; exit 1; }
     prl_disk_tool check --hdd "$PVMDIR/spike.hdd"
     prlctl set "$VMNAME" --device-add hdd --image "$PVMDIR/spike.hdd"
 
@@ -123,7 +146,7 @@ case "$CMD" in
     ;;
 
   reset)
-    SNAP="$(resolve_snapshot_id doorstep)"
+    SNAP="$(resolve_snapshot_id doorstep)" || true
     [ -n "$SNAP" ] || { echo "no doorstep snapshot found for $VMNAME" >&2; exit 1; }
     prlctl snapshot-switch "$VMNAME" --id "$SNAP"
     ;;
