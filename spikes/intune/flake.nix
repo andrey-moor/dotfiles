@@ -20,15 +20,17 @@
         inherit system modules specialArgs; format = "qcow-efi";
       };
       # b4mods un-stubbed (Task 3): b4-himmelblau.nix now exists.
-      # b3-image below is STILL STUBBED at [ ./base.nix ] -- that's Task 4's
-      # to restore to [ ./base.nix ./b3-intuneme.nix ] once b3-intuneme.nix exists.
+      # b3-image un-stubbed (Task 4): b3-intuneme.nix now exists. No
+      # specialArgs needed here -- unlike b4, b3-intuneme.nix has no external
+      # flake input to thread through.
       b4mods = [ ./base.nix ./b4-himmelblau.nix ];
       b4specialArgs = { himmelblauFlake = himmelblau; };
+      b3mods = [ ./base.nix ./b3-intuneme.nix ];
     in {
       packages.x86_64-linux = {
         base-image = mkImage { system = "x86_64-linux"; modules = [ ./base.nix ]; };
         b4-image   = mkImage { system = "x86_64-linux"; modules = b4mods; specialArgs = b4specialArgs; };
-        b3-image   = mkImage { system = "x86_64-linux"; modules = [ ./base.nix ]; };
+        b3-image   = mkImage { system = "x86_64-linux"; modules = b3mods; };
       };
       packages.aarch64-linux.b4-image = mkImage { system = "aarch64-linux"; modules = b4mods; specialArgs = b4specialArgs; };
     };
