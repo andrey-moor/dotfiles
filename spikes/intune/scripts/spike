@@ -3,11 +3,11 @@
 set -euo pipefail
 CMD="${1:?usage: spike <build|up|down|ssh|reset|destroy|status|vnc> <b4|b3>}"
 VM="${2:?usage: spike <cmd> <b4|b3>}"
+case "$VM" in b4|b3) ;; *) echo "invalid VM: $VM" >&2; exit 1 ;; esac
 DIR="$HOME/spikes/$VM"; BASE="$DIR/base.qcow2"; OVL="$DIR/overlay.qcow2"
 PID="$DIR/qemu.pid"; MON="$DIR/monitor.sock"
 FLAKE="$HOME/spikes/flake"           # synced copy of spikes/intune (task 2)
 case "$VM" in b4) SSHPORT=2241; VNC=41;; b3) SSHPORT=2231; VNC=31;; esac
-TSIP="$(tailscale ip -4 2>/dev/null | head -1)"
 QEMU=(nix shell nixpkgs#qemu --command qemu-system-x86_64)
 QIMG=(nix shell nixpkgs#qemu --command qemu-img)
 
@@ -23,7 +23,11 @@ case "$CMD" in
     running && { echo "already running (pid $(cat "$PID"))"; exit 0; }
     [ -f "$OVL" ] || "${QIMG[@]}" create -f qcow2 -b "$BASE" -F qcow2 "$OVL"
     GFX=(-display none)
-    [ "$VM" = b3 ] && GFX=(-device virtio-vga -display none -vnc "$TSIP:$VNC")
+    if [ "$VM" = b3 ]; then
+      TSIP="$(tailscale ip -4 2>/dev/null | head -1)" || true
+      [ -n "$TSIP" ] || { echo "tailscale not ready; cannot bind VNC" >&2; exit 1; }
+      GFX=(-device virtio-vga -display none -vnc "$TSIP:$VNC")
+    fi
     "${QEMU[@]}" -enable-kvm -machine q35 -cpu host -smp 4 -m 8G \
       -drive file="$OVL",if=virtio \
       -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSHPORT-:22 \
@@ -31,6 +35,8 @@ case "$CMD" in
       "${GFX[@]}" -daemonize -pidfile "$PID"
     echo "up: ssh port 127.0.0.1:$SSHPORT (jump via rocinante)"; ;;
   vnc)  # attach a tailnet VNC display to a running b4 too, if ever needed
+    TSIP="$(tailscale ip -4 2>/dev/null | head -1)" || true
+    [ -n "$TSIP" ] || { echo "tailscale not ready; cannot show VNC endpoint" >&2; exit 1; }
     echo "b3 serves VNC at $TSIP:$((5900+VNC)) while up. macOS: open vnc://$TSIP:$((5900+VNC))" ;;
   down)    running && kill "$(cat "$PID")"; rm -f "$PID"; echo down ;;
   reset)   running && kill "$(cat "$PID")" || true; rm -f "$PID" "$OVL"; echo "reset to doorstep (overlay dropped)" ;;
@@ -39,4 +45,5 @@ case "$CMD" in
              -i "$HOME/spikes/spike.key" -p "$SSHPORT" root@127.0.0.1 ;;
   status)  running && echo "RUNNING pid=$(cat "$PID")" || echo STOPPED
            ls -lh "$BASE" "$OVL" 2>/dev/null || true ;;
+  *)       echo "usage: spike <build|up|down|ssh|reset|destroy|status|vnc> <b4|b3>" >&2; exit 1 ;;
 esac
