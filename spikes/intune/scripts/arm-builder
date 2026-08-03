@@ -31,6 +31,14 @@ SSHPORT=2251
 KEY="$SPIKE_DIR/spike.key"           # NEVER sync this; only spike.key.pub goes to the guest
 PYDRIVE="$(dirname "${BASH_SOURCE[0]}")/serial_drive.py"
 
+# Bounded ceiling for "wait until SSH answers" loops (bootstrap, verify).
+# 100 * 3s = 5 minutes -- generous relative to observed boot+bootstrap time
+# (well under 2 minutes in practice) so a normal slow boot never false-trips,
+# but a genuinely wedged serial-console bootstrap fails loudly instead of
+# hanging forever.
+READY_CHECK_MAX_ATTEMPTS=100
+READY_CHECK_INTERVAL=3
+
 QEMU=(nix shell nixpkgs#qemu --command qemu-system-aarch64)
 QIMG=(nix shell nixpkgs#qemu --command qemu-img)
 SSH_OPTS=(-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -i "$KEY" -p "$SSHPORT")
@@ -39,6 +47,26 @@ ssh_c() { ssh "${SSH_OPTS[@]}" root@127.0.0.1 "$@"; }
 running() { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }
 qemu_prefix() { nix build nixpkgs#qemu --no-link --print-out-paths; }
 serial_pty() { grep -o '/dev/ttys[0-9]*' "$SERIAL_LOG" | tail -1; }
+
+# wait_for_ssh <phase-label> <serial-log-path> <ssh-command...>
+# Retries `<ssh-command...> echo READY` up to READY_CHECK_MAX_ATTEMPTS times,
+# READY_CHECK_INTERVAL seconds apart. Exits non-zero with a diagnosable
+# message (which phase, where to look) instead of hanging forever if the
+# guest never answers.
+wait_for_ssh() {
+  local phase="$1" logpath="$2"; shift 2
+  local attempt=0
+  until "$@" 'echo READY' >/dev/null 2>&1; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge "$READY_CHECK_MAX_ATTEMPTS" ]; then
+      local waited=$((READY_CHECK_MAX_ATTEMPTS * READY_CHECK_INTERVAL))
+      echo "TIMEOUT: $phase did not come up after ${waited}s ($READY_CHECK_MAX_ATTEMPTS attempts)." >&2
+      echo "Check the serial log for what the guest was doing: $logpath" >&2
+      return 1
+    fi
+    sleep "$READY_CHECK_INTERVAL"
+  done
+}
 
 case "${1:?usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|verify|status|down|destroy>}" in
   up)
@@ -78,7 +106,7 @@ case "${1:?usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|v
     TOKEN="XDONEX$RANDOM$RANDOM"
     python3 "$PYDRIVE" "$PTY" --marker "$TOKEN" --timeout 30 --send \
       "sudo bash -c 'mkdir -p /root/.ssh /mnt/seed; mount -t vfat /dev/vdc1 /mnt/seed && cat /mnt/seed/authorized_keys >> /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys; umount /mnt/seed; systemctl is-active sshd'; echo $TOKEN"
-    until ssh_c 'echo READY' 2>/dev/null; do sleep 3; done
+    wait_for_ssh "bootstrap SSH readiness (port $SSHPORT)" "$SERIAL_LOG" ssh "${SSH_OPTS[@]}" root@127.0.0.1
     echo "bootstrap: SSH is up on 127.0.0.1:$SSHPORT"
     echo "next: arm-builder prep-storage" ;;
 
@@ -154,8 +182,12 @@ case "${1:?usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|v
       -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:2261-:22 \
       -monitor unix:"$VDIR/monitor.sock",server,nowait -serial file:"$VDIR/serial.log" \
       -display none -daemonize -pidfile "$VDIR/qemu.pid" > "$VDIR/qemu-launch.log" 2>&1
-    VSSH=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -i "$KEY" -p 2261)
-    until ssh "${VSSH[@]}" root@127.0.0.1 'echo READY' 2>/dev/null; do sleep 3; done
+    VSSH=(-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -i "$KEY" -p 2261)
+    if ! wait_for_ssh "verify SSH readiness (port 2261)" "$VDIR/serial.log" ssh "${VSSH[@]}" root@127.0.0.1; then
+      kill "$(cat "$VDIR/qemu.pid")" 2>/dev/null || true
+      rm -rf "$VDIR"
+      exit 1
+    fi
     ssh "${VSSH[@]}" root@127.0.0.1 'uname -a; nix --extra-experimental-features "nix-command flakes" eval --impure --expr builtins.currentSystem; systemctl is-active himmelblaud; aad-tool status'
     kill "$(cat "$VDIR/qemu.pid")" 2>/dev/null || true
     rm -rf "$VDIR"
