@@ -1,32 +1,165 @@
 #!/usr/bin/env bash
-# P2 spike VM lifecycle. Runs on rocinante. Usage: spike <cmd> <b4|b3>
+# P2 spike VM lifecycle. Runs on rocinante.
+# Usage: spike <build|up|down|ssh|reset|doorstep|destroy|status|vnc> <b4|b3> [--force]
 set -euo pipefail
-CMD="${1:?usage: spike <build|up|down|ssh|reset|destroy|status|vnc> <b4|b3>}"
-VM="${2:?usage: spike <cmd> <b4|b3>}"
+CMD="${1:?usage: spike <build|up|down|ssh|reset|doorstep|destroy|status|vnc> <b4|b3> [--force]}"
+VM="${2:?usage: spike <cmd> <b4|b3> [--force]}"
 case "$VM" in b4|b3) ;; *) echo "invalid VM: $VM" >&2; exit 1 ;; esac
+shift 2
+FORCE=0
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=1 ;;
+    *) echo "unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
+
 DIR="$HOME/spikes/$VM"; BASE="$DIR/base.qcow2"; OVL="$DIR/overlay.qcow2"
 PID="$DIR/qemu.pid"; MON="$DIR/monitor.sock"
 EFIVARS="$DIR/efivars.fd"            # per-VM writable UEFI varstore (task 2 fix)
+OVL_DOORSTEP="$OVL.doorstep"         # b3 only -- see the doorstep note below
+EFIVARS_DOORSTEP="$EFIVARS.doorstep"
 FLAKE="$HOME/spikes/flake"           # synced copy of spikes/intune (task 2)
 case "$VM" in b4) SSHPORT=2241; VNC=41;; b3) SSHPORT=2231; VNC=31;; esac
 QEMU=(nix shell nixpkgs#qemu --command qemu-system-x86_64)
 QIMG=(nix shell nixpkgs#qemu --command qemu-img)
 
+# Bounded waits, in seconds. Shutdown is escalated, never assumed: ACPI
+# powerdown -> SIGTERM -> SIGKILL, each with its own ceiling. The pidfile is
+# only removed once the process is actually gone, so a subsequent `up` can
+# never race a still-live qemu for the hostfwd port (or write to an overlay
+# the dying process still has open).
+POWERDOWN_WAIT_SECONDS=60
+SIGTERM_WAIT_SECONDS=20
+SIGKILL_WAIT_SECONDS=10
+MONITOR_WAIT_SECONDS=10
+# VNC's classic DES challenge-response only ever uses the first 8 bytes of the
+# password, so a longer one is decoration. 8 alphanumerics (~47 bits) is the
+# practical ceiling for this auth type; the real perimeter is the tailnet bind.
+VNC_PASSWORD_LENGTH=8
+
+# ---------------------------------------------------------------------------
+# WHERE EACH VARIANT'S DOORSTEP LIVES -- read before changing any rm below.
+#
+#   b4: the doorstep (a healthy himmelblaud) is baked into base.qcow2 by
+#       `nix build`. The overlay holds nothing but boot/runtime noise, so
+#       dropping the overlay IS the reset. That is safe and stays as-is.
+#
+#   b3: the doorstep is produced at RUNTIME inside the guest -- `intuneme
+#       init` pulls a multi-GB OCI image, extracts an Ubuntu 24.04 rootfs and
+#       renames the container user. All of that lands in the OVERLAY (~5GB),
+#       never in the base image, and it cost a multi-GB pull plus roughly ten
+#       manual interventions to produce. Deleting b3's overlay therefore
+#       DESTROYS its doorstep, with no cheap way back.
+#
+# So b3 gets an explicit snapshot -- `spike doorstep b3`, a reflink copy of
+# the stopped overlay -- and `reset b3` RESTORES from it. When no snapshot
+# exists, `reset b3` refuses instead of falling back to deletion.
+# ---------------------------------------------------------------------------
+
 running() { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }
+
+tailscale_ip() { tailscale ip -4 2>/dev/null | head -1 || true; }
+
+gen_vnc_password() {
+  LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom 2>/dev/null | head -c "$VNC_PASSWORD_LENGTH" || true
+}
+
+# Send one HMP command to the qemu monitor. The command travels via the
+# environment rather than argv, so a VNC password never appears in `ps`.
+mon_cmd() {
+  [ -S "$MON" ] || return 1
+  SPIKE_MON_SOCK="$MON" SPIKE_MON_CMD="$1" python3 -c '
+import os, socket, sys, time
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(5)
+try:
+    s.connect(os.environ["SPIKE_MON_SOCK"])
+    time.sleep(0.2)
+    try: s.recv(65536)
+    except Exception: pass
+    s.sendall((os.environ["SPIKE_MON_CMD"] + "\n").encode())
+    time.sleep(0.3)
+    try: sys.stdout.write(s.recv(65536).decode(errors="replace"))
+    except Exception: pass
+finally:
+    s.close()
+'
+}
+
+wait_for_monitor() {
+  local i=0
+  while [ ! -S "$MON" ]; do
+    i=$((i + 1))
+    [ "$i" -ge "$MONITOR_WAIT_SECONDS" ] && return 1
+    sleep 1
+  done
+  return 0
+}
+
+wait_exit() {  # wait_exit <pid> <seconds>; 0 = gone, 1 = still alive
+  local pid="$1" secs="$2" i=0
+  while kill -0 "$pid" 2>/dev/null; do
+    i=$((i + 1))
+    [ "$i" -ge "$secs" ] && return 1
+    sleep 1
+  done
+  return 0
+}
+
+# Stop the guest and do not return until qemu is really gone. SIGTERM alone is
+# a hard power-off; b3 in particular has gigabytes of freshly written
+# container state, so try ACPI powerdown through the monitor first.
+stop_vm() {
+  running || { rm -f "$PID"; return 0; }
+  local pid; pid="$(cat "$PID")"
+  echo "stopping qemu pid $pid ..."
+  if mon_cmd "system_powerdown" >/dev/null 2>&1 && wait_exit "$pid" "$POWERDOWN_WAIT_SECONDS"; then
+    rm -f "$PID"; echo "guest powered down cleanly"; return 0
+  fi
+  echo "clean powerdown did not finish in ${POWERDOWN_WAIT_SECONDS}s; sending SIGTERM" >&2
+  kill "$pid" 2>/dev/null || true
+  if wait_exit "$pid" "$SIGTERM_WAIT_SECONDS"; then rm -f "$PID"; return 0; fi
+  echo "still alive after SIGTERM; sending SIGKILL" >&2
+  kill -9 "$pid" 2>/dev/null || true
+  wait_exit "$pid" "$SIGKILL_WAIT_SECONDS" || {
+    echo "qemu pid $pid will not die -- refusing to touch $DIR while it holds the disk open" >&2
+    exit 1
+  }
+  rm -f "$PID"
+}
 
 case "$CMD" in
   build)
+    # Same running-VM guard the other destructive verbs use: the cp below
+    # overwrites the very qcow2 a live qemu holds open as the overlay's
+    # backing file, which corrupts the running guest instantly.
+    running && { echo "$VM is running -- stop it first: spike down $VM" >&2; exit 1; }
+    if [ "$VM" = b3 ] && [ -f "$OVL_DOORSTEP" ] && [ "$FORCE" != 1 ]; then
+      echo "refusing to rebuild b3's base image: a doorstep snapshot exists at" >&2
+      echo "  $OVL_DOORSTEP" >&2
+      echo "b3's doorstep lives in the overlay, and a new base image invalidates every" >&2
+      echo "overlay stacked on it -- including that snapshot. Re-run with --force to" >&2
+      echo "proceed (the snapshot is moved aside, not deleted)." >&2
+      exit 1
+    fi
     mkdir -p "$DIR"
     nix build "$FLAKE#$VM-image" -o "$DIR/result"
     cp --no-preserve=mode "$(find -L "$DIR/result" -name '*.qcow2' | head -1)" "$BASE"
+    if [ -f "$OVL_DOORSTEP" ]; then
+      mv "$OVL_DOORSTEP" "$OVL_DOORSTEP.stale"
+      echo "NOTE: previous doorstep snapshot no longer matches this base image;" >&2
+      echo "      moved to $OVL_DOORSTEP.stale (bytes preserved, restore path disarmed)" >&2
+    fi
     rm -f "$OVL"; echo "base image rebuilt: $BASE" ;;
   up)
     running && { echo "already running (pid $(cat "$PID"))"; exit 0; }
+    [ -f "$BASE" ] || { echo "no base image at $BASE -- run: spike build $VM" >&2; exit 1; }
     [ -f "$OVL" ] || "${QIMG[@]}" create -f qcow2 -b "$BASE" -F qcow2 "$OVL"
     # qcow-efi images are UEFI-only (systemd-boot); bare qemu-system-x86_64
     # defaults to SeaBIOS, which cannot boot them. Point it at the OVMF
     # firmware bundled inside the nixpkgs qemu closure itself (no separate
-    # OVMF derivation, no hardcoded /nix/store hash — resolved fresh each
+    # OVMF derivation, no hardcoded /nix/store hash -- resolved fresh each
     # `up` so it tracks whatever nixpkgs revision is pinned). edk2-i386-vars.fd
     # is the correct blank varstore template for x86_64 too.
     QEMU_PREFIX="$(nix build nixpkgs#qemu --no-link --print-out-paths)"
@@ -34,11 +167,20 @@ case "$CMD" in
     OVMF_VARS_TEMPLATE="$QEMU_PREFIX/share/qemu/edk2-i386-vars.fd"
     [ -f "$EFIVARS" ] || { cp "$OVMF_VARS_TEMPLATE" "$EFIVARS"; chmod 644 "$EFIVARS"; }
     GFX=(-display none)
+    VNCPW=""
     if [ "$VM" = b3 ]; then
-      TSIP="$(tailscale ip -4 2>/dev/null | head -1)" || true
+      TSIP="$(tailscale_ip)"
       [ -n "$TSIP" ] || { echo "tailscale not ready; cannot bind VNC" >&2; exit 1; }
-      GFX=(-device virtio-vga -display none -vnc "$TSIP:$VNC")
+      # Binding to the tailnet address keeps the wire off the LAN and encrypted,
+      # but tailnet reachability is not authentication: any node could attach to
+      # this display, including while corporate credentials + MFA are being typed
+      # into the container's browser. `password=on` starts the display CLOSED --
+      # qemu rejects every client until set_password succeeds below.
+      VNCPW="$(gen_vnc_password)"
+      [ -n "$VNCPW" ] || { echo "could not generate a VNC password" >&2; exit 1; }
+      GFX=(-device virtio-vga -display none -vnc "$TSIP:$VNC,password=on")
     fi
+    rm -f "$MON"   # a stale socket from a crashed run blocks the monitor bind
     "${QEMU[@]}" -enable-kvm -machine q35 -cpu host -smp 4 -m 8G \
       -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
       -drive if=pflash,format=raw,file="$EFIVARS" \
@@ -46,18 +188,68 @@ case "$CMD" in
       -nic user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSHPORT-:22 \
       -monitor unix:"$MON",server,nowait -serial file:"$DIR/serial.log" \
       "${GFX[@]}" -daemonize -pidfile "$PID"
-    echo "up: ssh port 127.0.0.1:$SSHPORT (jump via rocinante)"; ;;
-  vnc)  # attach a tailnet VNC display to a running b4 too, if ever needed
-    TSIP="$(tailscale ip -4 2>/dev/null | head -1)" || true
+    if [ -n "$VNCPW" ]; then
+      wait_for_monitor || { echo "monitor socket never appeared; VNC stays locked" >&2; exit 1; }
+      mon_cmd "set_password vnc $VNCPW" >/dev/null || {
+        echo "could not set the VNC password; the display stays locked (fail-closed)" >&2; exit 1; }
+      echo "vnc:  $TSIP:$((5900 + VNC))   password: $VNCPW"
+      echo "      password is generated per-up and stored nowhere; rotate with: spike vnc b3"
+    fi
+    echo "up: ssh port 127.0.0.1:$SSHPORT (from rocinante itself: spike ssh $VM)"; ;;
+  vnc)
+    # b4 is launched with `-display none` and no VNC device at all.
+    [ "$VM" = b3 ] || { echo "b4 has no VNC display (headless, SSH only) -- nothing to attach to" >&2; exit 1; }
+    running || { echo "b3 is not running -- start it first: spike up b3" >&2; exit 1; }
+    TSIP="$(tailscale_ip)"
     [ -n "$TSIP" ] || { echo "tailscale not ready; cannot show VNC endpoint" >&2; exit 1; }
-    echo "b3 serves VNC at $TSIP:$((5900+VNC)) while up. macOS: open vnc://$TSIP:$((5900+VNC))" ;;
-  down)    running && kill "$(cat "$PID")"; rm -f "$PID"; echo down ;;
-  reset)   running && kill "$(cat "$PID")" || true; rm -f "$PID" "$OVL" "$EFIVARS"
-           echo "reset to doorstep (overlay + EFI vars dropped)" ;;
-  destroy) running && kill "$(cat "$PID")" || true; rm -rf "$DIR"; echo destroyed ;;
+    VNCPW="$(gen_vnc_password)"
+    [ -n "$VNCPW" ] || { echo "could not generate a VNC password" >&2; exit 1; }
+    mon_cmd "set_password vnc $VNCPW" >/dev/null || {
+      echo "could not reach the qemu monitor at $MON to set a password" >&2; exit 1; }
+    echo "vnc:  $TSIP:$((5900 + VNC))   password: $VNCPW   (freshly rotated)"
+    echo "macOS: open 'vnc://$TSIP:$((5900 + VNC))'" ;;
+  down)    stop_vm; echo down ;;
+  doorstep)
+    # Capture b3's runtime-built doorstep so `reset b3` has something to
+    # restore. Deliberately a separate, explicit verb: it is the one moment
+    # the operator declares "this overlay is the state worth keeping".
+    [ "$VM" = b3 ] || { echo "doorstep snapshots only apply to b3 -- b4's doorstep is in $BASE" >&2; exit 1; }
+    running && { echo "b3 is running -- stop it first (spike down b3); snapshotting a live overlay captures a torn image" >&2; exit 1; }
+    [ -f "$OVL" ] || { echo "no overlay at $OVL to snapshot" >&2; exit 1; }
+    if [ -f "$OVL_DOORSTEP" ] && [ "$FORCE" != 1 ]; then
+      echo "doorstep snapshot already exists: $OVL_DOORSTEP" >&2
+      echo "re-run with --force to overwrite it with the current overlay" >&2
+      exit 1
+    fi
+    cp --reflink=auto -f "$OVL" "$OVL_DOORSTEP"
+    [ ! -f "$EFIVARS" ] || cp --reflink=auto -f "$EFIVARS" "$EFIVARS_DOORSTEP"
+    echo "doorstep snapshot written: $OVL_DOORSTEP" ;;
+  reset)
+    stop_vm
+    if [ "$VM" = b3 ]; then
+      [ -f "$OVL_DOORSTEP" ] || {
+        echo "refusing to reset b3: no doorstep snapshot at $OVL_DOORSTEP." >&2
+        echo "b3's doorstep lives in the overlay, so dropping the overlay would destroy it." >&2
+        echo "Take a snapshot first (VM stopped): spike doorstep b3" >&2
+        exit 1
+      }
+      cp --reflink=auto -f "$OVL_DOORSTEP" "$OVL"
+      [ ! -f "$EFIVARS_DOORSTEP" ] || cp --reflink=auto -f "$EFIVARS_DOORSTEP" "$EFIVARS"
+      echo "reset b3: overlay + EFI vars restored from the doorstep snapshot"
+    else
+      rm -f "$OVL" "$EFIVARS"
+      echo "reset b4: overlay + EFI vars dropped (b4's doorstep lives in $BASE)"
+    fi ;;
+  destroy)
+    if [ "$VM" = b3 ] && [ -f "$OVL_DOORSTEP" ] && [ "$FORCE" != 1 ]; then
+      echo "refusing to destroy b3: $OVL_DOORSTEP holds its only doorstep snapshot." >&2
+      echo "Re-run with --force to delete it along with everything else." >&2
+      exit 1
+    fi
+    stop_vm; rm -rf "$DIR"; echo destroyed ;;
   ssh)     exec ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
              -i "$HOME/spikes/spike.key" -p "$SSHPORT" root@127.0.0.1 ;;
   status)  running && echo "RUNNING pid=$(cat "$PID")" || echo STOPPED
-           ls -lh "$BASE" "$OVL" "$EFIVARS" 2>/dev/null || true ;;
-  *)       echo "usage: spike <build|up|down|ssh|reset|destroy|status|vnc> <b4|b3>" >&2; exit 1 ;;
+           ls -lh "$BASE" "$OVL" "$EFIVARS" "$OVL_DOORSTEP" "$EFIVARS_DOORSTEP" 2>/dev/null || true ;;
+  *)       echo "usage: spike <build|up|down|ssh|reset|doorstep|destroy|status|vnc> <b4|b3> [--force]" >&2; exit 1 ;;
 esac

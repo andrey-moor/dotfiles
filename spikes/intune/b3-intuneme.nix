@@ -27,11 +27,23 @@
 # confirmed; "container provisioned and running" IS confirmed. No sign-in was
 # attempted at any point.
 #
+# Outcome summary for the public record — the only tracked evidence, and the
+# one to read first: `spikes/intune/README.md` ("Outcomes so far").
+#
 # Full verbatim evidence, the fix's exact mechanism, and the corrected
-# manual-poke tally: `spikes/intune/notes/b3-doorstep.md` (gitignored) and
-# `.superpowers/sdd/2026-08-03-env-refactor-p2-intune-spikes/
-# task-4-report.md` (fix-round-2 section). Read those before treating this
-# module as either a working or a dead candidate — it's neither, cleanly.
+# manual-poke tally live in two files that are deliberately NOT tracked (both
+# contain the real tenant domain and this repo is public), so they are
+# reachable only on the owner's machine:
+#   - `spikes/intune/notes/b3-doorstep.md` (gitignored)
+#   - `.superpowers/sdd/2026-08-03-env-refactor-p2-intune-spikes/task-4-report.md`
+#     (fix-round-2 section; the whole `.superpowers/` tree is gitignored)
+# Read those before treating this module as either a working or a dead
+# candidate — it's neither, cleanly.
+#
+# NOTE for the reset flow: b3's doorstep is everything `intuneme init` built
+# INSIDE the guest, which lives in the qemu overlay, not in the base image.
+# `spike reset b3` restores it from a `spike doorstep b3` snapshot; it will
+# not, and must not, simply drop the overlay the way `reset b4` does.
 # =============================================================================
 let
   # Step 1 research findings (github:frostyard/intuneme, docs.frostyard.github.io/intuneme,

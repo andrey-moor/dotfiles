@@ -32,17 +32,41 @@ KEY="$SPIKE_DIR/spike.key"           # NEVER sync this; only spike.key.pub goes 
 PYDRIVE="$(dirname "${BASH_SOURCE[0]}")/serial_drive.py"
 
 # Bounded ceiling for "wait until SSH answers" loops (bootstrap, verify).
-# 100 * 3s = 5 minutes -- generous relative to observed boot+bootstrap time
-# (well under 2 minutes in practice) so a normal slow boot never false-trips,
-# but a genuinely wedged serial-console bootstrap fails loudly instead of
-# hanging forever.
+# The bound is on ATTEMPTS, not wall-clock: 100 attempts, 3s apart, plus
+# however long each attempt itself takes. `ConnectTimeout=8` only bounds the
+# TCP connect, so an sshd that accepts the connection and then stalls before
+# the banner has no client-side ceiling at all and one attempt can hang
+# indefinitely. In practice boot+bootstrap finishes well under 2 minutes, so
+# the floor of ~5 minutes (100 * 3s) never false-trips; the point of the bound
+# is that a guest that never answers fails loudly rather than looping forever.
 READY_CHECK_MAX_ATTEMPTS=100
 READY_CHECK_INTERVAL=3
 
 QEMU=(nix shell nixpkgs#qemu --command qemu-system-aarch64)
 QIMG=(nix shell nixpkgs#qemu --command qemu-img)
-SSH_OPTS=(-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -i "$KEY" -p "$SSHPORT")
+# -n (stdin from /dev/null) is right for ssh_c, which never feeds the remote
+# command anything on stdin -- but it is FATAL for rsync, whose protocol runs
+# entirely over the remote shell's stdin/stdout: the remote rsync sees
+# immediate EOF and dies with "error in rsync protocol data stream" (exit 12).
+# So keep the shared options in one array and add -n only where it belongs.
+SSH_BASE_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -i "$KEY" -p "$SSHPORT")
+SSH_OPTS=(-n "${SSH_BASE_OPTS[@]}")
 ssh_c() { ssh "${SSH_OPTS[@]}" root@127.0.0.1 "$@"; }
+
+# rsync's -e value is split on plain whitespace with no quote handling at all
+# (see do_cmd() in rsync's main.c), so an option containing a space cannot
+# survive the trip. Build the string explicitly and refuse loudly rather than
+# hand rsync a silently mangled remote-shell command.
+rsync_rsh() {
+  local out="ssh" opt
+  for opt in "${SSH_BASE_OPTS[@]}"; do
+    case "$opt" in
+      *[[:space:]]*) echo "remote-shell option contains whitespace, unsupported by rsync -e: $opt" >&2; return 1 ;;
+    esac
+    out="$out $opt"
+  done
+  printf '%s' "$out"
+}
 
 running() { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }
 qemu_prefix() { nix build nixpkgs#qemu --no-link --print-out-paths; }
@@ -98,7 +122,10 @@ case "${1:?usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|v
     # disk) and install our pubkey into /root/.ssh/authorized_keys.
     # NOTE: macOS's /usr/bin/expect segfaults on `spawn -open` against this
     # pty; serial_drive.py is a from-scratch replacement, not a wrapper.
-    PTY="$(serial_pty)"
+    # `|| true`: serial_pty is a grep|tail pipeline, so a missing or
+    # non-matching log makes it exit non-zero -- which under `set -e` would
+    # abort here and leave the friendly guard on the next line unreachable.
+    PTY="$(serial_pty)" || true
     [ -n "$PTY" ] || { echo "no serial pty found in $SERIAL_LOG; run 'up' first" >&2; exit 1; }
     echo "waiting for boot to settle on $PTY ..."
     python3 "$PYDRIVE" "$PTY" --drain-quiet 6 --drain-max 150
@@ -135,9 +162,10 @@ case "${1:?usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|v
     # sync into this throwaway local VM. spike.key (private) must NEVER
     # leave behemoth -- excluded explicitly below, never add it back.
     ssh_c 'mkdir -p /root/flake'
+    RSH="$(rsync_rsh)"
     rsync -av --delete \
       --exclude spike.key --exclude notes/ --exclude scripts/ --exclude .gitignore \
-      -e "ssh ${SSH_OPTS[*]}" \
+      -e "$RSH" \
       "$SPIKE_DIR/" root@127.0.0.1:/root/flake/
     LEAK="$(ssh_c 'find /root/flake -iname "spike.key" ! -name "*.pub"' 2>/dev/null || true)"
     [ -z "$LEAK" ] || { echo "LEAK: spike.key present on guest: $LEAK" >&2; exit 1; }
@@ -161,7 +189,8 @@ case "${1:?usage: arm-builder <up|bootstrap|prep-storage|sync|build|poll|fetch|v
   fetch)
     mkdir -p "$DIR/output"
     OUT="${2:-$DIR/output/b4-image-aarch64.qcow2}"
-    rsync -av --progress -e "ssh ${SSH_OPTS[*]}" \
+    RSH="$(rsync_rsh)"
+    rsync -av --progress -e "$RSH" \
       root@127.0.0.1:/root/result/nixos.qcow2 "$OUT"
     echo "fetched: $OUT ($(du -h "$OUT" | cut -f1))"
     echo "next: arm-builder verify $OUT" ;;

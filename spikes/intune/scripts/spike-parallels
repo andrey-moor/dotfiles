@@ -148,6 +148,12 @@ case "$CMD" in
   reset)
     SNAP="$(resolve_snapshot_id doorstep)" || true
     [ -n "$SNAP" ] || { echo "no doorstep snapshot found for $VMNAME" >&2; exit 1; }
+    # Resolve the snapshot BEFORE stopping, so a missing snapshot costs
+    # nothing. The doorstep was captured at poweroff, and in the actual usage
+    # pattern (enrollment attempt fails -> reset -> retry) the VM is running,
+    # so switch into it from a stopped state rather than mid-run.
+    prlctl stop "$VMNAME" --kill 2>/dev/null || true
+    wait_for_stopped || { echo "$VMNAME did not stop — refusing to switch snapshots" >&2; exit 1; }
     prlctl snapshot-switch "$VMNAME" --id "$SNAP"
     ;;
 
