@@ -94,7 +94,7 @@ cd /opt/microsoft/intune/bin
 INTUNE_LOG_LEVEL=debug ./intune-portal
 ```
 
-1. Log in with your `USER@Microsoft.com` credentials
+1. Log in with your `USER@contoso.com` credentials
 2. Enroll your desktop
 3. Check compliance status in the Intune Agent
 4. Verify device appears on https://aka.ms/cpweb
@@ -108,7 +108,7 @@ microsoft-edge
 ```
 
 1. Login to Edge Profile (click grey person icon → "Sign in to sync data")
-2. Enter your `USER@Microsoft.com` account
+2. Enter your `USER@contoso.com` account
 3. SSO should work for office.com and other M365 sites
 
 > **NOTE:** Currently only Edge Browser supports CA for M365 on Ubuntu.
