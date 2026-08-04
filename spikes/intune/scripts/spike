@@ -221,22 +221,26 @@ case "$CMD" in
       echo "re-run with --force to overwrite it with the current overlay" >&2
       exit 1
     fi
-    cp --reflink=auto -f "$OVL" "$OVL_DOORSTEP"
+    cp --reflink=auto -f "$OVL" "$OVL_DOORSTEP.tmp" && mv -f "$OVL_DOORSTEP.tmp" "$OVL_DOORSTEP"
     [ ! -f "$EFIVARS" ] || cp --reflink=auto -f "$EFIVARS" "$EFIVARS_DOORSTEP"
     echo "doorstep snapshot written: $OVL_DOORSTEP" ;;
   reset)
-    stop_vm
     if [ "$VM" = b3 ]; then
+      # Check for a doorstep snapshot BEFORE stopping the VM, so a missing
+      # snapshot costs nothing (mirrors spike-parallels' reset ordering).
       [ -f "$OVL_DOORSTEP" ] || {
         echo "refusing to reset b3: no doorstep snapshot at $OVL_DOORSTEP." >&2
         echo "b3's doorstep lives in the overlay, so dropping the overlay would destroy it." >&2
         echo "Take a snapshot first (VM stopped): spike doorstep b3" >&2
         exit 1
       }
+      stop_vm
+      "${QIMG[@]}" info "$OVL_DOORSTEP" >/dev/null 2>&1 || { echo "doorstep snapshot is not a readable qcow2 -- refusing to restore" >&2; exit 1; }
       cp --reflink=auto -f "$OVL_DOORSTEP" "$OVL"
       [ ! -f "$EFIVARS_DOORSTEP" ] || cp --reflink=auto -f "$EFIVARS_DOORSTEP" "$EFIVARS"
       echo "reset b3: overlay + EFI vars restored from the doorstep snapshot"
     else
+      stop_vm
       rm -f "$OVL" "$EFIVARS"
       echo "reset b4: overlay + EFI vars dropped (b4's doorstep lives in $BASE)"
     fi ;;
