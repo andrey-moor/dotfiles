@@ -114,7 +114,7 @@ with lib;
         "gcloud-cli" # renamed upstream from google-cloud-sdk
         # Utilities
         "balenaetcher"
-        "tigervnc-viewer"
+        "tigervnc" # renamed upstream from tigervnc-viewer
       ];
       brews = [
         # CLI tools better via Homebrew
