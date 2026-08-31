@@ -49,6 +49,9 @@ in {
     # Homebrew packages
     homebrew = {
       enable = true;
+      # Brewfile must declare the nix-managed taps, or bundle cleanup untaps
+      # them and uninstalls every cask that came from them (2026-08-31 incident).
+      taps = builtins.attrNames config.nix-homebrew.taps;
       onActivation = {
         cleanup = "zap";
         # Taps are flake-pinned (above); letting brew self-update during activation
