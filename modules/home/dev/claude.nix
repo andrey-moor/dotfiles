@@ -71,7 +71,7 @@ let
   declaredSettingsFile = pkgs.writeText "claude-declared-settings.json"
     (builtins.toJSON declaredSettings);
 
-  # Merge semantics (ports chezmoi modify_settings.json):
+  # Merge semantics (ports the retired chezmoi modify_settings.json):
   #   - alwaysThinkingEnabled, effortLevel: overwrite
   #   - env: key-level additive (existing keys kept, CLAUDE_CODE_SHELL enforced)
   #   - enabledPlugins, extraKnownMarketplaces: authoritative replace

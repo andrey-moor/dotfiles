@@ -10,7 +10,7 @@ just build           # Build without applying
 just update          # Update flake inputs (nixpkgs, etc.)
 just fmt             # Format nix files
 just check           # Check flake validity
-just chezmoi-apply   # Apply chezmoi changes (~/.config, ~/.claude, etc.)
+just chezmoi-apply   # Apply chezmoi changes (~/.config: nvim, nushell, etc.)
 just chezmoi-diff    # Preview chezmoi changes
 ```
 
@@ -21,6 +21,7 @@ For a different host: `just --set host <hostname> switch`
 **Hybrid dotfiles approach:**
 - **Nix (nix-darwin + home-manager)**: Packages, services, declarative configs
 - **Chezmoi**: Mutable user configs that change frequently (neovim, nushell) — lives in `chezmoi/`
+- **agents/**: AI agent config (AGENTS.md, skills, commands) — fanned out by home-manager as out-of-store symlinks
 - **config/**: Infrastructure/service configs (litellm, etc.) — version-controlled, rarely changes
 - **Homebrew** (macOS only): GUI applications via casks
 
@@ -70,9 +71,14 @@ Chezmoi source lives in `chezmoi/` directory. The `modules.shell.chezmoi` module
 
 Managed targets:
 - `chezmoi/dot_config/` → `~/.config/` (neovim, nushell, alacritty, etc.)
-- `chezmoi/private_dot_claude/` → `~/.claude/` (settings, global CLAUDE.md, commands)
 
-Claude Code config uses a modify-template (`modify_settings.json`) to merge portable settings while preserving machine-local state (hooks, plugins). Custom commands `/dotfiles:claude-setup` and `/dotfiles:claude-sync` handle plugin installation and bidirectional sync.
+### Agent Stack
+
+`agents/` is the source of truth for AI agent config: `AGENTS.md` (global context) + `skills/` + `commands/`. Home-manager modules (`modules/home/dev/{claude,codex,copilot,opencode}.nix`) fan it out as out-of-store symlinks — edits in the repo are live immediately, no rebuild.
+
+- **settings.json**: declared-subset merge at activation; everything else (model, permissions, autoMode, ...) is app-owned and never touched. Never set `programs.claude-code.settings`/`.marketplaces` (makes settings.json a read-only store symlink).
+- **Plugins/marketplaces**: declared in `modules/home/dev/claude.nix` (`enabledPlugins`/`extraKnownMarketplaces`, authoritative). Add/remove = edit attrset + `just switch`; content updates via `claude plugin update`.
+- **MCP servers**: same module, via `programs.mcp` (surfaced as the `hm` plugin, tools `mcp__plugin_hm_<server>__*`).
 
 ## Hosts
 
