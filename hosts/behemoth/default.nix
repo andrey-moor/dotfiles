@@ -199,11 +199,6 @@ with lib;
           bazel.enable = true;
           hunk.enable = true;
           copilot.enable = true;
-          kb-engine = {
-            enable = true;
-            vaultPath = "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents/Main";
-            schedule.enable = true;  # weekly launchd pipeline + notification
-          };
         };
       };
     };
