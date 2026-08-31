@@ -196,6 +196,7 @@ with lib;
           kubernetes.enable = true;
           terraform.enable = true;
           claude.enable = true;
+          claude.obsidianVault = "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents";
           bazel.enable = true;
           hunk.enable = true;
           copilot.enable = true;

@@ -104,6 +104,12 @@ let
 in {
   options.modules.dev.claude = {
     enable = mkEnableOption "Claude Code CLI + agent stack";
+
+    obsidianVault = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Path to an Obsidian vault; when set, adds the obsidian MCP server.";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -112,6 +118,35 @@ in {
       package = inputs.claude-code-nix.packages.${pkgs.system}.default;
       # ~/.claude/CLAUDE.md is a thin importer; content lives in the repo.
       context = "@~/.agents/AGENTS.md\n";
+      # Pull programs.mcp.servers in via HM's synthesized `hm` personal
+      # plugin (carries an .mcp.json); tools appear as
+      # mcp__plugin_hm_<server>__*. Stale user-scope duplicates in
+      # ~/.claude.json are removed by scripts/agent-stack-cleanup.sh (Task 6).
+      enableMcpIntegration = true;
+    };
+
+    # Declarative MCP servers. Never set `enabled = false` on any of these:
+    # a disabled server lands in disabledMcpServerNames, which flips
+    # settings.json to a read-only store symlink (see LANDMINE above).
+    programs.mcp = {
+      enable = true;
+      servers = {
+        kagi = {
+          command = "op";
+          args = [ "run" "--" "uvx" "--python" "3.13" "kagimcp" ];
+          # op:// reference resolved by `op run` at launch — not a secret.
+          env.KAGI_API_KEY = "op://Private/Kagi/api_key";
+        };
+        fetch = {
+          command = "uvx";
+          args = [ "mcp-server-fetch" ];
+        };
+      } // optionalAttrs (cfg.obsidianVault != null) {
+        obsidian = {
+          command = "npx";
+          args = [ "-y" "@bitbonsai/mcpvault@latest" cfg.obsidianVault ];
+        };
+      };
     };
 
     home.file = mkMerge ([
