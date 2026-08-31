@@ -111,7 +111,7 @@ with lib;
         "obs"
         "imaging-edge"
         # Cloud
-        "google-cloud-sdk"
+        "gcloud-cli" # renamed upstream from google-cloud-sdk
         # Utilities
         "balenaetcher"
         "tigervnc-viewer"
