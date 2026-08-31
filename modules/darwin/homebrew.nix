@@ -36,8 +36,12 @@ in {
       taps = {
         "homebrew/homebrew-core" = inputs.homebrew-core;
         "homebrew/homebrew-bundle" = inputs.homebrew-bundle;
-        # Note: homebrew-cask is not managed here to avoid "Refusing to untap" errors
-        # Homebrew includes cask support by default
+        # With nix-homebrew pinning homebrew-core, HOMEBREW_NO_INSTALL_FROM_API is
+        # set, so casks MUST also come from a pinned tap — without this line they
+        # silently resolve from a stale local API cache (bit us 2026-08-31: months-old
+        # cask definitions with dead download URLs). Cask versions now track the
+        # flake input; `nix flake update homebrew-cask` to bump.
+        "homebrew/homebrew-cask" = inputs.homebrew-cask;
       };
       mutableTaps = true;
     };
@@ -47,7 +51,10 @@ in {
       enable = true;
       onActivation = {
         cleanup = "zap";
-        autoUpdate = true;
+        # Taps are flake-pinned (above); letting brew self-update during activation
+        # fights the pinning — on 2026-08-31 it cloned 1.1G of homebrew-core mid-switch
+        # and crashed brew 6.0.18. Upgrades arrive by bumping the flake inputs.
+        autoUpdate = false;
         upgrade = true;
         # Homebrew 6 made `brew bundle --cleanup` a dry-run that exits non-zero
         # unless cleanup is forced, which aborts activation. Force it through.
