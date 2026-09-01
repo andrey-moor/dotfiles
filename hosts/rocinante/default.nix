@@ -1,121 +1,58 @@
 # Rocinante -- x86_64 Linux workstation (Omarchy, standalone home-manager)
+#
+# Feature modules are listed in flake.nix: home/{core,dev,linux} bundles plus
+# copilot, hunk, lmstudio, python and linux/edge (x86_64 Edge).
+#
+# lan-mouse is deliberately NOT imported: the rolling-main daemon held an
+# input-capture overlay that stopped Wayland from seeing keyboard/mouse here
+# (2026-05-06). Re-add ./home/shell/lan-mouse.nix in flake.nix once fixed;
+# behemoth's config has this host's fingerprint.
 
-{ lib, ... }:
+{ config, pkgs, inputs, ... }:
 
-with lib;
 {
-  system = "x86_64-linux";
-  username = "andreym";
-  homeDirectory = "/home/andreym";
+  # Home-manager state version
+  home.stateVersion = "24.05";
+  home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
 
-  config = { config, pkgs, inputs, ... }: {
-    # Home-manager state version
-    home.stateVersion = "24.05";
-    home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
+  # nixGL for GPU acceleration with Nix apps on non-NixOS
+  targets.genericLinux.nixGL = {
+    packages = inputs.nixgl.packages;
+    defaultWrapper = "mesa";  # AMD GPU
+  };
 
-    # nixGL for GPU acceleration with Nix apps on non-NixOS
-    targets.genericLinux.nixGL = {
-      packages = inputs.nixgl.packages;
-      defaultWrapper = "mesa";  # AMD GPU
-    };
+  # Additional packages
+  home.packages = [
+    (pkgs.azure-cli.withExtensions [
+      pkgs.azure-cli-extensions.bastion
+      (pkgs.azure-cli-extensions.ssh.overridePythonAttrs (old: {
+        # nixpkgs has oras 0.2.x but extension pins 0.1.30 — works fine with newer
+        pythonRelaxDeps = [ "oras" ];
+        nativeBuildInputs = (old.nativeBuildInputs or []) ++ [
+          pkgs.python3Packages.pythonRelaxDepsHook
+        ];
+      }))
+    ])
+    pkgs._1password-cli  # op CLI for secret management
+    pkgs.uv              # Python package runner (uvx)
+    pkgs.nodejs           # Node.js runtime (npx)
+    pkgs.dnsutils
+    pkgs.netcat-openbsd
+    pkgs.grpcurl
+    pkgs.shellcheck
+    # tailscale: installed via pacman (needs root systemd service)
+    (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
+  ];
 
-    # Additional packages
-    home.packages = [
-      (pkgs.azure-cli.withExtensions [
-        pkgs.azure-cli-extensions.bastion
-        (pkgs.azure-cli-extensions.ssh.overridePythonAttrs (old: {
-          # nixpkgs has oras 0.2.x but extension pins 0.1.30 — works fine with newer
-          pythonRelaxDeps = [ "oras" ];
-          nativeBuildInputs = (old.nativeBuildInputs or []) ++ [
-            pkgs.python3Packages.pythonRelaxDepsHook
-          ];
-        }))
-      ])
-      pkgs._1password-cli  # op CLI for secret management
-      pkgs.uv              # Python package runner (uvx)
-      pkgs.nodejs           # Node.js runtime (npx)
-      pkgs.dnsutils
-      pkgs.netcat-openbsd
-      pkgs.grpcurl
-      pkgs.shellcheck
-      # tailscale: installed via pacman (needs root systemd service)
-      (config.lib.nixGL.wrap pkgs.mesa-demos)  # provides glxinfo, glxgears, etc.
-    ];
+  sops = {
+    age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+    defaultSopsFile = ../../secrets/wayvnc.yaml;
+    secrets."wayvnc-rocinante" = { };
+  };
 
-    sops = {
-      age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
-      defaultSopsFile = ../../secrets/wayvnc.yaml;
-      secrets."wayvnc-rocinante" = { };
-    };
-
-    # Enable modules
-    modules = {
-      dotfilesDir = "${config.home.homeDirectory}/dotfiles";
-
-      profiles.user = "andreym";
-
-      shell = {
-        default = "nushell";
-        nushell.enable = true;
-        git.enable = true;
-        ssh.enable = true;
-        direnv.enable = true;
-        atuin.enable = true;
-        starship.enable = true;
-        tmux.enable = true;
-        bat.enable = true;
-        lazygit.enable = true;
-        ghostty.enable = true;
-        gpg.enable = true;
-        onepassword.enable = true;
-        alacritty.enable = true;
-        openvpn.enable = true;
-        lan-mouse = {
-          # Disabled 2026-05-06: rolling-main daemon was holding an input-capture
-          # overlay that prevented Wayland from receiving keyboard/mouse on
-          # rocinante. Flip back to true once the upstream bug is fixed; config
-          # below (fingerprints, clients) is preserved.
-          enable = false;
-          authorizedFingerprints = {
-            "a6:0e:8b:92:c5:00:07:0c:c8:56:42:36:65:81:a4:be:ab:a4:91:47:c5:5b:10:22:de:08:5b:5e:57:27:44:ea" = "behemoth";
-          };
-          clients = [{
-            position = "right";
-            ips = [ "10.0.0.239" ];
-            activateOnStartup = true;
-          }];
-        };
-      };
-
-      dev = {
-        nix.enable = true;
-        neovim.enable = true;
-        vscode.enable = true;
-        jj.enable = true;
-        go.enable = true;
-        rust.enable = true;
-        kubernetes.enable = true;
-        claude.enable = true;
-        codex.enable = true;
-        opencode.enable = true;
-        python.enable = true;
-        bazel.enable = true;
-        terraform.enable = true;
-        hunk.enable = true;
-        lmstudio.enable = true;
-        copilot.enable = true;
-      };
-
-      linux = {
-        edge.enable = true;
-        firefox.enable = true;
-        intune.enable = true;
-        intune.debug = true;  # Enable verbose logging for debugging
-        wayvnc = {
-          enable = true;
-          passwordFile = config.sops.secrets."wayvnc-rocinante".path;
-        };
-      };
-    };
+  # Settings for the parameterized modules
+  modules.linux = {
+    intune.debug = true;  # Enable verbose logging for debugging
+    wayvnc.passwordFile = config.sops.secrets."wayvnc-rocinante".path;
   };
 }

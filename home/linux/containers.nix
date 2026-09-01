@@ -1,32 +1,18 @@
-# modules/darwin/containers.nix -- Container runtime and services via launchd
+# home/linux/containers.nix -- Container services via systemd user units
 #
-# Provides a declarative way to run containers as launchd services on macOS.
-# Similar to NixOS's virtualisation.oci-containers but for Darwin.
-# Supports OrbStack (via homebrew) or Podman (via nixpkgs) as the container runtime.
+# Provides a declarative way to run containers as systemd user services on Linux.
+# Similar to NixOS's virtualisation.oci-containers but for home-manager.
+# Uses podman (rootless) as the container runtime.
 
 { lib, config, pkgs, ... }:
 
 with lib;
 let
-  cfg = config.modules.darwin.containers;
+  cfg = config.modules.linux.containers;
 
-  # Runtime-specific configuration
-  runtimeConfig = {
-    orbstack = {
-      bin = "/usr/local/bin/docker";  # OrbStack symlinks here
-      path = "/usr/local/bin:/usr/bin:/bin";
-    };
-    podman = {
-      bin = "${pkgs.podman}/bin/podman";
-      path = "${pkgs.podman}/bin:/usr/local/bin:/usr/bin:/bin";
-    };
-  };
-
-  runtime = runtimeConfig.${cfg.runtime};
-
-  # Generate launchd service for a container
+  # Generate systemd service for a container
   mkContainerService = name: container: let
-    runArgs = [ runtime.bin "run" "--rm" "--name" name ]
+    runArgs = [ "${pkgs.podman}/bin/podman" "run" "--rm" "--name" name "--replace" ]
       ++ optional container.pull "--pull=always"
       ++ concatMap (p: [ "-p" p ]) container.ports
       ++ concatMap (v: [ "-v" v ]) container.volumes
@@ -41,13 +27,20 @@ let
       ++ [ container.image ]
       ++ container.cmd;
   in {
-    serviceConfig = {
-      ProgramArguments = runArgs;
-      KeepAlive = container.autoStart;
-      RunAtLoad = container.autoStart;
-      StandardOutPath = "${cfg.logDir}/container-${name}.log";
-      StandardErrorPath = "${cfg.logDir}/container-${name}.err";
-      EnvironmentVariables.PATH = runtime.path;
+    Unit = {
+      Description = "Container ${name}";
+      After = [ "network.target" ];
+    };
+    Service = {
+      Type = "simple";
+      ExecStartPre = "-${pkgs.podman}/bin/podman stop ${name}";
+      ExecStart = concatStringsSep " " runArgs;
+      ExecStop = "${pkgs.podman}/bin/podman stop ${name}";
+      Restart = "on-failure";
+      RestartSec = "10s";
+    };
+    Install = {
+      WantedBy = [ "default.target" ];
     };
   };
 
@@ -129,7 +122,7 @@ let
       autoStart = mkOption {
         type = types.bool;
         default = true;
-        description = "Start container automatically on boot/login";
+        description = "Start container automatically on login";
       };
 
       pull = mkOption {
@@ -148,23 +141,7 @@ let
   };
 
 in {
-  options.modules.darwin.containers = {
-    runtime = mkOption {
-      type = types.enum [ "orbstack" "podman" ];
-      default = "orbstack";
-      description = ''
-        Container runtime to use.
-        - orbstack: OrbStack (installed via homebrew cask)
-        - podman: Podman (installed via nixpkgs)
-      '';
-    };
-
-    logDir = mkOption {
-      type = types.str;
-      default = "/tmp";
-      description = "Directory for container logs";
-    };
-
+  options.modules.linux.containers = {
     containers = mkOption {
       type = types.attrsOf (types.submodule containerOpts);
       default = {};
@@ -175,36 +152,26 @@ in {
             image = "redis:7-alpine";
             ports = [ "6379:6379" ];
           };
-          postgres = {
-            image = "postgres:16";
-            ports = [ "5432:5432" ];
-            environment = {
-              POSTGRES_PASSWORD = "dev";
-              POSTGRES_DB = "myapp";
-            };
-            volumes = [ "pg-data:/var/lib/postgresql/data" ];
-          };
         }
       '';
     };
   };
 
   config = mkMerge [
-    # OrbStack: install via homebrew cask
-    (mkIf (cfg.runtime == "orbstack") {
-      homebrew.casks = [ "orbstack" ];
-    })
+    # Install podman and configure rootless containers
+    {
+      home.packages = [ pkgs.podman ];
 
-    # Podman: install via nixpkgs
-    (mkIf (cfg.runtime == "podman") {
-      environment.systemPackages = [ pkgs.podman ];
-    })
+      xdg.configFile."containers/policy.json".text = builtins.toJSON {
+        default = [{ type = "insecureAcceptAnything"; }];
+      };
+    }
 
-    # Create launchd agents for each container
+    # Create systemd user services for each container
     (mkIf (cfg.containers != {}) {
-      launchd.user.agents = mapAttrs' (name: container:
+      systemd.user.services = mapAttrs' (name: container:
         nameValuePair "container-${name}" (mkContainerService name container)
-      ) cfg.containers;
+      ) (filterAttrs (n: c: c.autoStart) cfg.containers);
     })
   ];
 }

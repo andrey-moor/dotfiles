@@ -1,18 +1,17 @@
 # modules/darwin/default.nix -- Darwin (macOS) base configuration
 #
-# Note: This module is only loaded on Darwin via the module system.
-# No need for mkIf guards.
+# Imported by hosts/behemoth. The single macOS user is hard-coded here; the
+# old `user.name`/`user.homeDir`/`user.dataDir` option set is gone.
 
-{ lib, config, pkgs, inputs, ... }:
+{ pkgs, ... }:
 
-with lib;
 {
   config = {
     # Note: Nix configuration is handled by Determinate Nix
     # Set nix.enable = false in host config when using Determinate Nix
     # To add extra caches, use /etc/nix/nix.custom.conf
 
-    # Note: nixpkgs.config.allowUnfree is set in mkFlake.nix mkPkgs
+    # Note: nixpkgs.config.allowUnfree is set in flake.nix mkPkgs
 
     # Home-manager: back up existing files instead of failing
     home-manager.backupFileExtension = "backup";
@@ -21,7 +20,7 @@ with lib;
     system.stateVersion = 6;
 
     # Primary user for homebrew and other user-specific options
-    system.primaryUser = config.user.name;
+    system.primaryUser = "andreym";
 
     # Shells
     programs.zsh.enable = true;
@@ -30,12 +29,12 @@ with lib;
 
     # XDG base directories (set at launchd level so nushell finds its config)
     # Note: launchd doesn't expand $HOME, so we use the explicit path
-    launchd.user.envVariables.XDG_CONFIG_HOME = "/Users/${config.user.name}/.config";
+    launchd.user.envVariables.XDG_CONFIG_HOME = "/Users/andreym/.config";
 
     # User account configuration
-    users.users.${config.user.name} = {
-      name = config.user.name;
-      home = "/Users/${config.user.name}";
+    users.users.andreym = {
+      name = "andreym";
+      home = "/Users/andreym";
       shell = pkgs.nushell;
     };
 

@@ -1,214 +1,170 @@
 # Behemoth -- macOS workstation (nix-darwin + home-manager)
+#
+# Home-manager feature modules are listed in flake.nix: home/{core,dev,darwin}
+# bundles plus copilot and hunk.
 
-{ lib, ... }:
+{ config, pkgs, dotfilesDir, ... }:
 
-with lib;
 {
-  system = "aarch64-darwin";
+  imports = [
+    ../../modules/darwin/default.nix
+    ../../modules/darwin/containers.nix
+    ../../modules/darwin/homebrew.nix
+  ];
 
-  config = { config, pkgs, ... }: {
-    # Disable nix-darwin's Nix management (Determinate Nix handles this)
-    nix.enable = false;
+  # Disable nix-darwin's Nix management (Determinate Nix handles this)
+  nix.enable = false;
 
-    networking.hostName = "behemoth";
-    networking.computerName = "Behemoth";
+  networking.hostName = "behemoth";
+  networking.computerName = "Behemoth";
 
-    # Ollama local LLM server
-    launchd.user.agents.ollama = {
-      command = "${pkgs.main.ollama}/bin/ollama serve";
-      serviceConfig = {
-        KeepAlive = true;
-        RunAtLoad = true;
-        StandardOutPath = "/tmp/ollama.log";
-        StandardErrorPath = "/tmp/ollama.log";
-      };
+  # Ollama local LLM server
+  launchd.user.agents.ollama = {
+    command = "${pkgs.main.ollama}/bin/ollama serve";
+    serviceConfig = {
+      KeepAlive = true;
+      RunAtLoad = true;
+      StandardOutPath = "/tmp/ollama.log";
+      StandardErrorPath = "/tmp/ollama.log";
     };
+  };
 
-    # LAN Mouse -- keyboard/mouse sharing with Linux machines
-    # Requires: Accessibility permission (System Settings > Privacy & Security > Accessibility)
-    # Little Snitch: allow UDP 4242
-    launchd.user.agents.lan-mouse = {
-      command = "${pkgs.lan-mouse-app}/bin/lan-mouse daemon";
-      serviceConfig = {
-        KeepAlive = true;
-        RunAtLoad = true;
-        StandardOutPath = "/tmp/lan-mouse.log";
-        StandardErrorPath = "/tmp/lan-mouse.log";
-      };
+  # LAN Mouse -- keyboard/mouse sharing with Linux machines
+  # Requires: Accessibility permission (System Settings > Privacy & Security > Accessibility)
+  # Little Snitch: allow UDP 4242
+  launchd.user.agents.lan-mouse = {
+    command = "${pkgs.lan-mouse-app}/bin/lan-mouse daemon";
+    serviceConfig = {
+      KeepAlive = true;
+      RunAtLoad = true;
+      StandardOutPath = "/tmp/lan-mouse.log";
+      StandardErrorPath = "/tmp/lan-mouse.log";
     };
+  };
 
-    # User configuration
-    user.name = "andreym";
-
-    # Dotfiles location
-    modules.dotfilesDir = "/Users/andreym/Documents/dotfiles";
-
-    # Darwin system-level modules
-    modules.darwin.containers = {
-      enable = true;
-      runtime = "orbstack";
-      containers.litellm = {
-        image = "ghcr.io/berriai/litellm:main-latest";
-        ports = [ "4000:4000" ];
-        pull = true;
-        volumes = [
-          "${config.modules.dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
-          "${config.user.dataDir}/litellm:/root/.config/litellm"  # Persist auth tokens
-        ];
-        cmd = [ "--config" "/app/config.yaml" "--num_workers" "4" ];
-      };
-
-      # RTMP/WebRTC streaming server for screen sharing
-      # OBS: rtmp://localhost:1935 with stream key (e.g., "stream")
-      # View: http://localhost:8889/<key> (WebRTC, <1s latency)
-      # Note: OBS must use x264 with bframes=0 or tune=zerolatency for WebRTC
-      containers.mediamtx = {
-        image = "bluenviron/mediamtx:latest";
-        ports = [
-          "1935:1935"      # RTMP input
-          "8889:8889"      # WebRTC player
-          "8189:8189/udp"  # WebRTC ICE/UDP
-          "8888:8888"      # HLS (fallback)
-          "8554:8554"      # RTSP
-        ];
-        environment.MTX_WEBRTCADDITIONALHOSTS = "10.0.0.239,10.0.0.157";
-        autoStart = true;
-      };
-    };
-
-    modules.darwin.homebrew = {
-      enable = true;
-      casks = [
-        # Development
-        "ghostty"
-        "cursor"
-        # Browsers
-        "google-chrome"
-        "firefox"
-        # Productivity
-        "1password"
-        "raycast"
-        "craft"
-        "fantastical"
-        "granola"
-        "ia-presenter"
-        "obsidian"
-        # Communication
-        "zoom"
-        # AI/ML
-        "claude"
-        "lm-studio"
-        # System
-        "karabiner-elements"
-        "monitorcontrol"
-        "parallels"
-        "little-snitch"
-        "tailscale-app"
-        # Design
-        "figma"
-        "monodraw"
-        # Media
-        "obs"
-        "imaging-edge"
-        # Cloud
-        "gcloud-cli" # renamed upstream from google-cloud-sdk
-        # Utilities
-        "balenaetcher"
-        "tigervnc" # renamed upstream from tigervnc-viewer
+  # Darwin system-level modules
+  modules.darwin.containers = {
+    runtime = "orbstack";
+    containers.litellm = {
+      image = "ghcr.io/berriai/litellm:main-latest";
+      ports = [ "4000:4000" ];
+      pull = true;
+      volumes = [
+        "${dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
+        "/Users/andreym/.local/share/litellm:/root/.config/litellm"  # Persist auth tokens
       ];
-      brews = [
-        # CLI tools better via Homebrew
-        "agent-browser"
-        "azure-cli"
-        "openssh"  # FIDO2/Yubikey SSH support (macOS default lacks it)
-        "firebase-cli"
-        "supabase"
-        "vercel-cli"
-      ];
-      # Mac App Store apps managed manually (`mas install <id>`).
-      # nix-homebrew's brew-bundle mas integration is flaky on Apple Silicon.
-      masApps = { };
+      cmd = [ "--config" "/app/config.yaml" "--num_workers" "4" ];
     };
 
-    # Home-manager user configuration
-    home-manager.users.andreym = { lib, config, pkgs, ... }: {
-      home.stateVersion = "24.05";
-      home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
-      home.username = lib.mkForce "andreym";
-      home.homeDirectory = lib.mkForce "/Users/andreym";
-
-      # Canonical fleet-wide dotfiles path (spec §4): the repo lives in
-      # ~/Documents/dotfiles here; Linux hosts already have it at ~/dotfiles.
-      home.file."dotfiles".source =
-        config.lib.file.mkOutOfStoreSymlink config.modules.dotfilesDir;
-
-      # Common packages (not tied to specific modules)
-      home.packages = with pkgs; [
-        _1password-cli  # op CLI for secret management
-        uv              # Python package runner (uvx)
-        nodejs          # Node.js runtime (npx)
-        # goose-cli  # AI coding agent — BLOCKED: nixpkgs v1.23.2 broken, upstream flake broken (block/goose#8514)
-        main.ollama     # Local LLM inference
-        qemu            # VM emulation (qemu-img, qemu-system-*)
-        (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
-        yubikey-manager # ykman CLI for Yubikey management
+    # RTMP/WebRTC streaming server for screen sharing
+    # OBS: rtmp://localhost:1935 with stream key (e.g., "stream")
+    # View: http://localhost:8889/<key> (WebRTC, <1s latency)
+    # Note: OBS must use x264 with bframes=0 or tune=zerolatency for WebRTC
+    containers.mediamtx = {
+      image = "bluenviron/mediamtx:latest";
+      ports = [
+        "1935:1935"      # RTMP input
+        "8889:8889"      # WebRTC player
+        "8189:8189/udp"  # WebRTC ICE/UDP
+        "8888:8888"      # HLS (fallback)
+        "8554:8554"      # RTSP
       ];
+      environment.MTX_WEBRTCADDITIONALHOSTS = "10.0.0.239,10.0.0.157";
+      autoStart = true;
+    };
+  };
 
-      # Home-manager modules (shell, dev, profiles)
-      modules = {
-        # Override default ~/.dotfiles path for this host
-        dotfilesDir = "/Users/andreym/Documents/dotfiles";
+  modules.darwin.homebrew = {
+    casks = [
+      # Development
+      "ghostty"
+      "cursor"
+      # Browsers
+      "google-chrome"
+      "firefox"
+      # Productivity
+      "1password"
+      "raycast"
+      "craft"
+      "fantastical"
+      "granola"
+      "ia-presenter"
+      "obsidian"
+      # Communication
+      "zoom"
+      # AI/ML
+      "claude"
+      "lm-studio"
+      # System
+      "karabiner-elements"
+      "monitorcontrol"
+      "parallels"
+      "little-snitch"
+      "tailscale-app"
+      # Design
+      "figma"
+      "monodraw"
+      # Media
+      "obs"
+      "imaging-edge"
+      # Cloud
+      "gcloud-cli" # renamed upstream from google-cloud-sdk
+      # Utilities
+      "balenaetcher"
+      "tigervnc" # renamed upstream from tigervnc-viewer
+    ];
+    brews = [
+      # CLI tools better via Homebrew
+      "agent-browser"
+      "azure-cli"
+      "openssh"  # FIDO2/Yubikey SSH support (macOS default lacks it)
+      "firebase-cli"
+      "supabase"
+      "vercel-cli"
+    ];
+    # Mac App Store apps managed manually (`mas install <id>`).
+    # nix-homebrew's brew-bundle mas integration is flaky on Apple Silicon.
+    masApps = { };
+  };
 
-        profiles.user = "andreym";
+  # Home-manager user configuration
+  home-manager.users.andreym = { lib, config, pkgs, dotfilesDir, ... }: {
+    home.stateVersion = "24.05";
+    home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
+    home.username = lib.mkForce "andreym";
+    home.homeDirectory = lib.mkForce "/Users/andreym";
 
-        shell = {
-          default = "nushell";
-          nushell.enable = true;
-          git.enable = true;
-          ssh.enable = true;
-          direnv.enable = true;
-          atuin.enable = true;
-          starship.enable = true;
-          tmux.enable = true;
-          bat.enable = true;
-          lazygit.enable = true;
-          ghostty.enable = true;
-          gpg.enable = true;
-          onepassword.enable = true;
-          alacritty.enable = true;
-          openvpn.enable = true;
-          lan-mouse = {
-            enable = true;
-            gpu = false;
-            authorizedFingerprints = {
-              "17:95:15:54:cc:74:7a:63:88:08:57:07:f1:0b:75:b1:a8:89:e2:f5:89:2b:4c:7a:25:88:2d:11:ae:fa:87:a3" = "rocinante";
-            };
-            clients = [{
-              position = "left";
-              ips = [ "10.0.0.6" ];
-              activateOnStartup = true;
-            }];
-          };
-        };
+    # Canonical fleet-wide dotfiles path (spec §4): the repo lives in
+    # ~/Documents/dotfiles here; Linux hosts already have it at ~/dotfiles.
+    home.file."dotfiles".source =
+      config.lib.file.mkOutOfStoreSymlink dotfilesDir;
 
-        dev = {
-          nix.enable = true;
-          neovim.enable = true;
-          vscode.enable = true;
-          jj.enable = true;
-          go.enable = true;
-          rust.enable = true;
-          kubernetes.enable = true;
-          terraform.enable = true;
-          claude.enable = true;
-          claude.obsidianVault = "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents";
-          bazel.enable = true;
-          hunk.enable = true;
-          codex.enable = true;
-          copilot.enable = true;
-          opencode.enable = true;
-        };
+    # Common packages (not tied to specific modules)
+    home.packages = with pkgs; [
+      _1password-cli  # op CLI for secret management
+      uv              # Python package runner (uvx)
+      nodejs          # Node.js runtime (npx)
+      # goose-cli  # AI coding agent — BLOCKED: nixpkgs v1.23.2 broken, upstream flake broken (block/goose#8514)
+      main.ollama     # Local LLM inference
+      qemu            # VM emulation (qemu-img, qemu-system-*)
+      (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
+      yubikey-manager # ykman CLI for Yubikey management
+    ];
+
+    # Settings for the parameterized modules
+    modules.dev.claude.obsidianVault =
+      "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents";
+
+    modules.shell.lan-mouse = {
+      gpu = false;
+      authorizedFingerprints = {
+        "17:95:15:54:cc:74:7a:63:88:08:57:07:f1:0b:75:b1:a8:89:e2:f5:89:2b:4c:7a:25:88:2d:11:ae:fa:87:a3" = "rocinante";
       };
+      clients = [{
+        position = "left";
+        ips = [ "10.0.0.6" ];
+        activateOnStartup = true;
+      }];
     };
   };
 }

@@ -34,7 +34,7 @@ update-claude:
 bump-copilot:
     #!/usr/bin/env bash
     set -euo pipefail
-    pin_file=modules/home/dev/copilot-pin.json
+    pin_file=home/dev/copilot-pin.json
     latest=$(curl -fsSL "https://registry.npmjs.org/@github/copilot/latest" \
       | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])")
     current=$(python3 -c "import json;print(json.load(open('$pin_file'))['version'])")
@@ -99,11 +99,3 @@ rocinante-switch:
 # Build rocinante config locally (cross-compile check)
 rocinante-build:
     nix build '.#homeConfigurations.rocinante.activationPackage' --dry-run
-
-# Format disk using disko for a specific host
-disko-format disko-host:
-    sudo nix run \
-        --extra-experimental-features nix-command \
-        --extra-experimental-features flakes \
-        github:nix-community/disko \
-        -- --mode zap_create_mount ./hosts/{{disko-host}}/disk.nix

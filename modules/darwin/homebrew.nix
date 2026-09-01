@@ -6,7 +6,6 @@ with lib;
 let cfg = config.modules.darwin.homebrew;
 in {
   options.modules.darwin.homebrew = {
-    enable = mkEnableOption "Homebrew package management";
     casks = mkOption {
       type = types.listOf types.str;
       default = [];
@@ -25,12 +24,12 @@ in {
     };
   };
 
-  config = mkIf cfg.enable {
+  config = {
     # nix-homebrew configuration
     nix-homebrew = {
       enable = true;
       enableRosetta = false;
-      user = config.user.name;
+      user = "andreym";
       # Migrate existing Homebrew installation
       autoMigrate = true;
       taps = {
