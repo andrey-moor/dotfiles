@@ -1,11 +1,11 @@
 # Rocinante -- x86_64 Linux workstation (Omarchy, standalone home-manager)
 #
-# Feature modules are listed in flake.nix: home/{core,dev,linux} bundles plus
-# copilot, hunk, lmstudio, python and linux/edge (x86_64 Edge).
+# Feature modules: the home/{core,dev,linux} bundles plus copilot, hunk,
+# lmstudio, python and linux/edge (x86_64 Edge), imported below.
 #
 # lan-mouse is deliberately NOT imported: the rolling-main daemon held an
 # input-capture overlay that stopped Wayland from seeing keyboard/mouse here
-# (2026-05-06). Re-add ./home/shell/lan-mouse.nix in flake.nix once fixed;
+# (2026-05-06). Re-add ../../home/shell/lan-mouse.nix here once fixed;
 # behemoth's config has this host's fingerprint.
 
 {
@@ -16,6 +16,17 @@
 }:
 
 {
+  imports = [
+    ../../home/core.nix
+    ../../home/dev.nix
+    ../../home/linux.nix
+    ../../home/dev/copilot.nix
+    ../../home/dev/hunk.nix
+    ../../home/dev/lmstudio.nix
+    ../../home/dev/python.nix
+    ../../home/linux/edge.nix
+  ];
+
   # Home-manager state version
   home.stateVersion = "24.05";
   home.enableNixpkgsReleaseCheck = false; # Using pkgs.main for some packages

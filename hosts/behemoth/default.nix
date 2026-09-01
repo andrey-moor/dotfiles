@@ -1,7 +1,7 @@
 # Behemoth -- macOS workstation (nix-darwin + home-manager)
 #
-# Home-manager feature modules are listed in flake.nix: home/{core,dev,darwin}
-# bundles plus copilot and hunk.
+# Home-manager feature modules: the home/{core,dev,darwin} bundles plus copilot
+# and hunk, imported below under home-manager.users.andreym.
 
 {
   config,
@@ -147,6 +147,14 @@
       ...
     }:
     {
+      imports = [
+        ../../home/core.nix
+        ../../home/dev.nix
+        ../../home/darwin.nix
+        ../../home/dev/copilot.nix
+        ../../home/dev/hunk.nix
+      ];
+
       home.stateVersion = "24.05";
       home.enableNixpkgsReleaseCheck = false; # Using pkgs.main for some packages
       home.username = lib.mkForce "andreym";

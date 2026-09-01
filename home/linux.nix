@@ -3,8 +3,10 @@
 # Host-specific: edge.nix (rocinante, x86_64), edge-rosetta.nix + containers.nix
 # (stargazer). rosetta.nix is pulled in by intune.nix/edge-rosetta.nix.
 
-[
-  ./linux/firefox.nix
-  ./linux/intune.nix
-  ./linux/wayvnc.nix
-]
+{
+  imports = [
+    ./linux/firefox.nix
+    ./linux/intune.nix
+    ./linux/wayvnc.nix
+  ];
+}

@@ -1,8 +1,8 @@
 # Stargazer -- Linux workstation (standalone home-manager)
 # Parallels VM on Apple Silicon with LUKS encryption
 #
-# Feature modules are listed in flake.nix: home/{core,dev,linux} bundles plus
-# python, linux/edge-rosetta (aarch64 Edge) and linux/containers.
+# Feature modules: the home/{core,dev,linux} bundles plus python,
+# linux/edge-rosetta (aarch64 Edge) and linux/containers, imported below.
 
 {
   config,
@@ -13,6 +13,15 @@
 }:
 
 {
+  imports = [
+    ../../home/core.nix
+    ../../home/dev.nix
+    ../../home/linux.nix
+    ../../home/dev/python.nix
+    ../../home/linux/containers.nix
+    ../../home/linux/edge-rosetta.nix
+  ];
+
   # Home-manager state version
   home.stateVersion = "24.05";
   home.enableNixpkgsReleaseCheck = false; # Using pkgs.main for some packages

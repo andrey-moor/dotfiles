@@ -103,25 +103,12 @@
           ];
         };
 
-      # Module order decides the merge order of list-typed options, and
-      # home.packages becomes a buildEnv whose derivation depends on that
-      # order. Sorting feature modules by path keeps a host's extra imports in
-      # the same place they'd sit in an alphabetical `home/<category>/` listing.
-      sortModules = builtins.sort (a: b: builtins.toString a < builtins.toString b);
-
-      # Home-manager modules loaded on every host, before the feature modules.
+      # Home-manager modules loaded on every host, before the host's own imports.
       homeBase = [
         ./home
         catppuccin.homeModules.catppuccin
         sops-nix.homeManagerModules.sops
       ];
-
-      bundles = {
-        core = import ./home/core.nix;
-        dev = import ./home/dev.nix;
-        darwin = import ./home/darwin.nix;
-        linux = import ./home/linux.nix;
-      };
     in
     {
       # macOS workstation
@@ -146,17 +133,7 @@
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
               home-manager.extraSpecialArgs = { inherit inputs dotfilesDir; };
-              home-manager.sharedModules =
-                homeBase
-                ++ sortModules (
-                  bundles.core
-                  ++ bundles.dev
-                  ++ bundles.darwin
-                  ++ [
-                    ./home/dev/copilot.nix
-                    ./home/dev/hunk.nix
-                  ]
-                );
+              home-manager.sharedModules = homeBase;
             }
             inputs.nix-homebrew.darwinModules.nix-homebrew
             # mac-app-util: trampolines so Nix apps appear in Spotlight/Raycast
@@ -182,18 +159,6 @@
             }
           ]
           ++ homeBase
-          ++ sortModules (
-            bundles.core
-            ++ bundles.dev
-            ++ bundles.linux
-            ++ [
-              ./home/dev/copilot.nix
-              ./home/dev/hunk.nix
-              ./home/dev/lmstudio.nix
-              ./home/dev/python.nix
-              ./home/linux/edge.nix
-            ]
-          )
           ++ [ ./hosts/rocinante ];
         };
 
@@ -214,16 +179,6 @@
             }
           ]
           ++ homeBase
-          ++ sortModules (
-            bundles.core
-            ++ bundles.dev
-            ++ bundles.linux
-            ++ [
-              ./home/dev/python.nix
-              ./home/linux/containers.nix
-              ./home/linux/edge-rosetta.nix
-            ]
-          )
           ++ [ ./hosts/stargazer ];
         };
 
