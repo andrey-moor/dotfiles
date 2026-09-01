@@ -7,6 +7,21 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      # Mirrors `just lint`. Directory args to `nix fmt` are deprecated, so the
+      # file list comes from git. spikes/ holds standalone throwaway flakes:
+      # excluded from deadnix here and from statix via statix.toml.
+      - name: nixfmt --check
+        run: nix fmt -- --check $(git ls-files '*.nix')
+      - name: statix
+        run: nix run nixpkgs#statix -- check .
+      - name: deadnix
+        run: nix run nixpkgs#deadnix -- --fail --exclude spikes
+
   flake-check:
     runs-on: ubuntu-latest
     steps:

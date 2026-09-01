@@ -4,7 +4,6 @@
 # and hunk, imported below under home-manager.users.andreym.
 
 {
-  config,
   pkgs,
   dotfilesDir,
   ...
@@ -172,7 +171,7 @@
         # goose-cli  # AI coding agent — BLOCKED: nixpkgs v1.23.2 broken, upstream flake broken (block/goose#8514)
         main.ollama # Local LLM inference
         qemu # VM emulation (qemu-img, qemu-system-*)
-        (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ])) # RE toolkit with MCP bridge
+        (ghidra.withExtensions (_exts: [ ghidra-extensions.ghydramcp ])) # RE toolkit with MCP bridge
         yubikey-manager # ykman CLI for Yubikey management
       ];
 

@@ -42,7 +42,6 @@
 
 with lib;
 let
-  cfg = config.modules.dev.copilot;
   pin = builtins.fromJSON (builtins.readFile ./copilot-pin.json);
   base = inputs.copilot-cli-flake.packages.${pkgs.system}.default;
   copilot =
@@ -50,7 +49,7 @@ let
       base
     else
       base.overrideAttrs (_old: {
-        version = pin.version;
+        inherit (pin) version;
         src = pkgs.fetchurl {
           url = "https://registry.npmjs.org/@github/copilot/-/copilot-${pin.version}.tgz";
           sha256 = pin.hash;

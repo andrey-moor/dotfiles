@@ -23,7 +23,6 @@
 
 with lib;
 let
-  cfg = config.modules.dev.opencode;
 
   mkAgentsLink = subpath: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/agents/${subpath}";
 

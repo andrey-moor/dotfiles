@@ -37,7 +37,6 @@ let
       null; # Future: native-arm64 when Microsoft ships arm64 packages
 
   isRosetta = mode == "rosetta";
-  isNativeX86 = mode == "native-x86_64";
 
   # Package source varies by mode (only import pkgsX86 when needed)
   pkgsX86 =

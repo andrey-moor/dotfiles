@@ -1,0 +1,10 @@
+# statix lint config.
+#
+# repeated_keys (W20) is off: nix module code deliberately uses flat dotted
+# paths (`home.packages`, `home.file."x".source`, `programs.git.enable`).
+# Collapsing those into nested attrsets fights the nixpkgs/home-manager idiom
+# and hurts readability, so the lint is noise here. Every other lint is on.
+disabled = ["repeated_keys"]
+
+# spikes/ holds standalone throwaway flakes that are not part of this config.
+ignore = ["spikes"]

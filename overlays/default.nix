@@ -3,7 +3,7 @@ final: prev: {
   # FIXME: nushell 0.110.0 test fails in sandbox with I/O permission error
   # Test: shell::environment::env::path_is_a_list_in_repl
   # Skip tests until upstream fixes or cached binary is available
-  nushell = prev.nushell.overrideAttrs (oldAttrs: {
+  nushell = prev.nushell.overrideAttrs (_oldAttrs: {
     doCheck = false;
   });
 
@@ -33,7 +33,7 @@ final: prev: {
   # FIXME: azure-cli ssh extension requires oras==0.1.30 but nixpkgs has 0.2.39
   # Skip the runtime dependency check until upstream fixes the version constraint
   azure-cli-extensions = prev.azure-cli-extensions // {
-    ssh = prev.azure-cli-extensions.ssh.overridePythonAttrs (oldAttrs: {
+    ssh = prev.azure-cli-extensions.ssh.overridePythonAttrs (_oldAttrs: {
       pythonRuntimeDepsCheck = "disabled";
     });
   };

@@ -77,7 +77,7 @@ in
           format = cfg.signingFormat;
         }
         // optionalAttrs (cfg.signer != null) {
-          signer = cfg.signer;
+          inherit (cfg) signer;
         }
       );
 

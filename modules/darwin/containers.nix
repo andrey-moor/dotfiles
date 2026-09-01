@@ -86,7 +86,7 @@ let
       };
     };
 
-  containerOpts = { name, ... }: {
+  containerOpts = _: {
     options = {
       image = mkOption {
         type = types.str;

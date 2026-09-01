@@ -93,7 +93,7 @@
           overlays = [
             (import ./overlays)
             # nixpkgs master as pkgs.main (packages that land there first)
-            (final: prev: {
+            (_final: _prev: {
               main = import inputs.nixpkgs-main {
                 inherit system;
                 config.allowUnfree = true;
@@ -182,7 +182,7 @@
           ++ [ ./hosts/stargazer ];
         };
 
-      formatter = forAllSystems (system: (mkPkgs system).nixfmt-rfc-style);
+      formatter = forAllSystems (system: (mkPkgs system).nixfmt);
 
       devShells = forAllSystems (system: {
         default = import ./shell.nix { pkgs = mkPkgs system; };

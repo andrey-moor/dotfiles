@@ -26,7 +26,7 @@ let
 
   # Build the config.toml attrset
   configToml = {
-    port = cfg.port;
+    inherit (cfg) port;
     release_bind = cfg.releaseBind;
   }
   // optionalAttrs (cfg.authorizedFingerprints != { }) {
@@ -36,14 +36,13 @@ let
     clients = map (
       c:
       {
-        ips = c.ips;
-        position = c.position;
+        inherit (c) ips position;
       }
       // optionalAttrs (c.hostname != null) {
-        hostname = c.hostname;
+        inherit (c) hostname;
       }
       // optionalAttrs (c.port != null) {
-        port = c.port;
+        inherit (c) port;
       }
       // optionalAttrs c.activateOnStartup {
         activate_on_startup = true;

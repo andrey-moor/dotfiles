@@ -68,7 +68,13 @@ clean-result:
 
 # Format nix files
 fmt:
-    nix fmt .
+    nix fmt -- $(git ls-files '*.nix')
+
+# Check formatting + run statix/deadnix (same gate as CI)
+lint:
+    nix fmt -- --check $(git ls-files '*.nix')
+    nix run nixpkgs#statix -- check .
+    nix run nixpkgs#deadnix -- --fail --exclude spikes
 
 # Check flake
 check:

@@ -7,7 +7,6 @@
 
 {
   lib,
-  config,
   pkgs,
   ...
 }:
@@ -15,7 +14,7 @@
 with lib;
 let
   # Override Edge version when upstream removes the nixpkgs-pinned deb
-  edgePackage = pkgs.microsoft-edge.overrideAttrs (old: rec {
+  edgePackage = pkgs.microsoft-edge.overrideAttrs (_old: rec {
     version = "145.0.3800.70";
     src = builtins.fetchurl {
       url = "https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/microsoft-edge-stable_${version}-1_amd64.deb";

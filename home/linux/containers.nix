@@ -80,7 +80,7 @@ let
       };
     };
 
-  containerOpts = { name, ... }: {
+  containerOpts = _: {
     options = {
       image = mkOption {
         type = types.str;
@@ -224,7 +224,7 @@ in
     (mkIf (cfg.containers != { }) {
       systemd.user.services = mapAttrs' (
         name: container: nameValuePair "container-${name}" (mkContainerService name container)
-      ) (filterAttrs (n: c: c.autoStart) cfg.containers);
+      ) (filterAttrs (_n: c: c.autoStart) cfg.containers);
     })
   ];
 }

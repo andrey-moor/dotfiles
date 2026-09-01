@@ -73,13 +73,13 @@ in
       };
 
       # GUI applications
-      casks = cfg.casks;
+      inherit (cfg) casks;
 
       # CLI tools not in nixpkgs or better via Homebrew
-      brews = cfg.brews;
+      inherit (cfg) brews;
 
       # Mac App Store apps
-      masApps = cfg.masApps;
+      inherit (cfg) masApps;
     };
   };
 }
