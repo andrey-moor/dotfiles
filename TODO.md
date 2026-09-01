@@ -36,6 +36,6 @@ defaults write ~/Library/Preferences/org.mozilla.firefox MicrosoftEntraSSO -bool
 ### Status
 
 - [ ] Test on rocinante
-- [ ] If working, integrate into dotfiles (Nix module or chezmoi)
+- [ ] If working, integrate into dotfiles (Nix module)
 - [ ] Apply to stargazer
 - [ ] Apply to behemoth

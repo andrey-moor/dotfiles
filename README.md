@@ -6,7 +6,7 @@ Nix-based dotfiles for macOS (nix-darwin) and Linux (NixOS/home-manager).
 
 **Hybrid approach:**
 - **Nix/home-manager**: Packages, services, and declarative configs (starship, tmux, bat, git, jj, gpg)
-- **chezmoi**: Mutable configs that change frequently (neovim/AstroVim, nushell)
+- **config/**: Mutable configs that change frequently (neovim/AstroVim, nushell, alacritty) — symlinked into `~/.config` by home-manager
 - **Homebrew** (macOS): GUI applications via casks
 
 ## Initial Setup (macOS)
@@ -59,26 +59,21 @@ just clean       # Garbage collect old generations
 just fmt         # Format nix files
 ```
 
-## Chezmoi (Mutable Configs)
+## Mutable Configs
 
-Neovim and nushell configs are managed by chezmoi and live in `chezmoi/` directory.
+Neovim, nushell, and alacritty configs live in `config/` and are deployed by home-manager as out-of-store symlinks into `~/.config`.
 
 **Editing configs (e.g., neovim):**
 ```bash
-# 1. Edit files directly in the repo
-nvim chezmoi/dot_config/nvim/lua/plugins/user.lua
-
-# 2. Apply changes to ~/.config
-just chezmoi-apply   # or: chezmoi apply
-
-# Preview changes before applying:
-just chezmoi-diff    # or: chezmoi diff
+# Edit files directly in the repo — changes are live immediately, no apply step
+nvim config/nvim/lua/plugins/user.lua
 ```
+
+Neovim's `lazy-lock.json` writes through the symlink, so plugin updates are committed straight from the working copy. Nushell's `history.txt` and `vendor/` stay machine-local (only the `.nu` config files are symlinked).
 
 **Path configuration:**
 - Default dotfiles path: `~/.dotfiles`
 - Override per-host via `modules.dotfilesDir` (e.g., behemoth uses `~/Documents/dotfiles`)
-- Chezmoi source dir is automatically set to `${dotfilesDir}/chezmoi`
 - `$DOTFILES` env var is exported for shell scripts
 
 ## Upgrading Packages
@@ -116,10 +111,7 @@ echo ~/.nix-profile/bin/nu | sudo tee -a /etc/shells
 chsh -s ~/.nix-profile/bin/nu
 ```
 
-**5. Apply chezmoi configs (neovim, nushell):**
-```bash
-chezmoi apply
-```
+Neovim/nushell/alacritty configs are symlinked from `config/` by the home-manager switch itself — no extra step.
 
 ## Directory Structure
 
@@ -136,8 +128,7 @@ chezmoi apply
 │       ├── shell/         # Shell tools (starship, tmux, bat, gpg, ssh, etc.)
 │       ├── dev/           # Dev tools (neovim, go, rust, jj, kubernetes, claude)
 │       └── profiles/      # User-specific configs
-├── chezmoi/               # Mutable configs (nushell, nvim)
-│   └── dot_config/
+├── config/                # Mutable configs (nvim, nushell, alacritty, litellm)
 ├── justfile               # Command runner
 └── README.md
 ```
@@ -154,15 +145,14 @@ chezmoi apply
 | `gpg.nix` | GPG agent with Yubikey/SSH support |
 | `ssh.nix` | SSH client config (GitHub, FIDO2 keys) |
 | `ghostty.nix` | Terminal emulator |
-| `nushell.nix` | Nu shell (package only, config via chezmoi) |
+| `nushell.nix` | Nu shell (config symlinked from `config/nushell`) |
 | `git.nix` | Git configuration with GPG signing |
 | `direnv.nix` | Directory-based environments |
-| `chezmoi.nix` | Chezmoi dotfile manager |
 
 ### Dev (`modules/home/dev/`)
 | Module | Description |
 |--------|-------------|
-| `neovim.nix` | Neovim + LSP deps (config via chezmoi/AstroVim) |
+| `neovim.nix` | Neovim + LSP deps (AstroVim config symlinked from `config/nvim`) |
 | `go.nix` | Go toolchain + gopls, delve |
 | `rust.nix` | Rust toolchain via rustup + cargo tools |
 | `jj.nix` | Jujutsu VCS |

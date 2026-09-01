@@ -32,11 +32,8 @@ chmod 600 ~/.config/sops/age/keys.txt
 ```
 
 ```bash
-# Install home-manager and switch
+# Install home-manager and switch (also symlinks nvim/nushell/alacritty configs from config/)
 nix run home-manager -- switch --flake .#rocinante -b backup
-
-# Apply chezmoi (nushell config, etc.)
-chezmoi apply
 ```
 
 ## Intune Enrollment

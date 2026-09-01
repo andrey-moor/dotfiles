@@ -316,20 +316,15 @@ nix run nixpkgs#home-manager -- switch --flake .#rocinante -b backup
 
 **Note:** The `-b backup` flag backs up any existing config files (from armarchy) that home-manager needs to manage. These are saved as `*.backup` files.
 
-### Step 12: Apply Chezmoi Configuration
+### Step 12: Verify Mutable Configs
 
-Home-manager installs packages and declarative configs. Chezmoi manages mutable user configs (neovim, nushell, etc.) that change frequently:
+Home-manager also deploys the mutable configs (neovim, nushell, alacritty) as out-of-store symlinks from the repo's `config/` directory — no separate apply step:
 
 ```bash
-# Apply chezmoi-managed configs (neovim, nushell, etc.)
-chezmoi apply
-
-# Verify configs were applied
+# Verify configs were symlinked
 ls ~/.config/nvim
 ls ~/.config/nushell
 ```
-
-The chezmoi module automatically sets `sourceDir` to the dotfiles chezmoi directory via the Parallels shared folder mount.
 
 ## Post-Install Verification
 

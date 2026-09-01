@@ -10,8 +10,6 @@ just build           # Build without applying
 just update          # Update flake inputs (nixpkgs, etc.)
 just fmt             # Format nix files
 just check           # Check flake validity
-just chezmoi-apply   # Apply chezmoi changes (~/.config: nvim, nushell, etc.)
-just chezmoi-diff    # Preview chezmoi changes
 ```
 
 For a different host: `just --set host <hostname> switch`
@@ -20,9 +18,8 @@ For a different host: `just --set host <hostname> switch`
 
 **Hybrid dotfiles approach:**
 - **Nix (nix-darwin + home-manager)**: Packages, services, declarative configs
-- **Chezmoi**: Mutable user configs that change frequently (neovim, nushell) — lives in `chezmoi/`
 - **agents/**: AI agent config (AGENTS.md, skills, commands) — fanned out by home-manager as out-of-store symlinks
-- **config/**: Infrastructure/service configs (litellm, etc.) — version-controlled, rarely changes
+- **config/**: Authored configs (nvim, nushell, alacritty, litellm) — deployed by home-manager as out-of-store symlinks, edits live immediately
 - **Homebrew** (macOS only): GUI applications via casks
 
 ### Flake Structure
@@ -62,15 +59,11 @@ Enable in host config: `modules.<category>.<name>.enable = true;`
 - `modules.dev.*`: Dev tools (neovim, go, rust, kubernetes, etc.)
 - `modules.darwin.containers`: Container services via launchd (OrbStack/Podman)
 
-### Chezmoi Integration
+### Mutable Configs
 
-Chezmoi source lives in `chezmoi/` directory. The `modules.shell.chezmoi` module:
-- Installs chezmoi
-- Configures sourceDir to `${dotfilesDir}/chezmoi`
-- Exports `$DOTFILES` env var for shell scripts
-
-Managed targets:
-- `chezmoi/dot_config/` → `~/.config/` (neovim, nushell, alacritty, etc.)
+Frequently-edited configs live in `config/{nvim,nushell,alacritty}` and are deployed by home-manager as out-of-store symlinks into `~/.config` — edits in the repo are live immediately, no apply step. Notes:
+- nvim's `lazy-lock.json` writes through the symlink; commit it straight from the working copy
+- nushell: only `config.nu`, `env.nu`, `catppuccin_mocha.nu` are symlinked — `history.txt` and `vendor/` stay machine-local
 
 ### Agent Stack
 

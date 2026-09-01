@@ -25,7 +25,7 @@ Always-on rules for any coding agent (Claude Code, Codex, Copilot, opencode) in 
 
 ## Environment & machines
 
-- Dotfiles managed with Nix (nix-darwin + home-manager) and Chezmoi.
+- Dotfiles managed with Nix (nix-darwin + home-manager).
 - Machines: behemoth (macOS, aarch64), rocinante (x86_64 Arch Linux),
   stargazer (aarch64 Linux VM on behemoth).
 - Repo lives at `~/Documents/dotfiles` on macOS, `~/dotfiles` on Linux.

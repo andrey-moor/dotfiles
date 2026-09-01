@@ -30,7 +30,6 @@ use $"($NU_SCRIPTS)/modules/kubernetes/"
 
 # Shell Aliases
 use $"($NU_SCRIPTS)/aliases/bat/bat-aliases.nu" *
-use $"($NU_SCRIPTS)/aliases/chezmoi/chezmoi-aliases.nu" *
 use $"($NU_SCRIPTS)/aliases/git/git-aliases.nu" *
 
 alias ll = ls -l
