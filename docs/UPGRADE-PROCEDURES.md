@@ -343,7 +343,7 @@ Same as Microsoft Identity Broker - git checkout and rebuild.
 
 **Current version:** 3.3.2
 **Pinned because:** Code:1200 broker authentication bug with OpenSSL 3.4+
-**Location:** `modules/home/linux/intune.nix` (opensslArch derivation)
+**Location:** `home/linux/intune.nix` (opensslArch derivation)
 **Update frequency:** ONLY when bug is fixed or security-critical
 **Risk level:** CRITICAL - Can completely break authentication
 
@@ -409,7 +409,7 @@ https://archive.archlinux.org/packages/o/openssl/openssl-3.3.2-1-x86_64.pkg.tar.
 ### Rollback
 
 ```bash
-git checkout modules/home/linux/intune.nix
+git checkout home/linux/intune.nix
 nix run home-manager -- switch --flake .#stargazer -b backup
 ```
 
@@ -425,7 +425,7 @@ nix run home-manager -- switch --flake .#stargazer -b backup
 
 **Current version:** 0.25.1
 **Pinned because:** Compatibility with YubiKey PIV and broker PKCS#11
-**Location:** `modules/home/linux/intune.nix` (openscArch derivation)
+**Location:** `home/linux/intune.nix` (openscArch derivation)
 **Update frequency:** When YubiKey support improves or bugs found
 **Risk level:** MEDIUM - Can break YubiKey certificate access
 
@@ -464,7 +464,7 @@ https://archive.archlinux.org/packages/o/opensc/opensc-0.25.1-1-x86_64.pkg.tar.z
 ### Rollback
 
 ```bash
-git checkout modules/home/linux/intune.nix
+git checkout home/linux/intune.nix
 nix run home-manager -- switch --flake .#stargazer -b backup
 ```
 

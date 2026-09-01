@@ -8,7 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 just switch          # Build and apply nix configuration
 just build           # Build without applying
 just update          # Update flake inputs (nixpkgs, etc.)
-just fmt             # Format nix files
+just fmt             # Format nix files (nixfmt over `git ls-files '*.nix'`)
+just lint            # Same gate as CI: nixfmt --check + statix + deadnix
 just check           # Check flake validity
 ```
 
@@ -24,40 +25,69 @@ For a different host: `just --set host <hostname> switch`
 
 ### Flake Structure
 
-The flake uses a custom `lib.mkFlake` builder (`lib/mkFlake.nix`) that:
-- Auto-detects host type from system string (darwin vs linux)
-- Darwin hosts → `darwinConfigurations` (nix-darwin + home-manager)
-- Linux hosts → `homeConfigurations` (standalone home-manager)
-- Auto-discovers modules via `mapModulesRec'` from filesystem
+`flake.nix` is hand-rolled — no builder lib, no filesystem magic. It declares one explicit block per host:
+
+- `darwinConfigurations.behemoth` → `darwin.lib.darwinSystem` (nix-darwin + home-manager as a darwin module)
+- `homeConfigurations.rocinante` / `homeConfigurations.stargazer` → `home-manager.lib.homeManagerConfiguration` (standalone HM on foreign Linux; P7 will move rocinante to NixOS)
+
+Shared pieces, all inline in `flake.nix`:
+- **`mkPkgs system`** — `import nixpkgs` with `config.allowUnfree = true` and overlays, in order: `./overlays`, a `pkgs.main` overlay (nixpkgs master, also allowUnfree, for packages that land there first), `nur.overlays.default`.
+- **`specialArgs` / `extraSpecialArgs` = `{ inherit inputs dotfilesDir; }`** — `dotfilesDir` is a per-host string literal (`/Users/andreym/Documents/dotfiles` on behemoth, `/home/andreym/dotfiles` on Linux), not an option. Modules take it as a function argument.
+- **`homeBase`** — `./home` (HM base: stateVersion, `$DOTFILES`, xdg, core packages) + `catppuccin.homeModules.catppuccin` + `sops-nix.homeManagerModules.sops`, applied on every host.
+- `formatter.<system> = pkgs.nixfmt` and `devShells.<system>.default = import ./shell.nix` for `x86_64-linux`, `aarch64-linux`, `aarch64-darwin` (`x86_64-darwin` is dropped — nixpkgs 26.11 no longer evaluates it).
+
+Each `hosts/<host>/default.nix` is a self-contained plain module: its own `imports` list plus its config. The flake block only supplies `system`, `pkgs`, `dotfilesDir` and the HM wiring.
 
 ### Module System
 
-Modules are **auto-discovered** from the filesystem - no manual imports needed.
+**Importing a module is what enables it.** There is no auto-discovery and no `enable` flag on ordinary modules.
 
-**Module pattern** (`modules/home/{shell,dev}/*.nix`):
-```nix
-{ lib, config, pkgs, ... }:
-with lib;
-let cfg = config.modules.<category>.<name>;
-in {
-  options.modules.<category>.<name> = {
-    enable = mkEnableOption "<description>";
-  };
-  config = mkIf cfg.enable {
-    home.packages = [ ... ];
-  };
-}
-```
+Layout:
+- `home/{core,dev,darwin,linux}.nix` — bundles: plain `{ imports = [ ... ]; }` lists.
+  - `core` — profile + shell tools every host gets
+  - `dev` — dev tooling every host gets
+  - `darwin` / `linux` — platform-only members
+- `home/{shell,dev,linux,profiles}/*.nix` — the feature files themselves.
+- `modules/darwin/{default,containers,homebrew}.nix` — macOS system-level (nix-darwin) modules, imported explicitly by `hosts/behemoth`.
 
-Enable in host config: `modules.<category>.<name>.enable = true;`
+A host imports the bundles it wants plus any one-off feature files (e.g. rocinante adds `home/dev/lmstudio.nix`; behemoth deliberately gets `home/shell/lan-mouse.nix` via `home/darwin.nix` while rocinante deliberately does not import it).
 
-### Key Options
+**Adding a tool:**
+1. Write `home/<category>/<tool>.nix` — a plain module, no options, no `mkIf`:
+   ```nix
+   { pkgs, ... }:
+   {
+     home.packages = [ pkgs.mytool ];
+   }
+   ```
+2. Add it to a bundle (`home/core.nix`, `home/dev.nix`, ...) if every host should have it, or to a single host's `imports` if not.
+3. `just switch`.
 
-- `modules.dotfilesDir`: Path to dotfiles repo (default: `~/.dotfiles`)
-- `modules.profiles.user`: User profile to load (sets git identity, signing key)
-- `modules.shell.*`: Shell tools (git, ssh, gpg, tmux, starship, etc.)
-- `modules.dev.*`: Dev tools (neovim, go, rust, kubernetes, etc.)
-- `modules.darwin.containers`: Container services via launchd (OrbStack/Podman)
+Add an option only when two hosts need the *same* module with *different* values.
+
+### Parameterized Modules
+
+These 11 modules keep options (under their existing `modules.*` names); hosts set values, imports still do the enabling:
+
+| Option path | What it configures |
+|-------------|--------------------|
+| `modules.darwin.containers` | `runtime`, `logDir`, `containers.*` — launchd container services |
+| `modules.darwin.homebrew` | `casks`, `brews`, `masApps` |
+| `modules.linux.containers` | `containers.*` — podman systemd user units |
+| `modules.linux.intune` | `debug` |
+| `modules.linux.wayvnc` | `passwordFile`, `port`, `address`, `monitor`, resolutions, `gpu`, `renderCursor` |
+| `modules.shell.git` | `userName`, `userEmail`, `signingKey`, `signingFormat`, `signer` |
+| `modules.shell.lan-mouse` | `port`, `gpu`, `releaseBind`, `authorizedFingerprints`, `clients` |
+| `modules.shell.onepassword` | `signer` (op-ssh-sign path; read by the andreym profile) |
+| `modules.dev.claude` | `obsidianVault` (adds the obsidian MCP server when set) |
+| `modules.dev.jj` | `userName`, `userEmail` |
+| `modules.dev.kubernetes` | `helm` (opt-in; nixpkgs helm breaks recurrently) |
+
+### Formatting & Lint
+
+`nix fmt` uses `pkgs.nixfmt`. `just fmt` formats, `just lint` runs the exact CI gate: `nixfmt --check` over `git ls-files '*.nix'`, `statix check .`, `deadnix --fail --exclude spikes`. CI runs the same three in a `lint` job alongside `flake-check` and the three per-host builds.
+
+`statix.toml` disables `repeated_keys` (flat dotted paths like `home.packages` / `programs.git.enable` are the nixpkgs idiom here) and ignores `spikes/`.
 
 ### Mutable Configs
 
@@ -67,10 +97,10 @@ Frequently-edited configs live in `config/{nvim,nushell,alacritty}` and are depl
 
 ### Agent Stack
 
-`agents/` is the source of truth for AI agent config: `AGENTS.md` (global context) + `skills/` + `commands/`. Home-manager modules (`modules/home/dev/{claude,codex,copilot,opencode}.nix`) fan it out as out-of-store symlinks — edits in the repo are live immediately, no rebuild.
+`agents/` is the source of truth for AI agent config: `AGENTS.md` (global context) + `skills/` + `commands/`. Home-manager modules (`home/dev/{claude,codex,copilot,opencode}.nix`) fan it out as out-of-store symlinks — edits in the repo are live immediately, no rebuild.
 
 - **settings.json**: declared-subset merge at activation; everything else (model, permissions, autoMode, ...) is app-owned and never touched. Never set `programs.claude-code.settings`/`.marketplaces` (makes settings.json a read-only store symlink).
-- **Plugins/marketplaces**: declared in `modules/home/dev/claude.nix` (`enabledPlugins`/`extraKnownMarketplaces`, authoritative). Add/remove = edit attrset + `just switch`; content updates via `claude plugin update`.
+- **Plugins/marketplaces**: declared in `home/dev/claude.nix` (`enabledPlugins`/`extraKnownMarketplaces`, authoritative). Add/remove = edit attrset + `just switch`; content updates via `claude plugin update`.
 - **MCP servers**: same module, via `programs.mcp` (surfaced as the `hm` plugin, tools `mcp__plugin_hm_<server>__*`).
 
 ## Hosts
@@ -123,5 +153,5 @@ nix run home-manager -- switch --flake .#stargazer -b backup
 ## Notes
 
 - Uses Determinate Nix installer (`nix.enable = false` in darwin config)
-- New `.nix` files in `modules/home/` are automatically loaded
-- Files prefixed with `_` are ignored by module discovery
+- A new `.nix` file under `home/` does nothing until something imports it — add it to a bundle or a host
+- Cross-module coupling is explicit: `home/linux/{intune,edge-rosetta}.nix` import `home/linux/rosetta.nix` directly

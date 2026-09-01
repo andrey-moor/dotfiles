@@ -9,6 +9,17 @@ Nix-based dotfiles for macOS (nix-darwin) and Linux (NixOS/home-manager).
 - **config/**: Mutable configs that change frequently (neovim/AstroVim, nushell, alacritty) — symlinked into `~/.config` by home-manager
 - **Homebrew** (macOS): GUI applications via casks
 
+`flake.nix` is hand-rolled: one explicit block per host — `darwinConfigurations.behemoth`
+(nix-darwin + home-manager) and `homeConfigurations.{rocinante,stargazer}` (standalone
+home-manager on foreign Linux). It shares a `mkPkgs` helper (allowUnfree; overlays
+`./overlays`, a `pkgs.main` overlay from nixpkgs master, and NUR) and passes
+`{ inherit inputs dotfilesDir; }` as `specialArgs` / `extraSpecialArgs`.
+
+Modules are **not** auto-discovered. `home/{core,dev,darwin,linux}.nix` are bundles —
+plain `imports` lists over the feature files in `home/{shell,dev,linux,profiles}/` — and
+each `hosts/<host>/default.nix` imports the bundles it wants plus any one-off feature
+files. Importing a module is what enables it.
+
 ## Initial Setup (macOS)
 
 **1. Install Nix (Determinate Systems installer):**
@@ -56,7 +67,8 @@ just switch      # Apply configuration
 just build       # Build without applying
 just update      # Update flake inputs (nixpkgs, etc.)
 just clean       # Garbage collect old generations
-just fmt         # Format nix files
+just fmt         # Format nix files (nixfmt)
+just lint        # Same gate as CI: nixfmt --check + statix + deadnix
 ```
 
 ## Mutable Configs
@@ -72,8 +84,9 @@ nvim config/nvim/lua/plugins/user.lua
 Neovim's `lazy-lock.json` writes through the symlink, so plugin updates are committed straight from the working copy. Nushell's `history.txt` and `vendor/` stay machine-local (only the `.nu` config files are symlinked).
 
 **Path configuration:**
-- Default dotfiles path: `~/.dotfiles`
-- Override per-host via `modules.dotfilesDir` (e.g., behemoth uses `~/Documents/dotfiles`)
+- The repo path is a per-host `dotfilesDir` string set in `flake.nix`
+  (`~/Documents/dotfiles` on behemoth, `~/dotfiles` on the Linux hosts) and passed to
+  modules as a `specialArgs` function argument
 - `$DOTFILES` env var is exported for shell scripts
 
 ## Upgrading Packages
@@ -117,17 +130,24 @@ Neovim/nushell/alacritty configs are symlinked from `config/` by the home-manage
 
 ```
 .
-├── flake.nix              # Flake entrypoint
+├── flake.nix              # Flake entrypoint (explicit per-host blocks)
 ├── hosts/
 │   ├── behemoth/          # macOS host (nix-darwin)
-│   └── rocinante/         # Linux host (standalone home-manager)
-├── modules/
-│   ├── darwin/            # macOS-specific modules
-│   │   └── homebrew.nix   # Homebrew casks & brews
-│   └── home/              # home-manager modules
-│       ├── shell/         # Shell tools (starship, tmux, bat, gpg, ssh, etc.)
-│       ├── dev/           # Dev tools (neovim, go, rust, jj, kubernetes, claude)
-│       └── profiles/      # User-specific configs
+│   ├── rocinante/         # x86_64 Linux host (standalone home-manager)
+│   └── stargazer/         # aarch64 Linux VM (standalone home-manager)
+├── home/                  # home-manager modules
+│   ├── default.nix        # HM base, loaded on every host
+│   ├── core.nix           # Bundle: profile + shell tools every host gets
+│   ├── dev.nix            # Bundle: dev tooling every host gets
+│   ├── darwin.nix         # Bundle: macOS-only members
+│   ├── linux.nix          # Bundle: Linux-only members
+│   ├── shell/             # Shell tools (starship, tmux, bat, gpg, ssh, etc.)
+│   ├── dev/               # Dev tools (neovim, go, rust, jj, kubernetes, claude)
+│   ├── linux/             # Linux-only features (intune, wayvnc, edge, firefox)
+│   └── profiles/          # User-specific configs
+├── modules/darwin/        # macOS system modules (base, containers, homebrew)
+├── overlays/              # nixpkgs overlays
+├── packages/              # Local package definitions
 ├── config/                # Mutable configs (nvim, nushell, alacritty, litellm)
 ├── justfile               # Command runner
 └── README.md
@@ -135,70 +155,114 @@ Neovim/nushell/alacritty configs are symlinked from `config/` by the home-manage
 
 ## Modules
 
-### Shell (`modules/home/shell/`)
-| Module | Description |
-|--------|-------------|
-| `starship.nix` | Prompt with Nerd Font symbols |
-| `tmux.nix` | Terminal multiplexer (Catppuccin theme) |
-| `bat.nix` | Better cat (Catppuccin theme) |
-| `lazygit.nix` | Git TUI |
-| `gpg.nix` | GPG agent with Yubikey/SSH support |
-| `ssh.nix` | SSH client config (GitHub, FIDO2 keys) |
-| `ghostty.nix` | Terminal emulator |
-| `nushell.nix` | Nu shell (config symlinked from `config/nushell`) |
-| `git.nix` | Git configuration with GPG signing |
-| `direnv.nix` | Directory-based environments |
+Importing a module enables it — there is no `enable` flag on ordinary modules. The
+"Imported by" column says which bundle carries it (`home/core.nix`, `home/dev.nix`,
+`home/darwin.nix`, `home/linux.nix`) or which host imports it directly.
 
-### Dev (`modules/home/dev/`)
-| Module | Description |
-|--------|-------------|
-| `neovim.nix` | Neovim + LSP deps (AstroVim config symlinked from `config/nvim`) |
-| `go.nix` | Go toolchain + gopls, delve |
-| `rust.nix` | Rust toolchain via rustup + cargo tools |
-| `jj.nix` | Jujutsu VCS |
-| `kubernetes.nix` | kubectl, helm, k9s, kubectx, kind, stern, kubelogin |
-| `claude.nix` | Claude Code CLI |
+### Shell (`home/shell/`)
+| Module | Description | Imported by |
+|--------|-------------|-------------|
+| `alacritty.nix` | Alacritty terminal (config from `config/alacritty`) | core |
+| `atuin.nix` | Shell history sync/search | core |
+| `bat.nix` | Better cat (Catppuccin theme) | core |
+| `direnv.nix` | Directory-based environments | core |
+| `ghostty.nix` | Ghostty terminal emulator | core |
+| `git.nix` | Git configuration + signing (**options**) | core |
+| `gpg.nix` | GPG agent with Yubikey support | core |
+| `lazygit.nix` | Git TUI | core |
+| `nushell.nix` | Nu shell (config from `config/nushell`) | core |
+| `onepassword.nix` | 1Password SSH agent + commit signing (**options**) | core |
+| `openvpn.nix` | OpenVPN client | core |
+| `ssh.nix` | SSH client config (GitHub, FIDO2 keys) | core |
+| `starship.nix` | Prompt with Nerd Font symbols | core |
+| `tmux.nix` | Terminal multiplexer (Catppuccin theme) | core |
+| `lan-mouse.nix` | Keyboard/mouse sharing over LAN (**options**) | darwin |
+
+### Dev (`home/dev/`)
+| Module | Description | Imported by |
+|--------|-------------|-------------|
+| `bazel.nix` | Bazel build system tools | dev |
+| `claude.nix` | Claude Code CLI + agent-stack wiring (**options**) | dev |
+| `codex.nix` | OpenAI Codex CLI | dev |
+| `go.nix` | Go toolchain + gopls, delve | dev |
+| `jj.nix` | Jujutsu VCS (**options**) | dev |
+| `kubernetes.nix` | kubectl, k9s, kubectx, kind, stern, kubelogin (**options**) | dev |
+| `neovim.nix` | Neovim + LSP deps (config from `config/nvim`) | dev |
+| `nix.nix` | Nix development tools | dev |
+| `opencode.nix` | OpenCode AI coding agent | dev |
+| `rust.nix` | Rust toolchain via rustup + cargo tools | dev |
+| `terraform.nix` | Terraform infrastructure tools | dev |
+| `vscode.nix` | VS Code with extensions | dev |
+| `copilot.nix` | GitHub Copilot CLI | behemoth, rocinante |
+| `hunk.nix` | Review-first terminal diff viewer | behemoth, rocinante |
+| `lmstudio.nix` | LM Studio desktop app for local LLMs | rocinante |
+| `python.nix` | Python development tools | rocinante, stargazer |
+
+### Linux (`home/linux/`)
+| Module | Description | Imported by |
+|--------|-------------|-------------|
+| `firefox.nix` | Firefox with privacy extensions (NUR) | linux |
+| `intune.nix` | Microsoft Intune Portal + identity brokers (**options**) | linux |
+| `wayvnc.nix` | WayVNC server for Wayland remote access (**options**) | linux |
+| `containers.nix` | Podman container services via systemd user units (**options**) | stargazer |
+| `edge.nix` | Microsoft Edge (x86_64) | rocinante |
+| `edge-rosetta.nix` | Microsoft Edge (aarch64 via Rosetta) | stargazer |
+| `rosetta.nix` | Rosetta x86_64 emulation for aarch64-linux | `intune.nix`, `edge-rosetta.nix` |
+
+### Profiles (`home/profiles/`)
+| Module | Description | Imported by |
+|--------|-------------|-------------|
+| `andreym.nix` | Git/jj identity, signing via 1Password | core |
 
 ### Darwin (`modules/darwin/`)
-| Module | Description |
-|--------|-------------|
-| `homebrew.nix` | Homebrew integration via nix-homebrew |
+| Module | Description | Imported by |
+|--------|-------------|-------------|
+| `default.nix` | macOS base (defaults, state version, HM backup ext) | behemoth |
+| `containers.nix` | Container services via launchd (**options**) | behemoth |
+| `homebrew.nix` | Homebrew integration via nix-homebrew (**options**) | behemoth |
+
+Modules marked **options** are the 11 parameterized ones; they declare settings under
+`modules.<category>.<name>` that hosts fill in. Everything else is a plain module.
 
 ## Adding a New Tool
 
-1. Create module in appropriate directory:
+1. Create a plain module — no options, no `enable`, no `mkIf`:
    ```nix
-   # modules/home/shell/mytool.nix
-   { lib, config, pkgs, ... }:
-   with lib;
-   let cfg = config.modules.shell.mytool;
-   in {
-     options.modules.shell.mytool = {
-       enable = mkEnableOption "MyTool";
-     };
-     config = mkIf cfg.enable {
-       home.packages = [ pkgs.mytool ];
-     };
-   };
+   # home/shell/mytool.nix
+   { pkgs, ... }:
+   {
+     home.packages = [ pkgs.mytool ];
+   }
    ```
 
-2. Enable in host config (`hosts/behemoth/default.nix`):
+2. Import it. Every host → add to a bundle (`home/core.nix`, `home/dev.nix`,
+   `home/darwin.nix`, `home/linux.nix`):
    ```nix
-   modules.shell.mytool.enable = true;
+   imports = [
+     # ...
+     ./shell/mytool.nix
+   ];
    ```
+   One host only → add it to that host's `imports` in `hosts/<host>/default.nix`.
 
-3. Rebuild: `just switch`
+3. Rebuild: `just switch`.
 
-Note: Modules are auto-discovered from the filesystem - no manual imports needed.
+A new `.nix` file does nothing until something imports it. Add an option only when two
+hosts need the same module with different values.
+
+## Formatting & Lint
+
+```bash
+just fmt     # nixfmt over `git ls-files '*.nix'`
+just lint    # nixfmt --check + statix check + deadnix --fail (the CI gate)
+```
+
+CI runs the same three checks in a `lint` job, plus `nix flake check --all-systems` and a
+build (or eval, for stargazer) of each host. `statix.toml` disables `repeated_keys` and
+ignores `spikes/`.
 
 ## Disko (Disk Formatting)
 
-**Note**: Disko is only relevant for NixOS installations (not macOS/nix-darwin). This dotfiles repo currently focuses on macOS (nix-darwin) and Linux (home-manager). If you plan to use NixOS in the future, disko provides declarative disk partitioning.
-
-For fresh NixOS installs:
-
-```bash
-just disko-format <host>
-```
-
-**Warning**: This erases the target disk completely.
+Not wired up yet. The `disko` flake input is kept for P7 (NixOS on rocinante's second
+NVMe), which will add the `disk.nix` layout and a `nixosConfigurations` block. There is no
+`disk.nix` and no `just disko-format` recipe today.
