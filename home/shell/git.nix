@@ -46,7 +46,13 @@ in
       description = "GPG key ID or SSH public key for signing commits and tags";
     };
     signingFormat = mkOption {
-      type = types.nullOr (types.enum [ "openpgp" "ssh" "x509" ]);
+      type = types.nullOr (
+        types.enum [
+          "openpgp"
+          "ssh"
+          "x509"
+        ]
+      );
       default = null;
       description = "Signing format (openpgp for GPG, ssh for 1Password/SSH keys)";
     };
@@ -62,14 +68,18 @@ in
       enable = true;
       lfs.enable = true;
 
-      signing = mkIf (cfg.signingKey != "") ({
-        key = cfg.signingKey;
-        signByDefault = true;
-      } // optionalAttrs (cfg.signingFormat != null) {
-        format = cfg.signingFormat;
-      } // optionalAttrs (cfg.signer != null) {
-        signer = cfg.signer;
-      });
+      signing = mkIf (cfg.signingKey != "") (
+        {
+          key = cfg.signingKey;
+          signByDefault = true;
+        }
+        // optionalAttrs (cfg.signingFormat != null) {
+          format = cfg.signingFormat;
+        }
+        // optionalAttrs (cfg.signer != null) {
+          signer = cfg.signer;
+        }
+      );
 
       settings = {
         user = {

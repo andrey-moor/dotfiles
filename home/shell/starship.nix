@@ -1,6 +1,11 @@
 # home/shell/starship.nix -- Starship prompt configuration
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

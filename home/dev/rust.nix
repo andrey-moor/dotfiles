@@ -1,6 +1,11 @@
 # home/dev/rust.nix -- Rust development tools (home-manager)
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

@@ -12,21 +12,27 @@
 # condition in the HM module: settings != {} || marketplaces != {} ||
 # disabledMcpServerNames != []).
 
-{ lib, dotfilesDir, config, pkgs, inputs, ... }:
+{
+  lib,
+  dotfilesDir,
+  config,
+  pkgs,
+  inputs,
+  ...
+}:
 
 with lib;
 let
   cfg = config.modules.dev.claude;
 
   # Out-of-store symlink into the live repo working copy (spec §4).
-  mkAgentsLink = subpath:
-    config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/agents/${subpath}";
+  mkAgentsLink = subpath: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/agents/${subpath}";
 
   # Names are enumerated from the flake's store copy of agents/; the symlink
   # targets point at the working tree via dotfilesDir.
-  skillNames = attrNames
-    (filterAttrs (_: type: type == "directory")
-      (builtins.readDir ../../agents/skills));
+  skillNames = attrNames (
+    filterAttrs (_: type: type == "directory") (builtins.readDir ../../agents/skills)
+  );
   commandNames = attrNames (builtins.readDir ../../agents/commands);
 
   # Declared subset of ~/.claude/settings.json, merged at activation time.
@@ -67,8 +73,9 @@ let
     };
   };
 
-  declaredSettingsFile = pkgs.writeText "claude-declared-settings.json"
-    (builtins.toJSON declaredSettings);
+  declaredSettingsFile = pkgs.writeText "claude-declared-settings.json" (
+    builtins.toJSON declaredSettings
+  );
 
   # Merge semantics (ports the retired chezmoi modify_settings.json):
   #   - alwaysThinkingEnabled, effortLevel: overwrite
@@ -100,7 +107,8 @@ let
 
     mv "$tmp" "$settings"
   '';
-in {
+in
+{
   options.modules.dev.claude = {
     obsidianVault = mkOption {
       type = types.nullOr types.str;
@@ -130,7 +138,14 @@ in {
       servers = {
         kagi = {
           command = "op";
-          args = [ "run" "--" "uvx" "--python" "3.13" "kagimcp" ];
+          args = [
+            "run"
+            "--"
+            "uvx"
+            "--python"
+            "3.13"
+            "kagimcp"
+          ];
           # op:// reference resolved by `op run` at launch — not a secret.
           env.KAGI_API_KEY = "op://Private/Kagi/api_key";
         };
@@ -138,26 +153,33 @@ in {
           command = "uvx";
           args = [ "mcp-server-fetch" ];
         };
-      } // optionalAttrs (cfg.obsidianVault != null) {
+      }
+      // optionalAttrs (cfg.obsidianVault != null) {
         obsidian = {
           command = "npx";
-          args = [ "-y" "@bitbonsai/mcpvault@latest" cfg.obsidianVault ];
+          args = [
+            "-y"
+            "@bitbonsai/mcpvault@latest"
+            cfg.obsidianVault
+          ];
         };
       };
     };
 
-    home.file = mkMerge ([
-      { ".agents/AGENTS.md".source = mkAgentsLink "AGENTS.md"; }
-    ]
-    # Skills fan out to both Claude Code and the vendor-neutral ~/.agents dir
-    # (read by codex/copilot, wired in later tasks).
-    ++ map (name: {
-      ".claude/skills/${name}".source = mkAgentsLink "skills/${name}";
-      ".agents/skills/${name}".source = mkAgentsLink "skills/${name}";
-    }) skillNames
-    ++ map (name: {
-      ".claude/commands/${name}".source = mkAgentsLink "commands/${name}";
-    }) commandNames);
+    home.file = mkMerge (
+      [
+        { ".agents/AGENTS.md".source = mkAgentsLink "AGENTS.md"; }
+      ]
+      # Skills fan out to both Claude Code and the vendor-neutral ~/.agents dir
+      # (read by codex/copilot, wired in later tasks).
+      ++ map (name: {
+        ".claude/skills/${name}".source = mkAgentsLink "skills/${name}";
+        ".agents/skills/${name}".source = mkAgentsLink "skills/${name}";
+      }) skillNames
+      ++ map (name: {
+        ".claude/commands/${name}".source = mkAgentsLink "commands/${name}";
+      }) commandNames
+    );
 
     home.activation.claudeSettingsMerge = hm.dag.entryAfter [ "writeBoundary" ] ''
       run ${settingsMergeScript} \

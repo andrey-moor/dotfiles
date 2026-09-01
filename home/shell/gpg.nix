@@ -1,6 +1,11 @@
 # home/shell/gpg.nix -- GPG and gpg-agent configuration with Yubikey support
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {
@@ -42,9 +47,7 @@ with lib;
       enable = true;
       enableSshSupport = true;
       # macOS: GUI pinentry, Linux: tty (curses has terminal size issues)
-      pinentry.package = if pkgs.stdenv.isDarwin
-        then pkgs.pinentry_mac
-        else pkgs.pinentry-tty;
+      pinentry.package = if pkgs.stdenv.isDarwin then pkgs.pinentry_mac else pkgs.pinentry-tty;
       # Cache passphrases for 24 hours (long sessions with AI tools need
       # persistent cache since non-interactive shells can't re-prompt via pinentry)
       defaultCacheTtl = 86400;
@@ -64,7 +67,7 @@ with lib;
 
     # Yubikey/smartcard management tools
     home.packages = with pkgs; [
-      yubikey-manager         # ykman CLI for Yubikey management
+      yubikey-manager # ykman CLI for Yubikey management
       yubikey-personalization # ykpersonalize for low-level config
     ];
   };

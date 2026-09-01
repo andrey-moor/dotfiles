@@ -13,30 +13,38 @@
 # out-of-store symlink into $HOME). Direct symlinks produce the identical
 # layout the module would (`opencode/AGENTS.md`, `opencode/skills/<name>`).
 
-{ lib, dotfilesDir, config, pkgs, ... }:
+{
+  lib,
+  dotfilesDir,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
   cfg = config.modules.dev.opencode;
 
-  mkAgentsLink = subpath:
-    config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/agents/${subpath}";
+  mkAgentsLink = subpath: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/agents/${subpath}";
 
-  skillNames = attrNames
-    (filterAttrs (_: type: type == "directory")
-      (builtins.readDir ../../agents/skills));
-in {
+  skillNames = attrNames (
+    filterAttrs (_: type: type == "directory") (builtins.readDir ../../agents/skills)
+  );
+in
+{
   config = {
     programs.opencode = {
       enable = true;
       package = pkgs.main.opencode;
     };
 
-    xdg.configFile = mkMerge ([
-      { "opencode/AGENTS.md".source = mkAgentsLink "AGENTS.md"; }
-    ]
-    ++ map (name: {
-      "opencode/skills/${name}".source = mkAgentsLink "skills/${name}";
-    }) skillNames);
+    xdg.configFile = mkMerge (
+      [
+        { "opencode/AGENTS.md".source = mkAgentsLink "AGENTS.md"; }
+      ]
+      ++ map (name: {
+        "opencode/skills/${name}".source = mkAgentsLink "skills/${name}";
+      }) skillNames
+    );
   };
 }

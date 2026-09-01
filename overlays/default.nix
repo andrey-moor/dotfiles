@@ -20,7 +20,9 @@ final: prev: {
       hash = "sha256-5pyZQbceDRBh2xYYcMf39WeyMp7z7z7X1ydFpyt+kGU=";
     };
     prePatch = ""; # Don't remove build.rs — new version uses shadow-rs
-    env = (oldAttrs.env or { }) // { GIT_DESCRIBE = version; };
+    env = (oldAttrs.env or { }) // {
+      GIT_DESCRIBE = version;
+    };
     cargoDeps = final.rustPlatform.fetchCargoVendor {
       inherit src;
       name = "${oldAttrs.pname}-${version}-vendor";
@@ -45,9 +47,10 @@ final: prev: {
   # postFixup has: for bin $out/lib/ghidra/support/*
   # should be:     for bin in $out/lib/ghidra/support/*
   ghidra = prev.ghidra.overrideAttrs (oldAttrs: {
-    postFixup = builtins.replaceStrings
-      [ "for bin $out/lib/ghidra/support/*" ]
-      [ "for bin in $out/lib/ghidra/support/*" ]
-      oldAttrs.postFixup;
+    postFixup =
+      builtins.replaceStrings
+        [ "for bin $out/lib/ghidra/support/*" ]
+        [ "for bin in $out/lib/ghidra/support/*" ]
+        oldAttrs.postFixup;
   });
 }

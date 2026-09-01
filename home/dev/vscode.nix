@@ -1,6 +1,11 @@
 # home/dev/vscode.nix -- Visual Studio Code with extensions
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {
@@ -12,24 +17,28 @@ with lib;
       profiles.default = {
         # Extensions managed by Nix
         # Find more at: https://search.nixos.org/packages?query=vscode-extensions
-        extensions = with pkgs.vscode-extensions; [
-          # Theme
-          catppuccin.catppuccin-vsc
-          catppuccin.catppuccin-vsc-icons
+        extensions =
+          with pkgs.vscode-extensions;
+          [
+            # Theme
+            catppuccin.catppuccin-vsc
+            catppuccin.catppuccin-vsc-icons
 
-          # Containers
-          ms-vscode-remote.remote-containers
-          ms-azuretools.vscode-docker
+            # Containers
+            ms-vscode-remote.remote-containers
+            ms-azuretools.vscode-docker
 
-          # Languages
-          ms-python.python
-          hashicorp.terraform
-        ] ++ optionals pkgs.stdenv.isLinux [
-          ms-vscode.cpptools  # gdb dependency broken on macOS
-        ] ++ [
-          # Kubernetes
-          ms-kubernetes-tools.vscode-kubernetes-tools
-        ];
+            # Languages
+            ms-python.python
+            hashicorp.terraform
+          ]
+          ++ optionals pkgs.stdenv.isLinux [
+            ms-vscode.cpptools # gdb dependency broken on macOS
+          ]
+          ++ [
+            # Kubernetes
+            ms-kubernetes-tools.vscode-kubernetes-tools
+          ];
 
         # Settings managed by Nix
         userSettings = {

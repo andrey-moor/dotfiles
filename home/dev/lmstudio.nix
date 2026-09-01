@@ -1,6 +1,11 @@
 # home/dev/lmstudio.nix -- LM Studio: desktop app for running local LLMs
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

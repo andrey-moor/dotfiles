@@ -1,6 +1,11 @@
 # home/shell/bat.nix -- Bat (better cat) configuration
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

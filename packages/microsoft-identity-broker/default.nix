@@ -1,9 +1,10 @@
-{ lib
-, stdenvNoCC
-, fetchurl
-, gnutar
-, gzip
-, binutils
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  gnutar,
+  gzip,
+  binutils,
 }:
 
 stdenvNoCC.mkDerivation rec {
@@ -18,9 +19,13 @@ stdenvNoCC.mkDerivation rec {
   # No build needed - just extract
   dontBuild = true;
   dontConfigure = true;
-  dontFixup = true;  # Don't patch ELF - binaries are x86_64, may run via Rosetta
+  dontFixup = true; # Don't patch ELF - binaries are x86_64, may run via Rosetta
 
-  nativeBuildInputs = [ gnutar gzip binutils ];
+  nativeBuildInputs = [
+    gnutar
+    gzip
+    binutils
+  ];
 
   unpackPhase = ''
     runHook preUnpack

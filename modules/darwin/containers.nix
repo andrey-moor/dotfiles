@@ -4,7 +4,12 @@
 # Similar to NixOS's virtualisation.oci-containers but for Darwin.
 # Supports OrbStack (via homebrew) or Podman (via nixpkgs) as the container runtime.
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
@@ -13,7 +18,7 @@ let
   # Runtime-specific configuration
   runtimeConfig = {
     orbstack = {
-      bin = "/usr/local/bin/docker";  # OrbStack symlinks here
+      bin = "/usr/local/bin/docker"; # OrbStack symlinks here
       path = "/usr/local/bin:/usr/bin:/bin";
     };
     podman = {
@@ -25,14 +30,43 @@ let
   runtime = runtimeConfig.${cfg.runtime};
 
   # Generate launchd service for a container
-  mkContainerService = name: container: let
-    runArgs = [ runtime.bin "run" "--rm" "--name" name ]
+  mkContainerService =
+    name: container:
+    let
+      runArgs = [
+        runtime.bin
+        "run"
+        "--rm"
+        "--name"
+        name
+      ]
       ++ optional container.pull "--pull=always"
-      ++ concatMap (p: [ "-p" p ]) container.ports
-      ++ concatMap (v: [ "-v" v ]) container.volumes
-      ++ optionals (container.network != null) (concatMap (n: [ "--network" n ]) (toList container.network))
-      ++ concatLists (mapAttrsToList (k: v: [ "-e" "${k}=${v}" ]) container.environment)
-      ++ concatLists (mapAttrsToList (k: v: [ "-l" "${k}=${v}" ]) container.labels)
+      ++ concatMap (p: [
+        "-p"
+        p
+      ]) container.ports
+      ++ concatMap (v: [
+        "-v"
+        v
+      ]) container.volumes
+      ++ optionals (container.network != null) (
+        concatMap (n: [
+          "--network"
+          n
+        ]) (toList container.network)
+      )
+      ++ concatLists (
+        mapAttrsToList (k: v: [
+          "-e"
+          "${k}=${v}"
+        ]) container.environment
+      )
+      ++ concatLists (
+        mapAttrsToList (k: v: [
+          "-l"
+          "${k}=${v}"
+        ]) container.labels
+      )
       ++ optional (container.user != null) "--user=${container.user}"
       ++ optional (container.workdir != null) "--workdir=${container.workdir}"
       ++ optional (container.hostname != null) "--hostname=${container.hostname}"
@@ -40,16 +74,17 @@ let
       ++ container.extraArgs
       ++ [ container.image ]
       ++ container.cmd;
-  in {
-    serviceConfig = {
-      ProgramArguments = runArgs;
-      KeepAlive = container.autoStart;
-      RunAtLoad = container.autoStart;
-      StandardOutPath = "${cfg.logDir}/container-${name}.log";
-      StandardErrorPath = "${cfg.logDir}/container-${name}.err";
-      EnvironmentVariables.PATH = runtime.path;
+    in
+    {
+      serviceConfig = {
+        ProgramArguments = runArgs;
+        KeepAlive = container.autoStart;
+        RunAtLoad = container.autoStart;
+        StandardOutPath = "${cfg.logDir}/container-${name}.log";
+        StandardErrorPath = "${cfg.logDir}/container-${name}.err";
+        EnvironmentVariables.PATH = runtime.path;
+      };
     };
-  };
 
   containerOpts = { name, ... }: {
     options = {
@@ -61,37 +96,50 @@ let
 
       cmd = mkOption {
         type = types.listOf types.str;
-        default = [];
+        default = [ ];
         description = "Command and arguments to pass to the container";
-        example = [ "--appendonly" "yes" ];
+        example = [
+          "--appendonly"
+          "yes"
+        ];
       };
 
       ports = mkOption {
         type = types.listOf types.str;
-        default = [];
+        default = [ ];
         description = "Port mappings (host:container)";
-        example = [ "6379:6379" "8080:80" ];
+        example = [
+          "6379:6379"
+          "8080:80"
+        ];
       };
 
       volumes = mkOption {
         type = types.listOf types.str;
-        default = [];
+        default = [ ];
         description = "Volume mounts (host:container or named volumes)";
-        example = [ "/data/redis:/data" "myvolume:/var/lib/data" ];
+        example = [
+          "/data/redis:/data"
+          "myvolume:/var/lib/data"
+        ];
       };
 
       environment = mkOption {
         type = types.attrsOf types.str;
-        default = {};
+        default = { };
         description = "Environment variables";
-        example = { POSTGRES_PASSWORD = "secret"; };
+        example = {
+          POSTGRES_PASSWORD = "secret";
+        };
       };
 
       labels = mkOption {
         type = types.attrsOf types.str;
-        default = {};
+        default = { };
         description = "Container labels";
-        example = { "com.example.description" = "My service"; };
+        example = {
+          "com.example.description" = "My service";
+        };
       };
 
       network = mkOption {
@@ -140,17 +188,24 @@ let
 
       extraArgs = mkOption {
         type = types.listOf types.str;
-        default = [];
+        default = [ ];
         description = "Extra arguments to pass to container run";
-        example = [ "--cap-add=SYS_PTRACE" "--memory=512m" ];
+        example = [
+          "--cap-add=SYS_PTRACE"
+          "--memory=512m"
+        ];
       };
     };
   };
 
-in {
+in
+{
   options.modules.darwin.containers = {
     runtime = mkOption {
-      type = types.enum [ "orbstack" "podman" ];
+      type = types.enum [
+        "orbstack"
+        "podman"
+      ];
       default = "orbstack";
       description = ''
         Container runtime to use.
@@ -167,7 +222,7 @@ in {
 
     containers = mkOption {
       type = types.attrsOf (types.submodule containerOpts);
-      default = {};
+      default = { };
       description = "Container service definitions";
       example = literalExpression ''
         {
@@ -201,9 +256,9 @@ in {
     })
 
     # Create launchd agents for each container
-    (mkIf (cfg.containers != {}) {
-      launchd.user.agents = mapAttrs' (name: container:
-        nameValuePair "container-${name}" (mkContainerService name container)
+    (mkIf (cfg.containers != { }) {
+      launchd.user.agents = mapAttrs' (
+        name: container: nameValuePair "container-${name}" (mkContainerService name container)
       ) cfg.containers;
     })
   ];

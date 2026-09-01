@@ -2,15 +2,22 @@
 #
 # Imported by home/core.nix: every host is this user's.
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {
   config = {
     # User-specific packages (Linux only - macOS uses Homebrew for GUI apps)
-    home.packages = with pkgs; optionals pkgs.stdenv.isLinux [
-      ghostty  # Preferred terminal (on macOS, managed via Homebrew cask)
-    ];
+    home.packages =
+      with pkgs;
+      optionals pkgs.stdenv.isLinux [
+        ghostty # Preferred terminal (on macOS, managed via Homebrew cask)
+      ];
 
     # Git configuration for this user. SSH signing via 1Password on every
     # host (home/shell/onepassword.nix is in core).

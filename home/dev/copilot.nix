@@ -31,7 +31,14 @@
 # .../etc/ssl/certs" stderr warning; no wrapper is added here -- if the
 # warning still reproduces under the current package, handle it in Task 7.
 
-{ lib, dotfilesDir, config, pkgs, inputs, ... }:
+{
+  lib,
+  dotfilesDir,
+  config,
+  pkgs,
+  inputs,
+  ...
+}:
 
 with lib;
 let
@@ -39,21 +46,23 @@ let
   pin = builtins.fromJSON (builtins.readFile ./copilot-pin.json);
   base = inputs.copilot-cli-flake.packages.${pkgs.system}.default;
   copilot =
-    if builtins.compareVersions base.version pin.version >= 0 then base
-    else base.overrideAttrs (_old: {
-      version = pin.version;
-      src = pkgs.fetchurl {
-        url = "https://registry.npmjs.org/@github/copilot/-/copilot-${pin.version}.tgz";
-        sha256 = pin.hash;
-      };
-    });
-in {
+    if builtins.compareVersions base.version pin.version >= 0 then
+      base
+    else
+      base.overrideAttrs (_old: {
+        version = pin.version;
+        src = pkgs.fetchurl {
+          url = "https://registry.npmjs.org/@github/copilot/-/copilot-${pin.version}.tgz";
+          sha256 = pin.hash;
+        };
+      });
+in
+{
   config = {
     programs.github-copilot-cli = {
       enable = true;
       package = copilot;
-      context = config.lib.file.mkOutOfStoreSymlink
-        "${dotfilesDir}/agents/AGENTS.md";
+      context = config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/agents/AGENTS.md";
     };
   };
 }

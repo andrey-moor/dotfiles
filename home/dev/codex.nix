@@ -21,7 +21,13 @@
 # skill discovery there is not conclusively verified -- confirm live in
 # Task 7. $CODEX_HOME/skills is left app-owned.
 
-{ lib, dotfilesDir, config, pkgs, ... }:
+{
+  lib,
+  dotfilesDir,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

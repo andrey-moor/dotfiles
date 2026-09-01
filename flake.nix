@@ -64,30 +64,44 @@
   };
 
   outputs =
-    inputs@{ nixpkgs, darwin, home-manager, catppuccin, sops-nix, nur, ... }:
+    inputs@{
+      nixpkgs,
+      darwin,
+      home-manager,
+      catppuccin,
+      sops-nix,
+      nur,
+      ...
+    }:
     let
       inherit (nixpkgs) lib;
 
       # x86_64-darwin is out: nixpkgs 26.11 dropped it, and importing nixpkgs
       # for it throws (which would fail `nix flake check --all-systems`).
-      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
       forAllSystems = lib.genAttrs systems;
 
-      mkPkgs = system: import nixpkgs {
-        inherit system;
-        config.allowUnfree = true;
-        overlays = [
-          (import ./overlays)
-          # nixpkgs master as pkgs.main (packages that land there first)
-          (final: prev: {
-            main = import inputs.nixpkgs-main {
-              inherit system;
-              config.allowUnfree = true;
-            };
-          })
-          nur.overlays.default
-        ];
-      };
+      mkPkgs =
+        system:
+        import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+          overlays = [
+            (import ./overlays)
+            # nixpkgs master as pkgs.main (packages that land there first)
+            (final: prev: {
+              main = import inputs.nixpkgs-main {
+                inherit system;
+                config.allowUnfree = true;
+              };
+            })
+            nur.overlays.default
+          ];
+        };
 
       # Module order decides the merge order of list-typed options, and
       # home.packages becomes a buildEnv whose derivation depends on that
@@ -132,12 +146,17 @@
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
               home-manager.extraSpecialArgs = { inherit inputs dotfilesDir; };
-              home-manager.sharedModules = homeBase ++ sortModules (
-                bundles.core ++ bundles.dev ++ bundles.darwin ++ [
-                  ./home/dev/copilot.nix
-                  ./home/dev/hunk.nix
-                ]
-              );
+              home-manager.sharedModules =
+                homeBase
+                ++ sortModules (
+                  bundles.core
+                  ++ bundles.dev
+                  ++ bundles.darwin
+                  ++ [
+                    ./home/dev/copilot.nix
+                    ./home/dev/hunk.nix
+                  ]
+                );
             }
             inputs.nix-homebrew.darwinModules.nix-homebrew
             # mac-app-util: trampolines so Nix apps appear in Spotlight/Raycast
@@ -161,15 +180,21 @@
               home.username = "andreym";
               home.homeDirectory = "/home/andreym";
             }
-          ] ++ homeBase ++ sortModules (
-            bundles.core ++ bundles.dev ++ bundles.linux ++ [
+          ]
+          ++ homeBase
+          ++ sortModules (
+            bundles.core
+            ++ bundles.dev
+            ++ bundles.linux
+            ++ [
               ./home/dev/copilot.nix
               ./home/dev/hunk.nix
               ./home/dev/lmstudio.nix
               ./home/dev/python.nix
               ./home/linux/edge.nix
             ]
-          ) ++ [ ./hosts/rocinante ];
+          )
+          ++ [ ./hosts/rocinante ];
         };
 
       # aarch64 Parallels VM on behemoth (standalone home-manager)
@@ -187,13 +212,19 @@
               home.username = "andreym";
               home.homeDirectory = "/home/andreym";
             }
-          ] ++ homeBase ++ sortModules (
-            bundles.core ++ bundles.dev ++ bundles.linux ++ [
+          ]
+          ++ homeBase
+          ++ sortModules (
+            bundles.core
+            ++ bundles.dev
+            ++ bundles.linux
+            ++ [
               ./home/dev/python.nix
               ./home/linux/containers.nix
               ./home/linux/edge-rosetta.nix
             ]
-          ) ++ [ ./hosts/stargazer ];
+          )
+          ++ [ ./hosts/stargazer ];
         };
 
       formatter = forAllSystems (system: (mkPkgs system).nixfmt-rfc-style);

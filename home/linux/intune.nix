@@ -8,7 +8,12 @@
 # DEBUG: modules.linux.intune.debug = true; intune-logs; intune-status
 # See: https://github.com/recolic/microsoft-intune-archlinux
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
@@ -24,18 +29,25 @@ let
   # ============================================================================
 
   mode =
-    if pkgs.stdenv.hostPlatform.isx86_64 then "native-x86_64"
-    else if pkgs.stdenv.hostPlatform.isAarch64 then "rosetta"
-    else null;  # Future: native-arm64 when Microsoft ships arm64 packages
+    if pkgs.stdenv.hostPlatform.isx86_64 then
+      "native-x86_64"
+    else if pkgs.stdenv.hostPlatform.isAarch64 then
+      "rosetta"
+    else
+      null; # Future: native-arm64 when Microsoft ships arm64 packages
 
   isRosetta = mode == "rosetta";
   isNativeX86 = mode == "native-x86_64";
 
   # Package source varies by mode (only import pkgsX86 when needed)
-  pkgsX86 = if isRosetta then import pkgs.path {
-    system = "x86_64-linux";
-    config.allowUnfree = true;
-  } else null;
+  pkgsX86 =
+    if isRosetta then
+      import pkgs.path {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+      }
+    else
+      null;
 
   pkgSource = if isRosetta then pkgsX86 else pkgs;
 
@@ -206,7 +218,7 @@ let
 
   # Compose final library path (used once, referenced by all wrappers)
   fullLibraryPath = concatStringsSep ":" (
-    [ opensslArchPath ]  # CRITICAL: OpenSSL 3.3.2 must be first
+    [ opensslArchPath ] # CRITICAL: OpenSSL 3.3.2 must be first
     ++ glibcLibs
     ++ systemLibs
     ++ x11Libs
@@ -549,7 +561,8 @@ let
     fi
   '';
 
-in {
+in
+{
   # Rosetta mode needs the x86_64 binfmt/linker plumbing; rosetta.nix is inert
   # on non-aarch64 hosts, where Intune runs natively.
   imports = [ ./rosetta.nix ];
@@ -565,23 +578,87 @@ in {
   config = mkIf (pkgs.stdenv.isLinux && mode != null) {
     home.packages = with pkgSource; [
       # Tools: keyring, YubiKey, helpers, wrappers
-      pkgs.gnome-keyring pkgs.seahorse pkgs.libsecret
-      pkgs.yubikey-manager pkgs.pcsc-tools pkgs.nss.tools
-      logsHelper statusHelper healthHelper prereqHelper
-      intuneWrapper intuneAgentWrapper userBrokerWrapper deviceBrokerWrapper userBrokerDbusService
+      pkgs.gnome-keyring
+      pkgs.seahorse
+      pkgs.libsecret
+      pkgs.yubikey-manager
+      pkgs.pcsc-tools
+      pkgs.nss.tools
+      logsHelper
+      statusHelper
+      healthHelper
+      prereqHelper
+      intuneWrapper
+      intuneAgentWrapper
+      userBrokerWrapper
+      deviceBrokerWrapper
+      userBrokerDbusService
       # Libraries (pkgSource resolves based on mode)
-      libglvnd wayland mesa glib-networking gnutls nettle libtasn1 libidn2
-      openscArch libp11 pcsclite.lib p11-kit p11-kit.bin libfido2
-      dbus.lib glib.out systemdLibs util-linux.lib curlNoHttp3.out
-      zlib.out libssh2.out nghttp2.lib brotli.lib icu.out stdenv.cc.cc.lib
-      zstd.out expat.out pcre2.out libxkbcommon.out fontconfig.lib freetype.out
-      cairo.out pango.out gdk-pixbuf.out gtk3.out atk.out at-spi2-atk.out at-spi2-core.out harfbuzz.out
-      libx11.out libxext.out libxrender.out libxi.out libxcursor.out
-      libxrandr.out libxfixes.out libxcomposite.out libxdamage.out libxcb.out
-      webkitgtk_4_1.out libsoup_3.out sqlite.out libpsl.out libidn.out
-      libpng.out libjpeg.out libwebp.out lcms2.out
-      gst_all_1.gstreamer.out gst_all_1.gst-plugins-base.out
-      libxml2.out libxslt.out enchant.out libnotify.out opensslArch
+      libglvnd
+      wayland
+      mesa
+      glib-networking
+      gnutls
+      nettle
+      libtasn1
+      libidn2
+      openscArch
+      libp11
+      pcsclite.lib
+      p11-kit
+      p11-kit.bin
+      libfido2
+      dbus.lib
+      glib.out
+      systemdLibs
+      util-linux.lib
+      curlNoHttp3.out
+      zlib.out
+      libssh2.out
+      nghttp2.lib
+      brotli.lib
+      icu.out
+      stdenv.cc.cc.lib
+      zstd.out
+      expat.out
+      pcre2.out
+      libxkbcommon.out
+      fontconfig.lib
+      freetype.out
+      cairo.out
+      pango.out
+      gdk-pixbuf.out
+      gtk3.out
+      atk.out
+      at-spi2-atk.out
+      at-spi2-core.out
+      harfbuzz.out
+      libx11.out
+      libxext.out
+      libxrender.out
+      libxi.out
+      libxcursor.out
+      libxrandr.out
+      libxfixes.out
+      libxcomposite.out
+      libxdamage.out
+      libxcb.out
+      webkitgtk_4_1.out
+      libsoup_3.out
+      sqlite.out
+      libpsl.out
+      libidn.out
+      libpng.out
+      libjpeg.out
+      libwebp.out
+      lcms2.out
+      gst_all_1.gstreamer.out
+      gst_all_1.gst-plugins-base.out
+      libxml2.out
+      libxslt.out
+      enchant.out
+      libnotify.out
+      opensslArch
     ];
 
     # D-Bus service file for user broker
@@ -593,16 +670,24 @@ in {
     # Native x86_64: use system OpenSC (tracks pacman updates)
     # Rosetta: use Nix-bundled x86_64 OpenSC (needs matching libopensc.so)
     xdg.configFile."pkcs11/modules/opensc.module".text = ''
-module: ${if mode == "native-x86_64" then "/usr/lib/pkcs11/opensc-pkcs11.so" else "${openscArch}/lib/pkcs11/opensc-pkcs11.so"}
-critical: no
-trust-policy: no
-'';
+      module: ${
+        if mode == "native-x86_64" then
+          "/usr/lib/pkcs11/opensc-pkcs11.so"
+        else
+          "${openscArch}/lib/pkcs11/opensc-pkcs11.so"
+      }
+      critical: no
+      trust-policy: no
+    '';
 
     # Systemd user service for intune-agent (compliance reporting)
     systemd.user.services.intune-agent = {
       Unit = {
         Description = "Intune Agent - compliance reporting";
-        After = [ "graphical-session.target" "gnome-keyring.service" ];
+        After = [
+          "graphical-session.target"
+          "gnome-keyring.service"
+        ];
       };
       Service = {
         Type = "oneshot";
@@ -635,22 +720,23 @@ trust-policy: no
     };
 
     # Activation script to verify setup
-    home.activation.verifyIntuneSetup =
-      lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
-        if [[ -f "$HOME/.local/share/dbus-1/services/com.microsoft.identity.broker1.service" ]]; then
-          noteEcho "Intune: User broker D-Bus service installed (mode: ${if mode != null then mode else "unknown"})"
-        else
-          warnEcho "Intune: User broker D-Bus service not found"
-        fi
-        ${optionalString isRosetta ''
+    home.activation.verifyIntuneSetup = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
+      if [[ -f "$HOME/.local/share/dbus-1/services/com.microsoft.identity.broker1.service" ]]; then
+        noteEcho "Intune: User broker D-Bus service installed (mode: ${
+          if mode != null then mode else "unknown"
+        })"
+      else
+        warnEcho "Intune: User broker D-Bus service not found"
+      fi
+      ${optionalString isRosetta ''
         noteEcho "Intune: Rosetta mode - verify binfmt with: cat /proc/sys/fs/binfmt_misc/rosetta"
-        ''}
-        if ! systemctl is-active microsoft-identity-device-broker >/dev/null 2>&1; then
-          noteEcho "Intune: Device broker not running - run: intune-prerequisites"
-        fi
-        if ! systemctl --user is-enabled intune-agent.timer >/dev/null 2>&1; then
-          noteEcho "Intune: Enable agent timer with: systemctl --user enable --now intune-agent.timer"
-        fi
-      '';
+      ''}
+      if ! systemctl is-active microsoft-identity-device-broker >/dev/null 2>&1; then
+        noteEcho "Intune: Device broker not running - run: intune-prerequisites"
+      fi
+      if ! systemctl --user is-enabled intune-agent.timer >/dev/null 2>&1; then
+        noteEcho "Intune: Enable agent timer with: systemctl --user enable --now intune-agent.timer"
+      fi
+    '';
   };
 }

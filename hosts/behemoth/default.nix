@@ -3,7 +3,12 @@
 # Home-manager feature modules are listed in flake.nix: home/{core,dev,darwin}
 # bundles plus copilot and hunk.
 
-{ config, pkgs, dotfilesDir, ... }:
+{
+  config,
+  pkgs,
+  dotfilesDir,
+  ...
+}:
 
 {
   imports = [
@@ -51,9 +56,14 @@
       pull = true;
       volumes = [
         "${dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
-        "/Users/andreym/.local/share/litellm:/root/.config/litellm"  # Persist auth tokens
+        "/Users/andreym/.local/share/litellm:/root/.config/litellm" # Persist auth tokens
       ];
-      cmd = [ "--config" "/app/config.yaml" "--num_workers" "4" ];
+      cmd = [
+        "--config"
+        "/app/config.yaml"
+        "--num_workers"
+        "4"
+      ];
     };
 
     # RTMP/WebRTC streaming server for screen sharing
@@ -63,11 +73,11 @@
     containers.mediamtx = {
       image = "bluenviron/mediamtx:latest";
       ports = [
-        "1935:1935"      # RTMP input
-        "8889:8889"      # WebRTC player
-        "8189:8189/udp"  # WebRTC ICE/UDP
-        "8888:8888"      # HLS (fallback)
-        "8554:8554"      # RTSP
+        "1935:1935" # RTMP input
+        "8889:8889" # WebRTC player
+        "8189:8189/udp" # WebRTC ICE/UDP
+        "8888:8888" # HLS (fallback)
+        "8554:8554" # RTSP
       ];
       environment.MTX_WEBRTCADDITIONALHOSTS = "10.0.0.239,10.0.0.157";
       autoStart = true;
@@ -117,7 +127,7 @@
       # CLI tools better via Homebrew
       "agent-browser"
       "azure-cli"
-      "openssh"  # FIDO2/Yubikey SSH support (macOS default lacks it)
+      "openssh" # FIDO2/Yubikey SSH support (macOS default lacks it)
       "firebase-cli"
       "supabase"
       "vercel-cli"
@@ -128,43 +138,52 @@
   };
 
   # Home-manager user configuration
-  home-manager.users.andreym = { lib, config, pkgs, dotfilesDir, ... }: {
-    home.stateVersion = "24.05";
-    home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
-    home.username = lib.mkForce "andreym";
-    home.homeDirectory = lib.mkForce "/Users/andreym";
+  home-manager.users.andreym =
+    {
+      lib,
+      config,
+      pkgs,
+      dotfilesDir,
+      ...
+    }:
+    {
+      home.stateVersion = "24.05";
+      home.enableNixpkgsReleaseCheck = false; # Using pkgs.main for some packages
+      home.username = lib.mkForce "andreym";
+      home.homeDirectory = lib.mkForce "/Users/andreym";
 
-    # Canonical fleet-wide dotfiles path (spec §4): the repo lives in
-    # ~/Documents/dotfiles here; Linux hosts already have it at ~/dotfiles.
-    home.file."dotfiles".source =
-      config.lib.file.mkOutOfStoreSymlink dotfilesDir;
+      # Canonical fleet-wide dotfiles path (spec §4): the repo lives in
+      # ~/Documents/dotfiles here; Linux hosts already have it at ~/dotfiles.
+      home.file."dotfiles".source = config.lib.file.mkOutOfStoreSymlink dotfilesDir;
 
-    # Common packages (not tied to specific modules)
-    home.packages = with pkgs; [
-      _1password-cli  # op CLI for secret management
-      uv              # Python package runner (uvx)
-      nodejs          # Node.js runtime (npx)
-      # goose-cli  # AI coding agent — BLOCKED: nixpkgs v1.23.2 broken, upstream flake broken (block/goose#8514)
-      main.ollama     # Local LLM inference
-      qemu            # VM emulation (qemu-img, qemu-system-*)
-      (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ]))  # RE toolkit with MCP bridge
-      yubikey-manager # ykman CLI for Yubikey management
-    ];
+      # Common packages (not tied to specific modules)
+      home.packages = with pkgs; [
+        _1password-cli # op CLI for secret management
+        uv # Python package runner (uvx)
+        nodejs # Node.js runtime (npx)
+        # goose-cli  # AI coding agent — BLOCKED: nixpkgs v1.23.2 broken, upstream flake broken (block/goose#8514)
+        main.ollama # Local LLM inference
+        qemu # VM emulation (qemu-img, qemu-system-*)
+        (ghidra.withExtensions (exts: [ ghidra-extensions.ghydramcp ])) # RE toolkit with MCP bridge
+        yubikey-manager # ykman CLI for Yubikey management
+      ];
 
-    # Settings for the parameterized modules
-    modules.dev.claude.obsidianVault =
-      "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents";
+      # Settings for the parameterized modules
+      modules.dev.claude.obsidianVault = "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents";
 
-    modules.shell.lan-mouse = {
-      gpu = false;
-      authorizedFingerprints = {
-        "17:95:15:54:cc:74:7a:63:88:08:57:07:f1:0b:75:b1:a8:89:e2:f5:89:2b:4c:7a:25:88:2d:11:ae:fa:87:a3" = "rocinante";
+      modules.shell.lan-mouse = {
+        gpu = false;
+        authorizedFingerprints = {
+          "17:95:15:54:cc:74:7a:63:88:08:57:07:f1:0b:75:b1:a8:89:e2:f5:89:2b:4c:7a:25:88:2d:11:ae:fa:87:a3" =
+            "rocinante";
+        };
+        clients = [
+          {
+            position = "left";
+            ips = [ "10.0.0.6" ];
+            activateOnStartup = true;
+          }
+        ];
       };
-      clients = [{
-        position = "left";
-        ips = [ "10.0.0.6" ];
-        activateOnStartup = true;
-      }];
     };
-  };
 }

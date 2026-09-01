@@ -1,6 +1,11 @@
 # home/dev/cc.nix -- C/C++ development tools (home-manager)
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {
@@ -21,8 +26,8 @@ with lib;
       pkg-config
 
       # Language servers and tools
-      clang-tools  # clangd LSP, clang-format, etc.
-      bear         # Build system integration
+      clang-tools # clangd LSP, clang-format, etc.
+      bear # Build system integration
     ];
   };
 }

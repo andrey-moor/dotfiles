@@ -3,7 +3,12 @@
 # Feature modules live in home/{shell,dev,linux,profiles}; hosts pull them in
 # through the bundles in home/{core,dev,darwin,linux}.nix (see flake.nix).
 
-{ lib, dotfilesDir, pkgs, ... }:
+{
+  lib,
+  dotfilesDir,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

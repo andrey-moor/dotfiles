@@ -68,7 +68,7 @@ clean-result:
 
 # Format nix files
 fmt:
-    nix fmt
+    nix fmt .
 
 # Check flake
 check:

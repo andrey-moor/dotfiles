@@ -5,13 +5,14 @@
 #
 # Usage: pkgsX86.callPackage ../../../packages/intune-portal { }
 #
-{ lib
-, stdenvNoCC
-, fetchurl
-, gnutar
-, gzip
-, binutils
-, zstd
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  gnutar,
+  gzip,
+  binutils,
+  zstd,
 }:
 
 stdenvNoCC.mkDerivation rec {
@@ -26,9 +27,14 @@ stdenvNoCC.mkDerivation rec {
   # No build needed - just extract
   dontBuild = true;
   dontConfigure = true;
-  dontFixup = true;  # Don't patch ELF - binaries are x86_64, may run via Rosetta
+  dontFixup = true; # Don't patch ELF - binaries are x86_64, may run via Rosetta
 
-  nativeBuildInputs = [ gnutar gzip zstd binutils ];
+  nativeBuildInputs = [
+    gnutar
+    gzip
+    zstd
+    binutils
+  ];
 
   unpackPhase = ''
     runHook preUnpack

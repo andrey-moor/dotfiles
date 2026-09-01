@@ -1,6 +1,11 @@
 # home/shell/ghostty.nix -- Ghostty terminal configuration
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
@@ -35,12 +40,15 @@ let
     '';
   };
 
-  ghosttyPkg = if pkgs.stdenv.isDarwin
-    then null  # macOS uses Homebrew
-    else if pkgs.stdenv.isAarch64
-    then lib.hiPrio systemGhosttyWrapper  # Use system ghostty with software rendering
-    else lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);  # x86_64: needs nixGL
-in {
+  ghosttyPkg =
+    if pkgs.stdenv.isDarwin then
+      null # macOS uses Homebrew
+    else if pkgs.stdenv.isAarch64 then
+      lib.hiPrio systemGhosttyWrapper # Use system ghostty with software rendering
+    else
+      lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty); # x86_64: needs nixGL
+in
+{
   config = {
     # Ensure ghostty terminfo is found by tmux/ncurses (e.g. when SSH-ing in)
     home.sessionVariables.TERMINFO_DIRS = "$HOME/.nix-profile/share/terminfo:/usr/share/terminfo";
@@ -50,7 +58,7 @@ in {
     # Uses home.file to place in ~/.local/share/applications/ which has higher XDG priority
     home.file = mkIf (pkgs.stdenv.isLinux && pkgs.stdenv.isAarch64) {
       ".local/share/applications/com.mitchellh.ghostty.desktop" = {
-        force = true;  # Override existing file
+        force = true; # Override existing file
         text = ''
           [Desktop Entry]
           Version=1.0

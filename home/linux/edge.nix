@@ -5,7 +5,12 @@
 #
 # For YubiKey certificate auth in Edge, run: intune-nss-setup
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
@@ -17,7 +22,8 @@ let
       sha256 = "sha256-gUyh9AD1ntnZb2iLRwKLxy0PxY0Dist73oT9AC2pFQI=";
     };
   });
-in {
+in
+{
   config = mkIf pkgs.stdenv.isLinux {
     home.packages = [
       edgePackage

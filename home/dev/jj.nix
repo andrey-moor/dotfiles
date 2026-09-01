@@ -1,10 +1,17 @@
 # home/dev/jj.nix -- Jujutsu (jj) version control
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
-let cfg = config.modules.dev.jj;
-in {
+let
+  cfg = config.modules.dev.jj;
+in
+{
   options.modules.dev.jj = {
     userName = mkOption {
       type = types.str;
@@ -28,7 +35,10 @@ in {
         };
         ui = {
           # Use delta for diffs if available
-          diff.tool = [ "delta" "--color-only" ];
+          diff.tool = [
+            "delta"
+            "--color-only"
+          ];
           pager = "delta";
         };
       };

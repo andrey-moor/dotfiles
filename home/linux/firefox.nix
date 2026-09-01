@@ -1,6 +1,11 @@
 # home/linux/firefox.nix -- Firefox browser with privacy extensions
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

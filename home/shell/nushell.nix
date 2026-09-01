@@ -3,15 +3,20 @@
 # Config lives in <dotfiles>/config/nushell, deployed as individual file
 # symlinks. nu_scripts fetched by nix at ~/.local/share/nushell/nu_scripts
 
-{ lib, dotfilesDir, config, pkgs, ... }:
+{
+  lib,
+  dotfilesDir,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
   isDarwin = pkgs.stdenv.isDarwin;
 
   # Out-of-store symlink into the live repo working copy.
-  mkNushellLink = name:
-    config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/config/nushell/${name}";
+  mkNushellLink = name: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/config/nushell/${name}";
 
   # Fetch nu_scripts from GitHub
   nu_scripts = pkgs.fetchFromGitHub {
@@ -20,9 +25,13 @@ let
     rev = "main";
     sha256 = "sha256-oxnXzxQkNccCs36j+aMzg4QGHDcX7niJruqxCkeg0LM=";
   };
-in {
+in
+{
   config = {
-    home.packages = [ pkgs.nushell pkgs.carapace ];
+    home.packages = [
+      pkgs.nushell
+      pkgs.carapace
+    ];
 
     # Individual file symlinks only — NOT the whole dir: history.txt and
     # vendor/autoload/ are machine-generated and must survive.

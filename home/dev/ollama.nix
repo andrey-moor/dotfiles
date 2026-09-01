@@ -1,6 +1,11 @@
 # home/dev/ollama.nix -- Ollama local LLM runner
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

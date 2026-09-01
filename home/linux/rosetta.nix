@@ -9,7 +9,12 @@
 #   - GC root for x86_64 glibc (prevents garbage collection)
 #   - /boot/vmlinuz-linux sync with /boot/Image (Arch ARM kernel naming fix)
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
@@ -19,7 +24,8 @@ let
 
   glibcX86 = pkgsX86.glibc;
   linkerPath = "${glibcX86}/lib/ld-linux-x86-64.so.2";
-in {
+in
+{
   config = mkIf (pkgs.stdenv.isLinux && pkgs.stdenv.hostPlatform.isAarch64) {
     # Note: extra-platforms must be set system-wide in /etc/nix/nix.custom.conf
     # (done by prerequisites script or Determinate Nix installer)

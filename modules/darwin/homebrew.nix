@@ -1,26 +1,35 @@
 # modules/darwin/homebrew.nix -- Homebrew integration via nix-homebrew
 
-{ lib, config, inputs, ... }:
+{
+  lib,
+  config,
+  inputs,
+  ...
+}:
 
 with lib;
-let cfg = config.modules.darwin.homebrew;
-in {
+let
+  cfg = config.modules.darwin.homebrew;
+in
+{
   options.modules.darwin.homebrew = {
     casks = mkOption {
       type = types.listOf types.str;
-      default = [];
+      default = [ ];
       description = "Homebrew casks to install";
     };
     brews = mkOption {
       type = types.listOf types.str;
-      default = [];
+      default = [ ];
       description = "Homebrew formulae to install";
     };
     masApps = mkOption {
       type = types.attrsOf types.int;
-      default = {};
+      default = { };
       description = "Mac App Store apps to install (name = id)";
-      example = { "Screens 5" = 1663047912; };
+      example = {
+        "Screens 5" = 1663047912;
+      };
     };
   };
 

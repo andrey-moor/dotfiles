@@ -1,6 +1,11 @@
 # home/shell/direnv.nix -- Direnv configuration (home-manager)
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

@@ -3,7 +3,12 @@
 # Config only: the alacritty binary is installed outside nix (e.g. Omarchy on
 # the Linux hosts). Whole-dir out-of-store symlink into the repo.
 
-{ lib, dotfilesDir, config, ... }:
+{
+  lib,
+  dotfilesDir,
+  config,
+  ...
+}:
 
 with lib;
 {

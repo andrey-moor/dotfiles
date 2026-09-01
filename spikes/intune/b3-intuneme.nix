@@ -158,12 +158,23 @@ in
   # "spike" user (not root) via a real login session, since intuneme itself
   # must run as a normal host user (it maps host UID -> container UID) and
   # rootless podman needs a real user session too.
-  environment.systemPackages = [ pkgs.cage pkgs.foot pkgs.mesa intuneme ];
+  environment.systemPackages = [
+    pkgs.cage
+    pkgs.foot
+    pkgs.mesa
+    intuneme
+  ];
 
   users.users.spike = {
     isNormalUser = true;
     uid = 1000;
-    extraGroups = [ "wheel" "podman" "video" "render" "audio" ];
+    extraGroups = [
+      "wheel"
+      "podman"
+      "video"
+      "render"
+      "audio"
+    ];
   };
   security.sudo.wheelNeedsPassword = false;
 
@@ -187,7 +198,10 @@ in
     description = "Kiosk Wayland session for the intuneme spike (tty1)";
     wantedBy = [ "multi-user.target" ];
     conflicts = [ "getty@tty1.service" ];
-    after = [ "systemd-user-sessions.service" "getty@tty1.service" ];
+    after = [
+      "systemd-user-sessions.service"
+      "getty@tty1.service"
+    ];
     serviceConfig = {
       ExecStart = "${pkgs.cage}/bin/cage -- ${pkgs.foot}/bin/foot";
       User = "spike";

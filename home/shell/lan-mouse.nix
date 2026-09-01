@@ -4,39 +4,55 @@
 # Generates ~/.config/lan-mouse/config.toml declaratively.
 # Fingerprints are exchanged on first connect via the GUI prompt.
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
   cfg = config.modules.shell.lan-mouse;
   tomlFormat = pkgs.formats.toml { };
 
-  lanMousePkg = if pkgs.stdenv.isDarwin
-    then pkgs.lan-mouse-app
-    else if cfg.gpu
-    then config.lib.nixGL.wrap pkgs.lan-mouse
-    else pkgs.lan-mouse;
+  lanMousePkg =
+    if pkgs.stdenv.isDarwin then
+      pkgs.lan-mouse-app
+    else if cfg.gpu then
+      config.lib.nixGL.wrap pkgs.lan-mouse
+    else
+      pkgs.lan-mouse;
 
   # Build the config.toml attrset
   configToml = {
     port = cfg.port;
     release_bind = cfg.releaseBind;
-  } // optionalAttrs (cfg.authorizedFingerprints != { }) {
+  }
+  // optionalAttrs (cfg.authorizedFingerprints != { }) {
     authorized_fingerprints = cfg.authorizedFingerprints;
-  } // optionalAttrs (cfg.clients != [ ]) {
-    clients = map (c: {
-      ips = c.ips;
-      position = c.position;
-    } // optionalAttrs (c.hostname != null) {
-      hostname = c.hostname;
-    } // optionalAttrs (c.port != null) {
-      port = c.port;
-    } // optionalAttrs c.activateOnStartup {
-      activate_on_startup = true;
-    }) cfg.clients;
+  }
+  // optionalAttrs (cfg.clients != [ ]) {
+    clients = map (
+      c:
+      {
+        ips = c.ips;
+        position = c.position;
+      }
+      // optionalAttrs (c.hostname != null) {
+        hostname = c.hostname;
+      }
+      // optionalAttrs (c.port != null) {
+        port = c.port;
+      }
+      // optionalAttrs c.activateOnStartup {
+        activate_on_startup = true;
+      }
+    ) cfg.clients;
   };
 
-in {
+in
+{
   options.modules.shell.lan-mouse = {
     port = mkOption {
       type = types.port;
@@ -52,47 +68,60 @@ in {
 
     releaseBind = mkOption {
       type = types.listOf types.str;
-      default = [ "KeyLeftCtrl" "KeyLeftShift" "KeyF" ];
+      default = [
+        "KeyLeftCtrl"
+        "KeyLeftShift"
+        "KeyF"
+      ];
       description = "Key combination to release mouse capture";
     };
 
     authorizedFingerprints = mkOption {
       type = types.attrsOf types.str;
       default = { };
-      example = { "AB:CD:..." = "my-other-machine"; };
+      example = {
+        "AB:CD:..." = "my-other-machine";
+      };
       description = "Pre-authorized client fingerprints mapped to descriptions";
     };
 
     clients = mkOption {
       default = [ ];
       description = "Client machines to connect to";
-      type = types.listOf (types.submodule {
-        options = {
-          position = mkOption {
-            type = types.enum [ "left" "right" "top" "bottom" ];
-            description = "Position of this client relative to the current machine";
+      type = types.listOf (
+        types.submodule {
+          options = {
+            position = mkOption {
+              type = types.enum [
+                "left"
+                "right"
+                "top"
+                "bottom"
+              ];
+              description = "Position of this client relative to the current machine";
+            };
+            hostname = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Hostname of the client machine (omit to use IPs only)";
+            };
+            ips = mkOption {
+              type = types.listOf types.str;
+              description = "IP addresses of the client machine";
+            };
+            port = mkOption {
+              type = types.nullOr types.port;
+              default = null;
+              description = "Override port for this client (defaults to global port)";
+            };
+            activateOnStartup = mkOption {
+              type = types.bool;
+              default = false;
+              description = "Automatically activate this client on startup";
+            };
           };
-          hostname = mkOption {
-            type = types.nullOr types.str;
-            default = null;
-            description = "Hostname of the client machine (omit to use IPs only)";
-          };
-          ips = mkOption {
-            type = types.listOf types.str;
-            description = "IP addresses of the client machine";
-          };
-          port = mkOption {
-            type = types.nullOr types.port;
-            default = null;
-            description = "Override port for this client (defaults to global port)";
-          };
-          activateOnStartup = mkOption {
-            type = types.bool;
-            default = false;
-            description = "Automatically activate this client on startup";
-          };
-        };
-      });
+        }
+      );
     };
   };
 

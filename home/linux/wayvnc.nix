@@ -4,7 +4,12 @@
 # Uses password auth for macOS Screen Sharing compatibility.
 # Includes resolution cycle script to find best remote resolution.
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
@@ -12,9 +17,7 @@ let
 
   # Wrap wayvnc with nixGL for GPU support on non-NixOS systems
   # config.lib.nixGL.wrap is a no-op when nixGL isn't configured
-  wayvncPkg = if cfg.gpu
-    then config.lib.nixGL.wrap pkgs.wayvnc
-    else pkgs.wayvnc;
+  wayvncPkg = if cfg.gpu then config.lib.nixGL.wrap pkgs.wayvnc else pkgs.wayvnc;
 
   # Resolution cycle script - rotates through options
   cycleResolution = pkgs.writeShellScriptBin "cycle-resolution" ''
@@ -84,7 +87,8 @@ let
     } > "$dir/config"
   '';
 
-in {
+in
+{
   options.modules.linux.wayvnc = {
     passwordFile = mkOption {
       type = types.path;
@@ -158,13 +162,17 @@ in {
     systemd.user.services.wayvnc = {
       Unit = {
         Description = "WayVNC - VNC server for Wayland";
-        After = [ "graphical-session.target" "sops-nix.service" ];
+        After = [
+          "graphical-session.target"
+          "sops-nix.service"
+        ];
         Wants = [ "sops-nix.service" ];
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
         ExecStartPre = "${renderConfig}";
-        ExecStart = "${wayvncPkg}/bin/wayvnc"
+        ExecStart =
+          "${wayvncPkg}/bin/wayvnc"
           + optionalString cfg.gpu " --gpu"
           + optionalString cfg.renderCursor " --render-cursor"
           + " --max-fps=${toString cfg.maxFps}";

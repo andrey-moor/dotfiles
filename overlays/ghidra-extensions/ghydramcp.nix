@@ -1,6 +1,11 @@
 # GhidraMCP - Ghidra MCP server extension
 # https://github.com/bethington/ghidra-mcp
-{ lib, stdenv, fetchurl, unzip }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  unzip,
+}:
 
 stdenv.mkDerivation rec {
   pname = "ghidra-mcp";

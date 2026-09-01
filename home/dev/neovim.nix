@@ -1,6 +1,12 @@
 # home/dev/neovim.nix -- Neovim editor (package + out-of-store config)
 
-{ lib, dotfilesDir, config, pkgs, ... }:
+{
+  lib,
+  dotfilesDir,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {
@@ -15,7 +21,7 @@ with lib;
       # Support for various languages in plugins
       withNodeJs = true;
       withPython3 = true;
-      withRuby = false;  # AstroNvim doesn't use Ruby providers; new HM default
+      withRuby = false; # AstroNvim doesn't use Ruby providers; new HM default
 
       # Extra packages available to neovim
       extraPackages = with pkgs; [
@@ -34,8 +40,7 @@ with lib;
 
     # Whole-dir out-of-store symlink: edits in the repo are live immediately,
     # and nvim's own writes (lazy-lock.json) land in the working copy.
-    xdg.configFile."nvim".source =
-      config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/config/nvim";
+    xdg.configFile."nvim".source = config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/config/nvim";
 
     # Home Manager writes its own init.lua (provider host_prog setup) when
     # programs.neovim is enabled, which would conflict with the whole-dir

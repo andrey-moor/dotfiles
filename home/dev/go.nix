@@ -1,6 +1,11 @@
 # home/dev/go.nix -- Go development environment
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {
@@ -15,10 +20,10 @@ with lib;
     };
 
     home.packages = with pkgs; [
-      gopls                 # Go language server
-      (lib.hiPrio gotools)  # goimports, etc. — hiPrio resolves modernize collision with gopls 0.21+
-      go-tools              # staticcheck
-      delve                 # Go debugger
+      gopls # Go language server
+      (lib.hiPrio gotools) # goimports, etc. — hiPrio resolves modernize collision with gopls 0.21+
+      go-tools # staticcheck
+      delve # Go debugger
     ];
   };
 }

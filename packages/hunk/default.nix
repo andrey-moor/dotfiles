@@ -16,20 +16,38 @@
 #
 # Usage: pkgs.callPackage ../../packages/hunk { }
 #
-{ lib, stdenv, stdenvNoCC, fetchurl }:
+{
+  lib,
+  stdenv,
+  stdenvNoCC,
+  fetchurl,
+}:
 
 let
   version = "0.10.0";
 
   archives = {
-    "x86_64-linux"   = { name = "hunkdiff-linux-x64";    sha256 = "1kwyk04vi9ji1hb99dv746jxi66c1d7bqhl3isz961xlbdpwlg9l"; };
-    "aarch64-linux"  = { name = "hunkdiff-linux-arm64";  sha256 = "1hxb1whn7d101w24wr0fx1zz2fig0dchm239mzm7kiykxb98d5ks"; };
-    "x86_64-darwin"  = { name = "hunkdiff-darwin-x64";   sha256 = "09lxd54skcssgqapdrissf7spyigl83z39npnacrpvgyil6bhhzg"; };
-    "aarch64-darwin" = { name = "hunkdiff-darwin-arm64"; sha256 = "0idd39ygk8929ijs77bf0xczkijnj7vwq1wvjvhpdgnyjdqv1n3i"; };
+    "x86_64-linux" = {
+      name = "hunkdiff-linux-x64";
+      sha256 = "1kwyk04vi9ji1hb99dv746jxi66c1d7bqhl3isz961xlbdpwlg9l";
+    };
+    "aarch64-linux" = {
+      name = "hunkdiff-linux-arm64";
+      sha256 = "1hxb1whn7d101w24wr0fx1zz2fig0dchm239mzm7kiykxb98d5ks";
+    };
+    "x86_64-darwin" = {
+      name = "hunkdiff-darwin-x64";
+      sha256 = "09lxd54skcssgqapdrissf7spyigl83z39npnacrpvgyil6bhhzg";
+    };
+    "aarch64-darwin" = {
+      name = "hunkdiff-darwin-arm64";
+      sha256 = "0idd39ygk8929ijs77bf0xczkijnj7vwq1wvjvhpdgnyjdqv1n3i";
+    };
   };
 
-  archive = archives.${stdenv.hostPlatform.system}
-    or (throw "hunk: unsupported system ${stdenv.hostPlatform.system}");
+  archive =
+    archives.${stdenv.hostPlatform.system}
+      or (throw "hunk: unsupported system ${stdenv.hostPlatform.system}");
 in
 stdenvNoCC.mkDerivation {
   pname = "hunk";

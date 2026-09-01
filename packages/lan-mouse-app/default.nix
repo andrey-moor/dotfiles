@@ -11,10 +11,11 @@
 #
 # Usage: pkgs.callPackage ../packages/lan-mouse-app { }
 
-{ lib
-, stdenvNoCC
-, fetchurl
-, unzip
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  unzip,
 }:
 
 stdenvNoCC.mkDerivation rec {

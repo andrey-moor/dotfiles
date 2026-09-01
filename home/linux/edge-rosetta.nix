@@ -9,7 +9,12 @@
 #   - NSS module config: ~/.pki/nssdb/pkcs11.txt (set up via intune-nss-setup)
 #   - LD_LIBRARY_PATH includes nixpkgs OpenSSL for OpenSC compatibility
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
@@ -34,31 +39,31 @@ let
     name = "sigtrap-ignore";
     dontUnpack = true;
     buildPhase = ''
-      cat > sigtrap_ignore.c << 'EOF'
-#define _GNU_SOURCE
-#include <signal.h>
-#include <string.h>
-#include <dlfcn.h>
+            cat > sigtrap_ignore.c << 'EOF'
+      #define _GNU_SOURCE
+      #include <signal.h>
+      #include <string.h>
+      #include <dlfcn.h>
 
-// Override sigaction to prevent crashpad from installing SIGTRAP handler
-static int (*real_sigaction)(int, const struct sigaction*, struct sigaction*) = NULL;
+      // Override sigaction to prevent crashpad from installing SIGTRAP handler
+      static int (*real_sigaction)(int, const struct sigaction*, struct sigaction*) = NULL;
 
-int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
-  if (!real_sigaction) {
-    real_sigaction = dlsym(RTLD_NEXT, "sigaction");
-  }
-  // Block any attempts to handle SIGTRAP - just ignore them
-  if (signum == SIGTRAP) {
-    if (oldact) {
-      memset(oldact, 0, sizeof(*oldact));
-      oldact->sa_handler = SIG_IGN;
-    }
-    return 0;
-  }
-  return real_sigaction(signum, act, oldact);
-}
-EOF
-      $CC -shared -fPIC -o libsigtrap_ignore.so sigtrap_ignore.c -ldl
+      int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
+        if (!real_sigaction) {
+          real_sigaction = dlsym(RTLD_NEXT, "sigaction");
+        }
+        // Block any attempts to handle SIGTRAP - just ignore them
+        if (signum == SIGTRAP) {
+          if (oldact) {
+            memset(oldact, 0, sizeof(*oldact));
+            oldact->sa_handler = SIG_IGN;
+          }
+          return 0;
+        }
+        return real_sigaction(signum, act, oldact);
+      }
+      EOF
+            $CC -shared -fPIC -o libsigtrap_ignore.so sigtrap_ignore.c -ldl
     '';
     installPhase = ''
       mkdir -p $out/lib
@@ -67,7 +72,7 @@ EOF
   };
 
   # Create a directory structure that mimics NixOS /run/opengl-driver
-  openglDriverDir = pkgs.runCommand "opengl-driver-x86" {} ''
+  openglDriverDir = pkgs.runCommand "opengl-driver-x86" { } ''
     mkdir -p $out/lib/gbm $out/lib/dri $out/lib/vdpau
 
     # Link Mesa DRI drivers
@@ -134,7 +139,8 @@ EOF
       "$@"
   '';
 
-in {
+in
+{
   # Edge under Rosetta needs the x86_64 binfmt/linker plumbing.
   imports = [ ./rosetta.nix ];
 

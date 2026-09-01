@@ -1,6 +1,11 @@
 # home/dev/hunk.nix -- hunk: review-first terminal diff viewer
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

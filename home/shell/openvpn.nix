@@ -1,6 +1,11 @@
 # home/shell/openvpn.nix -- OpenVPN client
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {

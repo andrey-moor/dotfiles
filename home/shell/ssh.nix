@@ -1,15 +1,23 @@
 # home/shell/ssh.nix -- SSH client configuration
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {
   config = {
-    home.packages = with pkgs; [
-      sshpass  # Non-interactive SSH password auth
-    ] ++ optionals stdenv.isLinux [
-      lxqt.lxqt-openssh-askpass
-    ];
+    home.packages =
+      with pkgs;
+      [
+        sshpass # Non-interactive SSH password auth
+      ]
+      ++ optionals stdenv.isLinux [
+        lxqt.lxqt-openssh-askpass
+      ];
 
     home.sessionVariables = mkIf pkgs.stdenv.isLinux {
       SSH_ASKPASS = "${pkgs.lxqt.lxqt-openssh-askpass}/bin/lxqt-openssh-askpass";

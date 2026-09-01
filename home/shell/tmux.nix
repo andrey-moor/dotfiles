@@ -1,6 +1,11 @@
 # home/shell/tmux.nix -- Tmux terminal multiplexer configuration
 
-{ lib, config, pkgs, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 
 with lib;
 {
