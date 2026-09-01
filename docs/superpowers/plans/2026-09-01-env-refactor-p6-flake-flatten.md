@@ -79,3 +79,11 @@
 - [ ] `just fmt` works; CI lint job green; repo formatted.
 - [ ] Docs describe the new shape; no auto-discovery claims remain.
 - [ ] behemoth switched (no-op), memory updated.
+
+## Amendments (2026-09-01, after Task 1)
+
+- **Task 1b — import-form bundles (owner decision: "do the right thing").** Task 1 shipped bundles as plain lists spliced in `flake.nix` with a `sortModules` helper, solely to keep closure hashes identical (module nesting depth reorders `home.packages`, which changes the `buildEnv` hash). Amended: bundles are `{ imports = [ ... ]; }` modules per spec §3 ("hosts import feature files directly"); hosts are self-contained (`hosts/<h>/default.nix` imports its bundles + extras); `flake.nix` host blocks are boilerplate (`modules = [ ./hosts/<h> ]`); `sortModules` deleted.
+- **Acceptance test changes from hash-identity to content-equivalence** for Tasks 1b–4: (a) sorted set of `home.packages` outPaths identical per host; (b) sorted closure requisites identical except the generation/buildEnv/activation wrapper derivations, each shown ordering-only via `nix-diff`. New baseline paths recorded in the Task 1b commit body.
+- `home/dev/cc.nix` (C/C++ toolchain, never enabled) and `home/dev/ollama.nix` (never enabled; behemoth runs ollama via launchd) deleted — owner-approved.
+- Task 2 finding: `nixfmt-rfc-style` is now an alias of `pkgs.nixfmt`, and passing `.` to `nix fmt` is deprecated. Task 3 uses `formatter = pkgs.nixfmt`, and both `just fmt` and the CI check run over `git ls-files '*.nix'`.
+- Task 1 corrections: `x86_64-darwin` dropped from systems (nixpkgs 26.11 no longer evaluates it); the andreym profile's GPG-signing branch was dead (1Password on all hosts) and was removed, closure-proven neutral; devShells were never exposed before — `shell.nix` now takes `{ pkgs }` and the flake exposes `devShells.<system>.default`.
