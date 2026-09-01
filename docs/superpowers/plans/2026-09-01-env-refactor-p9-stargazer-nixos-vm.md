@@ -98,3 +98,19 @@
 - [ ] Entra joined, Intune enrolled, **Compliant** in the portal with zero hand-fixes (all baked into modules).
 - [ ] Fire drill passed from scratch; old Stargazer VM deleted; Arch-era docs archived; runbook is the only install doc.
 - [ ] Tenant-bearing facts exist only in gitignored local files; repo public-safe.
+
+## Amendments (2026-09-01, after Task 1 research — see `2026-09-01-p9-research-notes.md`)
+
+- **Disk is `/dev/sda`** (Parallels offers ide/scsi/sata/nvme, no virtio disk; networking IS virtio). disko targets `/dev/sda`, 1 GB ESP (lanzaboote UKIs), LUKS2 interactive passphrase, btrfs `@root/@home/@nix/@log`, no swap.
+- **Terminal on stargazer = Alacritty** (owner decision). Parallels caps Linux guests at OpenGL 4.0 (Parallels 27's GL 4.3 Metal driver is Windows-only; spike VM on 27.0.0 confirms 4.0); Ghostty ≥ 1.2 needs GL 4.3. Alacritty (GL 3.3) is GPU-accelerated on virgl. Swap back to `home/shell/ghostty.nix` if Parallels ever extends GL 4.3 to Linux guests. Acceptance: `glxinfo -B` renderer = virgl; Alacritty renders on hardware GL.
+- **Secure Boot is REQUIRED for full compliance and feasible-now** (firmware in setup mode, empty PK/KEK/db on the spike). Task 6 is no longer conditional: lanzaboote (aarch64 best-effort) + `sbctl enroll-keys --microsoft` (2023 CAs bundled in sbctl ≥ 0.17) + `mokutil` in systemPackages (the tenant custom script reads `db` via mokutil/efivars). Outstanding check: `prlctl set --efi-secure-boot on` must not install a vendor PK.
+- **vTPM dropped** — Windows-only in Parallels, absent on the spike, and himmelblau's Nix build lacks the `tpm` feature (#1656: `hsm_type = "tpm"` kills the daemon; keep the default). LUKS passphrase at cold boot is the design.
+- **Identity design**: local `users.users.andreym` (uid 1000, `/home/andreym`) is MANDATORY (home-manager's NixOS module reads/writes `users.users.<name>`); himmelblau `user_map_file` maps `andreym` → the UPN (all four PAM entry points consult it). Set himmelblau `settings.shell` (upstream default `/bin/bash` does not exist on NixOS). Leave `pam_allow_groups` unset.
+- **himmelblau pin `github:himmelblau-idm/himmelblau/4.0.0`**; module must add: `ExecStart` override for a mutable config, `/etc/krb5.conf.d/` creation, `himmelblaud-tasks` 226/NAMESPACE fix, **declarative MTU 1400** on the shared-NAT interface (the spike lost DHCP after a hand-set MTU).
+- **Parallels guest tools**: aarch64 build exists but is userspace-only and irritates Hyprland → `hardware.parallels.enable` behind an opt-in option, default false. virtio + virtio-gpu only.
+- **Hyprland on aquamarine**: `WLR_*` env vars are dead; use `cursor { no_hardware_cursors = true }`, a pinned `monitor=` line (no EDID), `AQ_NO_MODIFIERS` only if needed. `hardware.graphics.enable = true` suffices (do NOT add `virglrenderer` — host-side).
+- **os-release override**: `environment.etc."os-release".text = lib.mkForce …` ONLY — never `system.nixos.{distroId,distroName,release}` (feeds boot labels, bootspec, hostName/stateVersion defaults). `ID=ubuntu`, `VERSION_ID="24.04"` satisfies both tenant distro groups after `normalize_version`.
+- A tenant CustomConfig policy runs `git config --system` → `/etc/gitconfig` must remain a writable real file (do not declare `environment.etc."gitconfig"`).
+- Installer: `nix run github:nix-community/disko …` needs `--extra-experimental-features "nix-command flakes"`; `nixos-install --flake` adds it itself.
+- `scripts/stargazer-vm ip` must handle IPv6 link-local / lease loss (the spike's IPv4 lookup returns 169.254.x when dhcpcd loses its lease).
+- Compliance gap confirmed = distro ×2 (identity module), encryption (LUKS), Secure Boot (Task 6); password rules already pass; custom script exit code ignored (JSON on stdout required).
