@@ -1,7 +1,14 @@
 keys:
   - &admin age13au8fs9h0p68htzmrggkq9tuc77vlv7h7d3v0n36rp33vz59ja3stlmfj3
+  # stargazer's host recipient, derived from its SSH host key after the first
+  # boot (P9 Task 4):
+  #   ssh-keyscan stargazer | ssh-to-age
+  # Add the resulting age1... key here as `&stargazer`, list it under the
+  # secrets/ rule below, then `sops updatekeys secrets/wayvnc.yaml`.
+  # - &stargazer age1PLACEHOLDER
 creation_rules:
   - path_regex: secrets/.*\.yaml$
     key_groups:
       - age:
           - *admin
+          # - *stargazer

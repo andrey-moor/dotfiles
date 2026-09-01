@@ -1,0 +1,285 @@
+#!/usr/bin/env bash
+# Parallels lifecycle for the stargazer NixOS VM.
+#
+# This box also hosts Nostromo (a live, domain-joined corporate Windows VM) and
+# spike-himmelblau-arm (the enrolled P2 reference VM). Neither may ever be
+# mutated. Every prlctl call below therefore targets $VMNAME, which can only
+# ever be "stargazer-nixos" or, with --drill, "stargazer-drill".
+set -euo pipefail
+
+VMNAME="stargazer-nixos"
+if [ "${1:-}" = "--drill" ]; then
+  VMNAME="stargazer-drill"
+  shift
+fi
+
+case "$VMNAME" in
+  stargazer-nixos | stargazer-drill) ;;
+  *)
+    echo "refusing to operate on '$VMNAME'" >&2
+    exit 1
+    ;;
+esac
+
+PARALLELS_DIR="$HOME/Parallels"
+ISO_DIR="$PARALLELS_DIR/iso"
+ISO="$ISO_DIR/nixos-minimal-aarch64-linux.iso"
+ISO_URL="https://channels.nixos.org/nixos-unstable/latest-nixos-minimal-aarch64-linux.iso"
+
+# Sizing per the P9 plan: behemoth is 16 cores / 128 GB and Nostromo takes
+# 10 / 64. Do not oversize.
+CPUS=8
+MEMSIZE=32768
+DISK_MB=262144
+MIN_FREE_GB=150
+
+usage() {
+  cat >&2 <<EOF
+usage: stargazer-vm [--drill] <verb> [args]
+
+  create              create the VM (refuses if it exists, or if $PARALLELS_DIR
+                      has less than ${MIN_FREE_GB} GB free)
+  iso                 download + verify the NixOS aarch64 minimal ISO, attach it
+                      and boot from it
+  up | down           start / stop
+  suspend | resume    suspend / resume
+  status              state, IP addresses, boot order
+  ip                  best-effort guest address (IPv4, else IPv6 link-local)
+  snapshot <name>     take a named snapshot
+  restore <name>      switch to a named snapshot (VM is stopped first)
+  destroy             delete the VM (double confirmation)
+
+Target VM: $VMNAME
+EOF
+}
+
+require_vm() {
+  prlctl list -i "$VMNAME" >/dev/null 2>&1 || {
+    echo "$VMNAME does not exist — run 'stargazer-vm create'" >&2
+    exit 1
+  }
+}
+
+free_gb() {
+  # df -k on macOS: 4th column is available 1K-blocks.
+  df -k "$PARALLELS_DIR" | awk 'NR==2 {printf "%d", $4 / 1048576}'
+}
+
+wait_for_stopped() {
+  for _ in $(seq 1 24); do
+    [ "$(prlctl list -a 2>/dev/null | awk -v n="$VMNAME" '$NF==n{print $2}')" = "stopped" ] && return 0
+    sleep 5
+  done
+  return 1
+}
+
+# `prlctl snapshot-switch` only accepts --id, and plain `snapshot-list` does not
+# print names, so names have to be resolved through the JSON form. python must
+# not raise on empty/invalid input: with no snapshots prlctl writes nothing and
+# exits non-zero, which `set -o pipefail` would otherwise propagate.
+resolve_snapshot_id() {
+  local name="$1"
+  prlctl snapshot-list "$VMNAME" --json 2>/dev/null | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except (json.JSONDecodeError, ValueError):
+    sys.exit(0)
+for k, v in d.items():
+    if v.get('name') == '$name':
+        print(k.strip('{}'))
+        break
+"
+}
+
+get_mac() {
+  prlctl list -i "$VMNAME" 2>/dev/null |
+    sed -n 's/.*mac=\([0-9A-Fa-f]\{12\}\).*/\1/p' | head -1 || true
+}
+
+get_ipv4() {
+  prlctl list -i "$VMNAME" 2>/dev/null | grep 'IP Addresses' |
+    grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 || true
+}
+
+# The spike VM's dhcpcd lost its shared-network lease and fell back to IPv4LL,
+# leaving it reachable only over IPv6 link-local on the Parallels bridge. Expect
+# the same fragility here rather than reporting a useless 169.254 address.
+get_ipv6_ll() {
+  local mac colon_mac
+  mac="$(get_mac)"
+  [ -n "$mac" ] || return 0
+  colon_mac="$(echo "$mac" | sed 's/../&:/g; s/:$//' | tr '[:upper:]' '[:lower:]')"
+  # ndp -an prints "fe80::…%bridgeN  <mac>  bridgeN …"; leading zeros in the
+  # MAC are stripped there, so compare octet-wise.
+  ndp -an 2>/dev/null | awk -v mac="$colon_mac" '
+    function norm(m,   parts, i, out) {
+      n = split(m, parts, ":")
+      out = ""
+      for (i = 1; i <= n; i++) out = out sprintf("%02x", strtonum("0x" parts[i])) (i < n ? ":" : "")
+      return out
+    }
+    $1 ~ /^fe80::/ && norm($2) == mac { print $1; exit }
+  '
+}
+
+CMD="${1:-}"
+[ -n "$CMD" ] || {
+  usage
+  exit 1
+}
+shift || true
+
+case "$CMD" in
+  create)
+    if prlctl list -i "$VMNAME" >/dev/null 2>&1; then
+      echo "$VMNAME already exists — destroy it first" >&2
+      exit 1
+    fi
+    mkdir -p "$PARALLELS_DIR"
+    free="$(free_gb)"
+    if [ "$free" -lt "$MIN_FREE_GB" ]; then
+      echo "only ${free} GB free in $PARALLELS_DIR; need at least ${MIN_FREE_GB} GB" >&2
+      exit 1
+    fi
+    echo "creating $VMNAME (${CPUS} vCPU, ${MEMSIZE} MB RAM, ${DISK_MB} MB disk; ${free} GB free)"
+
+    prlctl create "$VMNAME" --distribution linux --no-hdd
+    prlctl set "$VMNAME" --cpus "$CPUS" --memsize "$MEMSIZE"
+    # Parallels 27 documents --bios-type; the spike script's undocumented
+    # --efi-boot is the same switch on older builds.
+    prlctl set "$VMNAME" --bios-type efi-arm64
+    # Secure Boot stays off until P9 Task 6 enrolls lanzaboote's keys, and there
+    # is deliberately no vTPM: Parallels documents it as Windows-only, and
+    # himmelblau's Nix build cannot use a TPM anyway (upstream #1656).
+    prlctl set "$VMNAME" --efi-secure-boot off
+
+    # SATA, because Parallels offers no virtio disk interface; hosts/stargazer/
+    # disko.nix targets /dev/sda accordingly.
+    prlctl set "$VMNAME" --device-add hdd --size "$DISK_MB" --type expand --iface sata
+    prlctl set "$VMNAME" --device-set net0 --type shared --adapter-type virtio
+    prlctl set "$VMNAME" --video-adapter-type virtio --3d-accelerate highest
+    prlctl set "$VMNAME" --auto-share-smart-card on # YubiKey at the local console
+
+    echo "created $VMNAME. next: stargazer-vm iso"
+    ;;
+
+  iso)
+    require_vm
+    mkdir -p "$ISO_DIR"
+    tmp="$(mktemp -d "$ISO_DIR/.dl.XXXXXX")"
+    trap 'rm -rf "$tmp"' EXIT
+    echo "resolving $ISO_URL"
+    real_url="$(curl -sIL -o /dev/null -w '%{url_effective}' "$ISO_URL")"
+    echo "downloading $real_url"
+    curl -fL --progress-bar -o "$tmp/iso" "$real_url"
+    echo "verifying sha256"
+    want="$(curl -fsSL "${real_url}.sha256" | awk '{print $1}')"
+    got="$(shasum -a 256 "$tmp/iso" | awk '{print $1}')"
+    if [ "$want" != "$got" ]; then
+      echo "sha256 mismatch: expected $want, got $got" >&2
+      exit 1
+    fi
+    mv "$tmp/iso" "$ISO"
+    echo "ISO at $ISO"
+
+    if prlctl list -i "$VMNAME" | grep -q '^ *cdrom0'; then
+      prlctl set "$VMNAME" --device-set cdrom0 --image "$ISO"
+    else
+      prlctl set "$VMNAME" --device-add cdrom --image "$ISO" --iface sata
+    fi
+    prlctl set "$VMNAME" --device-bootorder "cdrom0 hdd0"
+    ;;
+
+  up)
+    require_vm
+    prlctl start "$VMNAME"
+    ;;
+
+  down)
+    require_vm
+    prlctl stop "$VMNAME"
+    ;;
+
+  suspend)
+    require_vm
+    prlctl suspend "$VMNAME"
+    ;;
+
+  resume)
+    require_vm
+    prlctl resume "$VMNAME"
+    ;;
+
+  status)
+    require_vm
+    prlctl list -i "$VMNAME" | grep -E 'State|IP Addresses|Boot order|EFI|Secure'
+    ;;
+
+  ip)
+    require_vm
+    ipv4="$(get_ipv4)"
+    case "$ipv4" in
+      169.254.*)
+        echo "warning: guest reports the IPv4 link-local address $ipv4 — its DHCP lease is gone" >&2
+        ipv4=""
+        ;;
+    esac
+    if [ -n "$ipv4" ]; then
+      echo "$ipv4"
+      exit 0
+    fi
+    ll="$(get_ipv6_ll)"
+    if [ -n "$ll" ]; then
+      echo "no usable IPv4; reachable over IPv6 link-local:" >&2
+      echo "$ll"
+      exit 0
+    fi
+    echo "no address found — is the VM up? (stargazer-vm status)" >&2
+    exit 1
+    ;;
+
+  snapshot)
+    require_vm
+    name="${1:?usage: stargazer-vm snapshot <name>}"
+    prlctl snapshot "$VMNAME" -n "$name"
+    ;;
+
+  restore)
+    require_vm
+    name="${1:?usage: stargazer-vm restore <name>}"
+    snap="$(resolve_snapshot_id "$name")" || true
+    [ -n "$snap" ] || {
+      echo "no snapshot named '$name' on $VMNAME" >&2
+      exit 1
+    }
+    prlctl stop "$VMNAME" --kill 2>/dev/null || true
+    wait_for_stopped || {
+      echo "$VMNAME did not stop — refusing to switch snapshots" >&2
+      exit 1
+    }
+    prlctl snapshot-switch "$VMNAME" --id "$snap"
+    ;;
+
+  destroy)
+    require_vm
+    echo "About to PERMANENTLY DELETE the VM '$VMNAME' and its disks."
+    read -r -p "Type the VM name to continue: " confirm1
+    [ "$confirm1" = "$VMNAME" ] || {
+      echo "aborted" >&2
+      exit 1
+    }
+    read -r -p "This cannot be undone. Type DESTROY to confirm: " confirm2
+    [ "$confirm2" = "DESTROY" ] || {
+      echo "aborted" >&2
+      exit 1
+    }
+    prlctl stop "$VMNAME" --kill 2>/dev/null || true
+    prlctl delete "$VMNAME"
+    ;;
+
+  *)
+    usage
+    exit 1
+    ;;
+esac

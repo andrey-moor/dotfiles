@@ -86,3 +86,7 @@ spikes/intune/*.key
 spikes/intune/*.key.pub
 spikes/intune/notes/
 spikes/intune/result
+
+# P9 stargazer locals — never commit (the .example stays tracked)
+hosts/stargazer/local/*
+!hosts/stargazer/local/tenant.nix.example

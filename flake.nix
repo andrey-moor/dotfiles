@@ -21,6 +21,18 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # NixOS host layer (stargazer; P7 second)
+    himmelblau = {
+      url = "github:himmelblau-idm/himmelblau/4.0.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # Only reached through modules/nixos/secureboot.nix, which is off by
+    # default, so a first install never needs it.
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v1.1.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Platform support
     darwin = {
       url = "github:LnL7/nix-darwin/master";
@@ -162,24 +174,33 @@
           ++ [ ./hosts/rocinante ];
         };
 
-      # aarch64 Parallels VM on behemoth (standalone home-manager)
-      homeConfigurations.stargazer =
+      # aarch64 Parallels VM on behemoth (NixOS, integrated home-manager)
+      nixosConfigurations.stargazer =
         let
+          system = "aarch64-linux";
+          pkgs = mkPkgs system;
           dotfilesDir = "/home/andreym/dotfiles";
         in
-        home-manager.lib.homeManagerConfiguration {
-          pkgs = mkPkgs "aarch64-linux";
+        nixpkgs.lib.nixosSystem {
+          inherit system;
 
-          extraSpecialArgs = { inherit inputs dotfilesDir; };
+          specialArgs = { inherit inputs dotfilesDir; };
 
           modules = [
+            { nixpkgs.pkgs = lib.mkDefault pkgs; }
+            home-manager.nixosModules.home-manager
             {
-              home.username = "andreym";
-              home.homeDirectory = "/home/andreym";
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+              home-manager.backupFileExtension = "backup";
+              home-manager.extraSpecialArgs = { inherit inputs dotfilesDir; };
+              home-manager.sharedModules = homeBase;
             }
-          ]
-          ++ homeBase
-          ++ [ ./hosts/stargazer ];
+            sops-nix.nixosModules.sops
+            inputs.disko.nixosModules.disko
+            inputs.himmelblau.nixosModules.himmelblau
+            ./hosts/stargazer
+          ];
         };
 
       formatter = forAllSystems (system: (mkPkgs system).nixfmt);

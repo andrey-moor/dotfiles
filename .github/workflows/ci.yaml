@@ -48,7 +48,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
-      # Eval-only: stargazer's closure includes x86_64 .deb derivations (Intune/Rosetta
-      # stack) that cannot build on a stock aarch64 runner without binfmt emulation.
-      # Upgrade to a full `nix build` once stargazer is rebuilt Rosetta-free.
-      - run: nix eval --raw .#homeConfigurations.stargazer.activationPackage.drvPath
+      - run: nix build .#nixosConfigurations.stargazer.config.system.build.toplevel --no-link --fallback
