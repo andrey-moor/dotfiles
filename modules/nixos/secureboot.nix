@@ -4,7 +4,7 @@
 # a two-step ceremony, documented in hosts/stargazer/README.md:
 #
 #   1. Build+switch with this module still OFF, then create the keys:
-#        sudo sbctl create-keys
+#        sudo nix run nixpkgs#sbctl -- create-keys   # sbctl is only installed once this module is on
 #   2. Set `modules.nixos.secureboot.enable = true`, switch, then
 #        sudo sbctl enroll-keys --microsoft      # 2023 CAs, not own-keys-only
 #      and flip Parallels' EFI Secure Boot on (`prlctl set <vm>
