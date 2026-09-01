@@ -28,7 +28,8 @@ For a different host: `just --set host <hostname> switch`
 `flake.nix` is hand-rolled — no builder lib, no filesystem magic. It declares one explicit block per host:
 
 - `darwinConfigurations.behemoth` → `darwin.lib.darwinSystem` (nix-darwin + home-manager as a darwin module)
-- `homeConfigurations.rocinante` / `homeConfigurations.stargazer` → `home-manager.lib.homeManagerConfiguration` (standalone HM on foreign Linux; P7 will move rocinante to NixOS)
+- `homeConfigurations.rocinante` → `home-manager.lib.homeManagerConfiguration` (standalone HM on foreign Linux; P7 will move it to NixOS)
+- `nixosConfigurations.stargazer` → `nixpkgs.lib.nixosSystem` (NixOS + integrated home-manager, disko, sops-nix, himmelblau)
 
 Shared pieces, all inline in `flake.nix`:
 - **`mkPkgs system`** — `import nixpkgs` with `config.allowUnfree = true` and overlays, in order: `./overlays`, a `pkgs.main` overlay (nixpkgs master, also allowUnfree, for packages that land there first), `nur.overlays.default`.
@@ -107,7 +108,7 @@ Frequently-edited configs live in `config/{nvim,nushell,alacritty}` and are depl
 
 - **behemoth**: macOS workstation (aarch64-darwin)
 - **rocinante**: x86_64 Arch Linux (Omarchy) workstation, accessed via Tailscale
-- **stargazer**: aarch64-linux Parallels VM on behemoth with LUKS encryption (Intune compliance)
+- **stargazer**: aarch64 NixOS VM on Parallels (behemoth), LUKS root, Intune-enrolled
 
 ### Behemoth (macOS)
 
@@ -132,23 +133,29 @@ nix run home-manager -- switch --flake .#rocinante -b backup
 - Native x86_64 — no Rosetta needed
 - See `hosts/rocinante/README.md` for full setup instructions
 
-### Stargazer (Parallels VM - Encrypted)
+### Stargazer (NixOS VM on Parallels)
 
-aarch64-linux Parallels VM on behemoth with LUKS full-disk encryption for Microsoft Intune compliance. Runs Omarchy (Hyprland).
+Fallback devbox: aarch64 NixOS VM on Parallels, declared as `nixosConfigurations.stargazer`
+(`hosts/stargazer/` + `modules/nixos/`). disko LUKS2 + btrfs, integrated home-manager,
+minimal Hyprland on virtio-gpu, Entra join + Intune enrollment via himmelblau.
 
-**Dotfiles:** `/home/andreym/dotfiles` (git clone, same path as rocinante)
+**Install:** `hosts/stargazer/README.md` is the runbook — VM creation through enrollment,
+Secure Boot and the fire drill. It is the only install doc.
+
+**VM lifecycle:** `scripts/stargazer-vm <create|iso|up|down|suspend|resume|status|ip|snapshot|restore|destroy>`
+(hard-coded to `stargazer-nixos`; `--drill` targets `stargazer-drill`).
 
 **Build/switch (from within stargazer):**
 ```bash
-cd ~/dotfiles
-nix run home-manager -- switch --flake .#stargazer -b backup
+sudo nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer --refresh
 ```
 
 **Notes:**
-- aarch64-linux with Rosetta for x86_64 emulation
-- Same `/home/andreym/dotfiles` path as rocinante — distinguish by `hostname` or `uname -m` (aarch64 vs x86_64)
-- Uses nixGL with mesa (virtio_gpu in Parallels)
-- See `hosts/stargazer/README.md` for full setup instructions
+- `system.autoUpgrade` refreshes from the same `github:` ref daily (persistent timer)
+- `~/dotfiles` must be cloned for the home-manager out-of-store symlinks to resolve
+- `/etc/os-release` reports Ubuntu 24.04 by owner decision (Intune Allowed Distributions);
+  `nixos-version` stays honest — see `modules/nixos/intune-identity.nix`
+- No Rosetta, no nixGL
 
 ## Notes
 

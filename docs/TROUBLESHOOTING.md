@@ -138,7 +138,7 @@ Either GRUB config has wrong UUID, or 'encrypt' hook missing from initramfs.
 **Prevention:**
 During initial setup, verify UUIDs match before first reboot.
 
-**Related:** [docs/arch-arm-encrypted-install.md](arch-arm-encrypted-install.md)
+**Related:** [docs/archive/arch-arm-encrypted-install.md](archive/arch-arm-encrypted-install.md)
 
 ---
 
@@ -591,6 +591,6 @@ If none of these solutions work:
 3. If it's a blocking issue, consider restoring from a known-good snapshot and retrying the failed step
 
 4. For persistent issues, check the relevant detailed documentation:
-   - [Template creation](arch-arm-encrypted-install.md)
-   - [Omarchy + GRUB](omarchy-grub-install.md)
+   - [Template creation](archive/arch-arm-encrypted-install.md)
+   - [Omarchy + GRUB](archive/omarchy-grub-install.md)
    - [Microsoft broker reference](intune-broker2.0.md)

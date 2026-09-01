@@ -17,7 +17,7 @@ Create new Arch Linux ARM VMs by cloning from the encrypted base snapshot and ru
 ## Prerequisites
 
 - Working ArchBase-Template VM with `EncryptedBase-GRUB` snapshot
-- Snapshot created per [arch-arm-encrypted-install.md](arch-arm-encrypted-install.md)
+- Snapshot created per [arch-arm-encrypted-install.md](archive/arch-arm-encrypted-install.md)
 - LUKS passphrase: 4815162342 (change after clone if desired)
 
 ## Step 1: Clone from Encrypted Base
@@ -70,7 +70,7 @@ prlctl start "YourNewVM"
 
 1. Enter LUKS passphrase (4815162342)
 2. Login as root
-3. Follow [omarchy-grub-install.md](omarchy-grub-install.md) starting from Step 2 (backup GRUB)
+3. Follow [omarchy-grub-install.md](archive/omarchy-grub-install.md) starting from Step 2 (backup GRUB)
 
 **Quick reference:**
 
@@ -238,6 +238,6 @@ sudo mount -t prl_fs Host /mnt/psf
 
 ## References
 
-- [arch-arm-encrypted-install.md](arch-arm-encrypted-install.md) - Base LUKS+GRUB setup
-- [omarchy-grub-install.md](omarchy-grub-install.md) - Omarchy with GRUB preservation
+- [arch-arm-encrypted-install.md](archive/arch-arm-encrypted-install.md) - Base LUKS+GRUB setup
+- [omarchy-grub-install.md](archive/omarchy-grub-install.md) - Omarchy with GRUB preservation
 - [Parallels CLI Reference](https://download.parallels.com/desktop/v18/docs/en_US/Parallels%20Desktop%20Pro%20Edition%20Command-Line%20Reference.pdf)

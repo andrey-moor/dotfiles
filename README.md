@@ -10,8 +10,9 @@ Nix-based dotfiles for macOS (nix-darwin) and Linux (NixOS/home-manager).
 - **Homebrew** (macOS): GUI applications via casks
 
 `flake.nix` is hand-rolled: one explicit block per host — `darwinConfigurations.behemoth`
-(nix-darwin + home-manager) and `homeConfigurations.{rocinante,stargazer}` (standalone
-home-manager on foreign Linux). It shares a `mkPkgs` helper (allowUnfree; overlays
+(nix-darwin + home-manager), `homeConfigurations.rocinante` (standalone home-manager on
+foreign Linux) and `nixosConfigurations.stargazer` (NixOS with integrated home-manager).
+It shares a `mkPkgs` helper (allowUnfree; overlays
 `./overlays`, a `pkgs.main` overlay from nixpkgs master, and NUR) and passes
 `{ inherit inputs dotfilesDir; }` as `specialArgs` / `extraSpecialArgs`.
 
@@ -134,7 +135,7 @@ Neovim/nushell/alacritty configs are symlinked from `config/` by the home-manage
 ├── hosts/
 │   ├── behemoth/          # macOS host (nix-darwin)
 │   ├── rocinante/         # x86_64 Linux host (standalone home-manager)
-│   └── stargazer/         # aarch64 Linux VM (standalone home-manager)
+│   └── stargazer/         # aarch64 NixOS VM on Parallels (+ install runbook)
 ├── home/                  # home-manager modules
 │   ├── default.nix        # HM base, loaded on every host
 │   ├── core.nix           # Bundle: profile + shell tools every host gets
@@ -204,10 +205,9 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `firefox.nix` | Firefox with privacy extensions (NUR) | linux |
 | `intune.nix` | Microsoft Intune Portal + identity brokers (**options**) | linux |
 | `wayvnc.nix` | WayVNC server for Wayland remote access (**options**) | linux |
-| `containers.nix` | Podman container services via systemd user units (**options**) | stargazer |
+| `containers.nix` | Podman container services via systemd user units (**options**) | — (unused) |
 | `edge.nix` | Microsoft Edge (x86_64) | rocinante |
-| `edge-rosetta.nix` | Microsoft Edge (aarch64 via Rosetta) | stargazer |
-| `rosetta.nix` | Rosetta x86_64 emulation for aarch64-linux | `intune.nix`, `edge-rosetta.nix` |
+| `rosetta.nix` | Rosetta x86_64 emulation for aarch64-linux | `intune.nix` |
 
 ### Profiles (`home/profiles/`)
 | Module | Description | Imported by |
@@ -258,11 +258,11 @@ just lint    # nixfmt --check + statix check + deadnix --fail (the CI gate)
 ```
 
 CI runs the same three checks in a `lint` job, plus `nix flake check --all-systems` and a
-build (or eval, for stargazer) of each host. `statix.toml` disables `repeated_keys` and
+build of each host (stargazer builds on an `ubuntu-24.04-arm` runner). `statix.toml` disables `repeated_keys` and
 ignores `spikes/`.
 
 ## Disko (Disk Formatting)
 
-Not wired up yet. The `disko` flake input is kept for P7 (NixOS on rocinante's second
-NVMe), which will add the `disk.nix` layout and a `nixosConfigurations` block. There is no
-`disk.nix` and no `just disko-format` recipe today.
+Used by stargazer only: `hosts/stargazer/disko.nix` (LUKS2 + btrfs on `/dev/sda`), applied
+from the installer ISO — see `hosts/stargazer/README.md`. rocinante gets its own layout in
+P7. There is no `just disko-format` recipe.

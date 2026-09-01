@@ -299,4 +299,4 @@ The Nix wrappers provide:
 - [recolic/microsoft-intune-archlinux](https://github.com/recolic/microsoft-intune-archlinux) - Arch Linux workarounds
 - [OpenSSL Issue #254](https://github.com/microsoft/linux-package-repositories/issues/254) - OpenSSL 3.4.0+ bug
 - [Microsoft Broker 2.0 Docs](docs/intune-broker2.0.md) - Internal broker documentation
-- [Encrypted Install Guide](docs/rocinante-encrypted-install.md) - LUKS setup for Intune compliance
+- [Encrypted Install Guide](archive/rocinante-encrypted-install.md) - LUKS setup for Intune compliance
