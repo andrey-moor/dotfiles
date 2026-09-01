@@ -4,7 +4,13 @@ keys:
   # boot (P9 Task 4):
   #   ssh-keyscan stargazer | ssh-to-age
   # Add the resulting age1... key here as `&stargazer`, list it under the
-  # secrets/ rule below, then `sops updatekeys secrets/wayvnc.yaml`.
+  # secrets/ rule below, then re-encrypt BOTH secrets with the admin private
+  # key (owner-run, it is the only key that can currently decrypt them):
+  #   sops updatekeys secrets/wayvnc.yaml
+  #   sops updatekeys secrets/stargazer-tenant.yaml
+  # Until then the host cannot decrypt anything: wayvnc has no password and
+  # himmelblau's tenant drop-in renders empty (both fail soft, see
+  # modules/nixos/himmelblau.nix).
   # - &stargazer age1PLACEHOLDER
 creation_rules:
   - path_regex: secrets/.*\.yaml$

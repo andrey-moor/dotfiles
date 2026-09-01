@@ -9,15 +9,10 @@
 # (Parallels caps Linux guests at OpenGL 4.0; ghostty >= 1.2 needs 4.3).
 
 {
-  lib,
   config,
   ...
 }:
 
-let
-  # null when hosts/stargazer/local/tenant.nix is absent -- see ./tenant.nix.
-  tenant = import ./tenant.nix;
-in
 {
   imports = [
     ./hardware.nix
@@ -32,26 +27,17 @@ in
 
   networking.hostName = "stargazer";
 
-  # Entra/Intune stays off until the tenant facts are available. The warning is
-  # the only signal a build from `github:...#stargazer` gets, so keep it loud.
-  modules.nixos.himmelblau = lib.mkIf (tenant != null) {
-    enable = true;
-    inherit (tenant) domain tenantId upn;
-  };
-
-  warnings = lib.optional (tenant == null) ''
-    stargazer: hosts/stargazer/local/tenant.nix is absent, so himmelblau
-    (Entra join + Intune enrollment) is DISABLED in this build.
-    Copy hosts/stargazer/local/tenant.nix.example to
-    hosts/stargazer/local/tenant.nix and rebuild with a `path:` flake
-    reference -- `github:` and `git+file:` references cannot see gitignored
-    files. See hosts/stargazer/tenant.nix.
-  '';
+  # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
+  # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
+  # unconditional and works identically from `github:andrey-moor/dotfiles#stargazer`.
+  modules.nixos.himmelblau.enable = true;
 
   sops = {
     # First host done the §10 way: the recipient is derived from this machine's
     # SSH host key (ssh-to-age), so no master key is ever copied in.
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+    # Per-secret `sopsFile` overrides this; modules/nixos/himmelblau.nix points
+    # its three tenant secrets at secrets/stargazer-tenant.yaml.
     defaultSopsFile = ../../secrets/wayvnc.yaml;
     secrets."wayvnc-stargazer".owner = "andreym";
   };
