@@ -131,11 +131,16 @@ with lib;
     };
 
     # Home-manager user configuration
-    home-manager.users.andreym = { lib, pkgs, ... }: {
+    home-manager.users.andreym = { lib, config, pkgs, ... }: {
       home.stateVersion = "24.05";
       home.enableNixpkgsReleaseCheck = false;  # Using pkgs.main for some packages
       home.username = lib.mkForce "andreym";
       home.homeDirectory = lib.mkForce "/Users/andreym";
+
+      # Canonical fleet-wide dotfiles path (spec §4): the repo lives in
+      # ~/Documents/dotfiles here; Linux hosts already have it at ~/dotfiles.
+      home.file."dotfiles".source =
+        config.lib.file.mkOutOfStoreSymlink config.modules.dotfilesDir;
 
       # Common packages (not tied to specific modules)
       home.packages = with pkgs; [
@@ -170,7 +175,7 @@ with lib;
           ghostty.enable = true;
           gpg.enable = true;
           onepassword.enable = true;
-          chezmoi.enable = true;
+          alacritty.enable = true;
           openvpn.enable = true;
           lan-mouse = {
             enable = true;

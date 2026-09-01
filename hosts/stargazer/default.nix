@@ -65,7 +65,7 @@ with lib;
         ghostty.enable = true;
         gpg.enable = true;
         onepassword.enable = true;
-        chezmoi.enable = true;
+        alacritty.enable = true;
         openvpn.enable = true;
       };
 

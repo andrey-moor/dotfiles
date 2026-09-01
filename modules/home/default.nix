@@ -19,6 +19,10 @@ with lib;
     # Home-manager state version
     home.stateVersion = mkDefault "24.05";
 
+    # Export DOTFILES for shell scripts (nushell nix-switch/nix-update,
+    # linux/intune.nix) on every host, regardless of enabled modules.
+    home.sessionVariables.DOTFILES = config.modules.dotfilesDir;
+
     # Enable home-manager CLI (needed for standalone home-manager on Linux)
     programs.home-manager.enable = true;
 

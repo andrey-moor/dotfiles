@@ -78,14 +78,6 @@ check:
 info:
     nix flake show
 
-# Apply chezmoi changes
-chezmoi-apply:
-    chezmoi apply
-
-# Show chezmoi diff
-chezmoi-diff:
-    chezmoi diff
-
 # Full rebuild: update inputs, switch, and clean
 rebuild:
     just update

@@ -68,7 +68,7 @@ with lib;
         ghostty.enable = true;
         gpg.enable = true;
         onepassword.enable = true;
-        chezmoi.enable = true;
+        alacritty.enable = true;
         openvpn.enable = true;
         lan-mouse = {
           # Disabled 2026-05-06: rolling-main daemon was holding an input-capture

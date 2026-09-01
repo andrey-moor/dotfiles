@@ -1,9 +1,11 @@
-# modules/home/dev/neovim.nix -- Neovim editor (package only, config via chezmoi)
+# modules/home/dev/neovim.nix -- Neovim editor (package + out-of-store config)
 
 { lib, config, pkgs, ... }:
 
 with lib;
-let cfg = config.modules.dev.neovim;
+let
+  cfg = config.modules.dev.neovim;
+  dotfilesDir = config.modules.dotfilesDir;
 in {
   options.modules.dev.neovim = {
     enable = mkEnableOption "Neovim editor";
@@ -32,14 +34,21 @@ in {
       ];
 
       # NOTE: No extraConfig or plugins here!
-      # Full AstroNvim configuration is managed by chezmoi at ~/.config/nvim/
-      # This allows Lazy.nvim to manage plugins and write lazy-lock.json
+      # Full AstroNvim configuration lives in <dotfiles>/config/nvim, deployed
+      # below as an out-of-store symlink. Lazy.nvim manages plugins and writes
+      # lazy-lock.json through the symlink straight into the repo.
     };
 
-    # Home Manager now writes its own init.lua (provider host_prog setup) when
-    # programs.neovim is enabled, which clobbers the chezmoi-managed AstroNvim
-    # bootstrap. Disable it so chezmoi's init.lua wins. Providers are still
-    # discovered via PATH because withNodeJs/withPython3 put them there.
+    # Whole-dir out-of-store symlink: edits in the repo are live immediately,
+    # and nvim's own writes (lazy-lock.json) land in the working copy.
+    xdg.configFile."nvim".source =
+      config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/config/nvim";
+
+    # Home Manager writes its own init.lua (provider host_prog setup) when
+    # programs.neovim is enabled, which would conflict with the whole-dir
+    # symlink above. Disable it so the repo's plain Lua config wins. Providers
+    # are still discovered via PATH because withNodeJs/withPython3 put them
+    # there.
     xdg.configFile."nvim/init.lua".enable = mkForce false;
   };
 }
