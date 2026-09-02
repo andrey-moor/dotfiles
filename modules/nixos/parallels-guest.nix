@@ -48,7 +48,16 @@ in
     networking.useNetworkd = true;
     systemd.network.networks."10-primary" = {
       matchConfig.Name = "en*";
-      networkConfig.DHCP = "yes";
+      networkConfig = {
+        DHCP = "yes";
+        # No router advertisements: the LAN advertises a v6 default route but
+        # has no working v6 egress, and Entra publishes AAAA records. With the
+        # RA route present the kernel sources v6 from the Tailscale ULA and
+        # himmelblaud's connect() to login.microsoftonline.com just times out
+        # (its ip_version=ipv4-only does not stop the AAAA attempt). Seen on
+        # the first enrollment attempt, 2026-09-02.
+        IPv6AcceptRA = false;
+      };
       linkConfig.MTUBytes = toString cfg.mtu;
     };
   };
