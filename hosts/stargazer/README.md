@@ -1,6 +1,8 @@
 # Stargazer — install runbook
 
-> **Last updated:** 2026-09-01 (P9). Replaces the Arch/armarchy/Rosetta guide,
+> **Last updated:** 2026-09-02 (P9 Task 4). Steps 3 and 4 now describe the path
+> that was **actually executed** on 2026-09-02, not the planned one — see
+> "Recorded run" at the top of step 4. Replaces the Arch/armarchy/Rosetta guide,
 > which is archived under [`docs/archive/`](../../docs/archive/).
 
 Everything below is executed **by the owner, at the Mac**, top to bottom. Steps
@@ -45,10 +47,15 @@ and [the research notes](../../docs/superpowers/plans/2026-09-01-p9-research-not
 - [ ] **≥ 150 GB free** in `~/Parallels` (`scripts/stargazer-vm create` refuses
       below that). The disk is 256 GB *expanding*, so this is headroom, not
       immediate consumption.
-- [ ] **1Password unlocked** on the Mac (SSH agent for the `git push` in step 3).
-- [ ] **The admin age key** readable for sops:
-      `~/Library/Application Support/sops/age/keys.txt` (mode 600). It is the
-      only key that can currently decrypt `secrets/*.yaml`.
+- [ ] **1Password unlocked** on the Mac. Three things need it: the SSH agent for
+      the `git push` in step 3, the same agent for `ssh nixos@<ip>` into the
+      installer (step 4.1), and `op read` for the admin age key (step 3).
+- [ ] **The admin age key**, the only key that can currently decrypt
+      `secrets/*.yaml`. It lives in 1Password as the Secure Note
+      **"sops age key (dotfiles admin)"** (Private vault, field `notesPlain`,
+      one `AGE-SECRET-KEY-…` line). Step 3 spills it to a temp file for the
+      duration of `sops updatekeys` and deletes it again; a permanent
+      `~/Library/Application Support/sops/age/keys.txt` (mode 600) also works.
 - [ ] **YubiKey** to hand (step 6 only). Smart-card sharing is turned on by the
       create script; the key must be plugged into the **Mac**, and the Parallels
       window must have focus, for the guest to see it.
@@ -79,12 +86,33 @@ What `create` applies (do not re-do this in the Parallels GUI):
 | Firmware | `--bios-type efi-arm64` | |
 | Secure Boot | **off** | until step 7 enrolls lanzaboote's keys |
 | vTPM | **absent** | Windows-only in Parallels; himmelblau can't use one anyway (upstream #1656) |
-| Network | **bridged** (LAN DHCP), **virtio** adapter | Shared NAT is broken on behemoth (its DHCP never issued a lease); MTU 1400 from `modules/nixos/parallels-guest.nix` stays harmless on bridged |
+| Network | **bridged** (LAN DHCP), **virtio** adapter | Shared NAT is broken on behemoth: its DHCP has never issued a lease (empty lease file; the spike VM fell back to IPv4LL, `stargazer-nixos` got only an `fe80::` address). Bridged got a LAN lease (`10.24.0.x/16`) immediately. MTU 1400 from `modules/nixos/parallels-guest.nix` stays harmless on bridged |
 | Video | virtio, 3D "Highest" | virgl acceleration |
 | Smart card | shared | YubiKey at the local console |
 
+`create` has defaulted to bridged since commit `5bae01e`. An older VM still on
+shared NAT can be switched in place, with the VM stopped — it picks up a LAN
+lease on the next boot:
+
+```bash
+behemoth$ prlctl set stargazer-nixos --device-set net0 --type bridged --iface default
+```
+
 `iso` downloads the **nixos-unstable aarch64 minimal ISO**, verifies its sha256,
-attaches it as `cdrom0` and sets the boot order to `cdrom0 hdd0`.
+attaches it as `cdrom0` **connected** (`--connect`) and sets the boot order to
+`cdrom0 hdd0`.
+
+> **If the VM boots into the firmware's Device Manager / Boot Manager screen**
+> instead of the ISO, `cdrom0` is attached but disconnected — the state the
+> `iso` verb produced before commit `5bae01e`. Fix it and hard-reset:
+>
+> ```bash
+> behemoth$ prlctl set stargazer-nixos --device-set cdrom0 --connect
+> behemoth$ prlctl reset stargazer-nixos
+> ```
+>
+> Use `reset`, **not** `prlctl restart`: this firmware ignores ACPI reboot
+> requests, so `restart` hangs.
 
 ---
 
@@ -105,11 +133,14 @@ key**. Two facts make the ordering matter:
 So: generate the keypair here, register it, push, and inject it into the target
 during the install (step 4). The first boot then decrypts everything.
 
-```bash
-behemoth$ ssh-keygen -t ed25519 -N '' -C 'root@stargazer' \
-            -f /tmp/stargazer_host_ed25519_key
+Pick a scratch directory that is **not** the repo (`$SCRATCH` below); the
+keypair must never be committed.
 
-behemoth$ nix run nixpkgs#ssh-to-age -- -i /tmp/stargazer_host_ed25519_key.pub
+```bash
+behemoth$ ssh-keygen -q -t ed25519 -N '' -C stargazer \
+            -f "$SCRATCH/stargazer_host_ed25519_key"
+
+behemoth$ nix run nixpkgs#ssh-to-age -- -i "$SCRATCH/stargazer_host_ed25519_key.pub"
 age1........................................................    # copy this
 ```
 
@@ -128,21 +159,40 @@ creation_rules:
           - *stargazer          # <- uncommented
 ```
 
-Re-encrypt **both** secrets to the new recipient list and publish:
+Re-encrypt **both** secrets to the new recipient list. `updatekeys` has to
+*decrypt* first, so it needs the **admin private key**; it lives in 1Password,
+so hand it to sops through a short-lived temp file rather than installing it:
 
 ```bash
-behemoth$ nix run nixpkgs#sops -- updatekeys secrets/wayvnc.yaml
-behemoth$ nix run nixpkgs#sops -- updatekeys secrets/stargazer-tenant.yaml
+behemoth$ agekey="$(mktemp)"; chmod 600 "$agekey"
+behemoth$ op read "op://Private/sops age key (dotfiles admin)/notesPlain" > "$agekey"
+behemoth$ export SOPS_AGE_KEY_FILE="$agekey"
+behemoth$ nix run nixpkgs#sops -- updatekeys -y secrets/wayvnc.yaml
+behemoth$ nix run nixpkgs#sops -- updatekeys -y secrets/stargazer-tenant.yaml
+behemoth$ rm -f "$agekey"; unset SOPS_AGE_KEY_FILE
+```
+
+`op read` triggers a **Touch ID prompt** — 1Password must be unlocked, and see
+the warning in step 4.1 about focus-stealing prompts if you are also typing at
+the VM console. `-y` skips `updatekeys`'s per-file confirmation.
+
+Verify both files now list **two** recipients, then publish:
+
+```bash
+behemoth$ grep -c 'recipient:' secrets/wayvnc.yaml secrets/stargazer-tenant.yaml   # 2 and 2
 behemoth$ git commit -am 'chore(secrets): add stargazer host recipient'
 behemoth$ git push
 ```
+
+**Push before `nixos-install`.** The installer fetches `github:` — an unpushed
+recipient is an invisible no-op, and the first boot comes up domain-less.
 
 > The comment block in `.sops.yaml` describes the *other* ordering (derive the
 > recipient from the installed machine's key after first boot, then switch a
 > second time). That works too, but it means the first boot comes up
 > domain-less. Pre-generating is the path this runbook takes.
 
-Keep `/tmp/stargazer_host_ed25519_key*` until step 4 is done; then delete it
+Keep `$SCRATCH/stargazer_host_ed25519_key*` until step 4 is done; then delete it
 from the Mac (`shred -u` / `rm -P`). The same keypair is reused by the fire
 drill (step 8), so if a drill is planned, park it somewhere deliberate instead.
 
@@ -150,70 +200,134 @@ drill (step 8), so if a drill is planned, park it somewhere deliberate instead.
 
 ## 4. Install from the ISO (owner/interactive)
 
+> ### Recorded run: 2026-09-02
+>
+> This step was executed for real on 2026-09-02; what follows is that path, not
+> the planned one. The deviations worth knowing before you start:
+>
+> - **Bridged, not shared NAT.** Shared-NAT DHCP on behemoth has never handed
+>   out a lease. The VM is bridged (step 2) and gets a normal LAN address
+>   (`10.24.0.x/16`); the IPv6-link-local dance below is a shared-mode fallback
+>   only.
+> - **SSH into the ISO by key, not by password.** Pulling
+>   `https://github.com/andrey-moor.keys` into the installer's
+>   `~/.ssh/authorized_keys` is one console line and lets the 1Password SSH
+>   agent in (4.1). `passwd` still works if you prefer it.
+> - **The ISO has no Parallels guest tools**, so `prlctl exec` does not work —
+>   every "at the console" line really is typed into the VM window (or driven by
+>   `stargazer-vm console-type`, 4.1).
+> - **disko was run at the console**, deliberately, so the LUKS passphrase is
+>   typed into the VM window and never crosses SSH.
+> - **`nixos-install` was run detached** (`nohup … &` + `tail -f`) so a dropped
+>   SSH session cannot kill the build.
+> - **The host key was in `.sops.yaml` and pushed before the install** (step 3),
+>   so the very first boot decrypted the tenant drop-in.
+
 **4.1 — get a shell.** The installer autologs `nixos` at the Parallels console
-with an empty password, and empty passwords cannot be used over SSH. At the
-console:
+with an **empty password**, and sshd rejects empty passwords, so SSH is closed
+until the guest has either a key or a password. There are no guest tools on the
+ISO, so this first line has to be typed at the console. What was used:
 
 ```
-iso# passwd            # set a throwaway password for the `nixos` user
+iso# mkdir -p ~/.ssh && curl -fsSL https://github.com/andrey-moor.keys > ~/.ssh/authorized_keys && echo KEYS-OK
 ```
 
-Then find the address and connect:
+Those are the 1Password-held SSH keys, so `ssh nixos@<ip>` then works straight
+off the **unlocked** 1Password agent. (`iso# passwd` and a throwaway password is
+the equivalent alternative.)
 
 ```bash
 behemoth$ ./scripts/stargazer-vm ip
 behemoth$ ssh nixos@<ip>
 ```
 
-If `ip` warns that the guest reports a `169.254.x` address, its DHCP lease is
-gone; the script falls back to printing the **IPv6 link-local** address, which
-must be used with the Mac-side bridge interface as the scope:
+**Verify before touching the disk:**
+
+```bash
+behemoth$ ssh nixos@<ip> 'lsblk -dno NAME,SIZE,TYPE; ip -4 addr show scope global; curl -sI https://cache.nixos.org | head -1'
+# expect: sda 256G disk / a LAN address / HTTP/2 200
+```
+
+<details>
+<summary><b>Typing at the console from behemoth</b> (<code>stargazer-vm console-type</code>)</summary>
+
+`./scripts/stargazer-vm console-type '<command>'` drives the Parallels window
+with AppleScript: it raises the VM window, refuses if the front window is not
+ours, types the string, re-checks focus, and only then presses Return. The
+terminal app needs **Accessibility** permission (System Settings → Privacy &
+Security → Accessibility).
+
+Two gotchas it encodes, both learned the hard way:
+
+- Parallels swallows `keystroke "."` — periods are sent as `key code 47`.
+- Anything that steals focus mid-typing (a 1Password/Touch ID prompt, a
+  notification) sends the rest of the keystrokes to whatever is in front.
+  **Never run `op`, `sudo`, or anything else that prompts while typing.**
+
+It is a convenience, not a requirement — typing into the VM window by hand is
+always correct.
+
+</details>
+
+If the VM is on shared NAT and `ip` warns about a `169.254.x` address, its DHCP
+lease is gone; the script falls back to printing the **IPv6 link-local**
+address, which must be used with the Mac-side bridge interface as the scope:
 
 ```bash
 behemoth$ ssh 'nixos@fe80::xxxx:xxxx:xxxx:xxxx%bridge103'
 ```
 
 (`bridge103` is whichever `bridgeN` holds `10.211.55.2` — `ifconfig | grep -B5 10.211.55.2`.)
+The real fix is to switch the adapter to bridged (step 2).
 
 **4.2 — partition and format.** disko formats `/dev/sda` per
 `hosts/stargazer/disko.nix`: 1 GB ESP + LUKS2 (`cryptroot`) + btrfs
 `@root/@home/@nix/@log`. The installer ISO does **not** have flakes enabled, so
 the experimental features have to be passed explicitly (`nixos-install` adds
-them itself; `nix run` does not):
+them itself; `nix run` does not).
 
-```bash
-iso# sudo nix --extra-experimental-features "nix-command flakes" \
-       run github:nix-community/disko -- \
+**Run this at the console, not over SSH** — it prompts for the LUKS passphrase,
+which should be typed into the VM window and nowhere else:
+
+```
+iso# sudo nix run --extra-experimental-features 'nix-command flakes' \
+       github:nix-community/disko -- \
        --mode disko --flake github:andrey-moor/dotfiles#stargazer
 ```
 
-You are prompted for the **LUKS passphrase** (twice). This slot is never
-removed — it is what makes the image portable off Parallels and what the fire
-drill proves. Store it in 1Password now.
+It prints `disko version 1.13.0-dirty`, unpacks the flake, partitions, and then
+prompts for the **LUKS passphrase** (twice). This slot is never removed — it is
+what makes the image portable off Parallels and what the fire drill proves.
+Store it in 1Password now.
 
-disko leaves everything mounted under `/mnt`. Sanity-check before continuing:
+disko leaves everything mounted under `/mnt`. Sanity-check before continuing —
+`findmnt -R /mnt` is the one that shows the whole tree at once:
 
 ```bash
-iso# lsblk -f          # sda1 vfat /mnt/boot, sda2 crypto_LUKS -> cryptroot btrfs
-iso# findmnt /mnt /mnt/boot /mnt/home /mnt/nix /mnt/var/log
+iso# lsblk -f          # sda1 1G vfat /mnt/boot; sda2 crypto_LUKS -> cryptroot btrfs
+iso# findmnt -R /mnt   # @root -> /mnt, @home, @nix, @log -> /mnt/var/log
+                       # all btrfs with compress=zstd:3, noatime, discard=async
 ```
 
-**4.3 — inject the pre-generated host key** (this is what makes step 3 pay off):
+**4.3 — inject the pre-generated host key** (this is what makes step 3 pay off).
+From behemoth, over SSH:
 
 ```bash
-behemoth$ scp /tmp/stargazer_host_ed25519_key /tmp/stargazer_host_ed25519_key.pub \
-            nixos@<ip>:
+behemoth$ scp "$SCRATCH/stargazer_host_ed25519_key" "$SCRATCH/stargazer_host_ed25519_key.pub" \
+            nixos@<ip>:/tmp/
 
-iso# sudo install -d -m 755 /mnt/etc/ssh
-iso# sudo install -m 600 ~/stargazer_host_ed25519_key     /mnt/etc/ssh/ssh_host_ed25519_key
-iso# sudo install -m 644 ~/stargazer_host_ed25519_key.pub /mnt/etc/ssh/ssh_host_ed25519_key.pub
-iso# rm ~/stargazer_host_ed25519_key*
+behemoth$ ssh nixos@<ip> '
+  sudo install -Dm600 /tmp/stargazer_host_ed25519_key     /mnt/etc/ssh/ssh_host_ed25519_key
+  sudo install -Dm644 /tmp/stargazer_host_ed25519_key.pub /mnt/etc/ssh/ssh_host_ed25519_key.pub
+  shred -u /tmp/stargazer_host_ed25519_key'
 ```
 
-**4.4 — install.**
+**4.4 — install.** Run it **detached**, so an SSH drop cannot kill the build:
 
 ```bash
-iso# sudo nixos-install --flake github:andrey-moor/dotfiles#stargazer --no-root-passwd
+iso# nohup sudo nixos-install --flake github:andrey-moor/dotfiles#stargazer \
+       --no-root-passwd > /tmp/nixos-install.log 2>&1 &
+iso# tail -f /tmp/nixos-install.log        # done when it says "installation finished!"
 ```
 
 Expect a long build (the closure is built from source for anything not in the
@@ -554,18 +668,43 @@ behemoth$ rm -f ~/Parallels/ArchBase-Template.pvm.tar.zst   # optional, ~big
 
 ## 10. Troubleshooting
 
-**`ip` returns `169.254.x`, or SSH to the guest times out.**
-The guest's DHCP client lost its lease on the Parallels shared network — the
-spike VM does this too. `./scripts/stargazer-vm ip` detects it and prints the
-**IPv6 link-local** address instead; use it with the bridge scope:
-`ssh 'nixos@fe80::…%bridge103'`. Find the bridge with
-`ifconfig | grep -B5 10.211.55.2`.
+**`ip` returns nothing, `169.254.x`, or only an `fe80::` address.**
+The adapter is on the Parallels **shared** network, whose DHCP server on
+behemoth has never issued a lease (its lease file is empty; the spike VM fell
+back to IPv4LL and `stargazer-nixos` got no IPv4 at all). This is not a guest
+problem — don't go debugging `systemd-networkd`. Fix it at the hypervisor, with
+the VM stopped:
 
-**MTU.** Entra/Intune traffic over Parallels shared NAT needs **MTU 1400**. This
-is declarative (`modules/nixos/parallels-guest.nix`, `linkConfig.MTUBytes` on
-`systemd.network`), and networkd's DHCP client has `UseMTU` off, so the lease
-cannot undo it. Never set it by hand with `ip link set mtu` — that is exactly
-what cost the spike VM its lease. Check with `ip link show enp0s5`.
+```bash
+behemoth$ prlctl set stargazer-nixos --device-set net0 --type bridged --iface default
+```
+
+A bridged adapter gets a LAN lease (`10.24.0.x/16` here) on the next boot.
+`scripts/stargazer-vm create` has defaulted to bridged since `5bae01e`, so only
+older VMs need this.
+
+*Fallback, shared mode only:* `./scripts/stargazer-vm ip` prints the **IPv6
+link-local** address when there is no usable IPv4; use it with the bridge scope,
+`ssh 'nixos@fe80::…%bridge103'`, where `bridge103` is whichever `bridgeN` holds
+`10.211.55.2` (`ifconfig | grep -B5 10.211.55.2`).
+
+**The VM boots to the firmware's Device Manager / Boot Manager screen.**
+`cdrom0` is attached but disconnected. `prlctl set stargazer-nixos --device-set
+cdrom0 --connect`, then `prlctl reset stargazer-nixos` — **not** `prlctl
+restart`, which hangs because this firmware ignores ACPI reboot requests. Step 2
+has the detail; the `iso` verb passes `--connect` since `5bae01e`.
+
+**`prlctl exec` into the installer does nothing.** The ISO carries no Parallels
+guest tools. Type at the console (or use `stargazer-vm console-type`, step 4.1);
+once SSH is open, use SSH.
+
+**MTU.** Entra/Intune traffic over Parallels **shared NAT** needs **MTU 1400**.
+This is declarative (`modules/nixos/parallels-guest.nix`, `linkConfig.MTUBytes`
+on `systemd.network`), and networkd's DHCP client has `UseMTU` off, so the lease
+cannot undo it. On the bridged adapter this VM actually uses it is simply
+harmless, so it stays unconditional. Never set it by hand with
+`ip link set mtu` — that is exactly what cost the spike VM its lease. Check with
+`ip link show enp0s5`.
 
 **`/etc/himmelblau/himmelblau.conf.d/` has no `10-tenant.conf`, or it is empty.**
 The host cannot decrypt `secrets/stargazer-tenant.yaml`: its age recipient is

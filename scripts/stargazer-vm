@@ -45,6 +45,8 @@ usage: stargazer-vm [--drill] <verb> [args]
   suspend | resume    suspend / resume
   status              state, IP addresses, boot order
   ip                  best-effort guest address (IPv4, else IPv6 link-local)
+  console-type <cmd>  type <cmd> + Return into the VM's Parallels window
+                      (needs Accessibility permission for this terminal)
   snapshot <name>     take a named snapshot
   restore <name>      switch to a named snapshot (VM is stopped first)
   destroy             delete the VM (double confirmation)
@@ -242,6 +244,52 @@ case "$CMD" in
     fi
     echo "no address found — is the VM up? (stargazer-vm status)" >&2
     exit 1
+    ;;
+
+  console-type)
+    require_vm
+    cmd="${1:?usage: stargazer-vm console-type \"<command>\"}"
+    # The NixOS installer ISO ships no Parallels guest tools, so `prlctl exec`
+    # is unavailable and the console can only be driven by synthetic keystrokes.
+    # Two rules learned during the 2026-09-02 install are encoded here:
+    # Parallels swallows `keystroke "."`, so periods go through `key code 47`;
+    # and anything that steals focus mid-typing (a 1Password/Touch ID prompt, a
+    # notification) delivers the rest of the keystrokes to whatever is in front,
+    # so focus is re-checked before Return is pressed.
+    keys=""
+    rest="$cmd"
+    while [ -n "$rest" ]; do
+      chunk="${rest%%.*}"
+      if [ -n "$chunk" ]; then
+        keys="$keys    keystroke \"$(printf '%s' "$chunk" | sed 's/\\/\\\\/g; s/"/\\"/g')\"
+"
+      fi
+      if [ "$chunk" = "$rest" ]; then
+        rest=""
+      else
+        rest="${rest#*.}"
+        keys="$keys    key code 47
+"
+      fi
+    done
+
+    if ! osascript <<EOF
+tell application "Parallels Desktop" to activate
+delay 0.5
+tell application "System Events" to tell process "Parallels Desktop"
+    perform action "AXRaise" of window "$VMNAME"
+    delay 0.5
+    if name of front window is not "$VMNAME" then error "front window is not $VMNAME"
+$keys
+    delay 0.2
+    if name of front window is not "$VMNAME" then error "focus was stolen while typing — nothing was submitted"
+    key code 36
+end tell
+EOF
+    then
+      echo "console-type failed — is Accessibility granted to this terminal, and is $VMNAME's window open?" >&2
+      exit 1
+    fi
     ;;
 
   snapshot)
