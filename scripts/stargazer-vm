@@ -157,7 +157,10 @@ case "$CMD" in
     # SATA, because Parallels offers no virtio disk interface; hosts/stargazer/
     # disko.nix targets /dev/sda accordingly.
     prlctl set "$VMNAME" --device-add hdd --size "$DISK_MB" --type expand --iface sata
-    prlctl set "$VMNAME" --device-set net0 --type shared --adapter-type virtio
+    # Bridged, not shared: on behemoth the Parallels shared-network DHCP has
+    # never issued a lease (spike VM fell back to IPv4LL; stargazer-nixos got
+    # no IPv4 at all on 2026-09-01). Bridged gets a LAN lease like Nostromo.
+    prlctl set "$VMNAME" --device-set net0 --type bridged --iface default --adapter-type virtio
     prlctl set "$VMNAME" --video-adapter-type virtio --3d-accelerate highest
     prlctl set "$VMNAME" --auto-share-smart-card on # YubiKey at the local console
 
@@ -184,10 +187,12 @@ case "$CMD" in
     echo "ISO at $ISO"
 
     if prlctl list -i "$VMNAME" | grep -q '^ *cdrom0'; then
-      prlctl set "$VMNAME" --device-set cdrom0 --image "$ISO"
+      prlctl set "$VMNAME" --device-set cdrom0 --image "$ISO" --connect
     else
-      prlctl set "$VMNAME" --device-add cdrom --image "$ISO" --iface sata
+      prlctl set "$VMNAME" --device-add cdrom --image "$ISO" --iface sata --connect
     fi
+    # Without --connect the firmware sees no bootable device and drops to its
+    # setup menu (seen on the first stargazer-nixos boot).
     prlctl set "$VMNAME" --device-bootorder "cdrom0 hdd0"
     ;;
 

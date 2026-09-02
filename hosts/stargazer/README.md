@@ -79,7 +79,7 @@ What `create` applies (do not re-do this in the Parallels GUI):
 | Firmware | `--bios-type efi-arm64` | |
 | Secure Boot | **off** | until step 7 enrolls lanzaboote's keys |
 | vTPM | **absent** | Windows-only in Parallels; himmelblau can't use one anyway (upstream #1656) |
-| Network | shared (NAT), **virtio** adapter | MTU 1400 is applied declaratively by `modules/nixos/parallels-guest.nix` |
+| Network | **bridged** (LAN DHCP), **virtio** adapter | Shared NAT is broken on behemoth (its DHCP never issued a lease); MTU 1400 from `modules/nixos/parallels-guest.nix` stays harmless on bridged |
 | Video | virtio, 3D "Highest" | virgl acceleration |
 | Smart card | shared | YubiKey at the local console |
 
