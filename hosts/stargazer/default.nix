@@ -27,6 +27,12 @@
 
   networking.hostName = "stargazer";
 
+  # Parallels Tools (userspace-only on aarch64): dynamic resolution,
+
+  # clipboard, shared folders. Opt-in; watch for Hyprland irritation.
+
+  modules.nixos.parallels.guestTools = true;
+
   # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
   # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
   # unconditional and works identically from `github:andrey-moor/dotfiles#stargazer`.
@@ -56,10 +62,6 @@
 
     home.stateVersion = "24.05";
     home.enableNixpkgsReleaseCheck = false; # Using pkgs.main for some packages
-
-    # Parallels Tools (userspace-only on aarch64): dynamic resolution,
-    # clipboard, shared folders. Opt-in; watch for Hyprland irritation.
-    modules.nixos.parallels.guestTools = true;
 
     modules.linux.wayvnc = {
       passwordFile = config.sops.secrets."wayvnc-stargazer".path;
