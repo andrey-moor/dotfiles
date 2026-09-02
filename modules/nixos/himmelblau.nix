@@ -86,6 +86,31 @@ in
     # poisoned client/backoff state made every later login/sudo return
     # PAM_ABORT ("Provider online failed … TimedOut") until a restart. Seen
     # 2026-09-02 on stargazer.
+    # Keep the daemon's Entra client warm. libhimmelblau does not retry a
+    # request that fails on a stale pooled connection; the first login/probe
+    # after an idle period then returns "Network down" (PAM_ABORT) and the
+    # next attempt works. A cheap periodic probe keeps a live connection and
+    # the online state fresh. Remove once upstream retries RequestFailed.
+    systemd.services.himmelblau-keepwarm = {
+      description = "Keep himmelblaud's Entra connection warm";
+      after = [ "himmelblaud.service" ];
+      requisite = [ "himmelblaud.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${inputs.himmelblau.packages.${pkgs.system}.aad-tool}/bin/aad-tool status";
+        SuccessExitStatus = "0 1";
+        TimeoutStartSec = 40;
+      };
+    };
+    systemd.timers.himmelblau-keepwarm = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "45s";
+        OnUnitActiveSec = "60s";
+        AccuracySec = "5s";
+      };
+    };
+
     systemd.services.himmelblaud = {
       after = [
         "network-online.target"
