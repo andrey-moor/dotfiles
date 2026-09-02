@@ -9,6 +9,11 @@
   # The one local account. home-manager's NixOS module reads and writes
   # `users.users.<name>`, so this entry is mandatory even though the login
   # itself is brokered by Entra (see modules/nixos/himmelblau.nix).
+  # Single-user VM behind LUKS + login: wheel gets passwordless sudo so the
+  # host (behemoth) can administer it over key-only SSH. Owner decision
+  # 2026-09-02 (P9 Task 4).
+  security.sudo.wheelNeedsPassword = false;
+
   users.users.andreym = {
     isNormalUser = true;
     uid = 1000;
