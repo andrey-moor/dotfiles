@@ -81,6 +81,19 @@ in
   };
 
   config = mkIf cfg.enable {
+    # Upstream only Wants= network-online.target; without After= the daemon's
+    # first Entra probe at boot ran before the network was up, failed, and the
+    # poisoned client/backoff state made every later login/sudo return
+    # PAM_ABORT ("Provider online failed … TimedOut") until a restart. Seen
+    # 2026-09-02 on stargazer.
+    systemd.services.himmelblaud = {
+      after = [
+        "network-online.target"
+        "tailscaled.service"
+      ];
+      wants = [ "network-online.target" ];
+    };
+
     # Upstream (4.0.0) force-appends "sudo" and "sshd" to its PAM service list
     # whenever those services are enabled, so pamServices cannot exclude them.
     # Disable the rules for sudo directly: the user-mapped account would
