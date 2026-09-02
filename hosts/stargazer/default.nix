@@ -39,7 +39,15 @@
 
   # Secure Boot on complete the ceremony (hosts/stargazer/README.md §7).
 
-  modules.nixos.secureboot.enable = true;
+  # 2026-09-02: with lanzaboote + our PK/KEK/db enrolled, Parallels halts the VM
+
+  # when EFI Secure Boot is on, and the signed systemd-boot hangs at its menu
+
+  # even with it off. Rolled back to snapshot `enrolled`; stays off until a
+
+  # Parallels-compatible approach is proven (plan amendment).
+
+  modules.nixos.secureboot.enable = false;
   # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
   # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
   # unconditional and works identically from `github:andrey-moor/dotfiles#stargazer`.
