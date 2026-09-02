@@ -81,6 +81,17 @@ in
   };
 
   config = mkIf cfg.enable {
+    # PAM services that authenticate against Entra. Upstream's default also
+    # lists "sudo", which makes every sudo demand a FIDO/Hello factor for the
+    # user-mapped account (then falls back to pam_unix after a timeout). sudo
+    # stays on the local password; login/greetd, sshd and the systemd user
+    # session keep himmelblau for join, policy and the Hello PIN.
+    services.himmelblau.pamServices = [
+      "login"
+      "sshd"
+      "systemd-user"
+    ];
+
     sops.secrets =
       genAttrs
         [
