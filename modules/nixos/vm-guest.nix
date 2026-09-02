@@ -16,6 +16,19 @@
 with lib;
 let
   cfg = config.modules.nixos.vmGuest;
+
+  # `hyprctl keyword` is rejected outright by the Lua config manager ("keyword
+  # can't work with non-legacy parsers. Use eval." -- src/debug/HyprCtl.cpp in
+  # v0.56.2); `hyprctl eval` re-runs hl.monitor(), which merges into the
+  # existing rule for that output and schedules a monitor refresh. Lua takes
+  # single-quoted strings, so nothing needs escaping through the shell.
+  # Coupled to modules/nixos/desktop-hyprland.nix on purpose: the two have to
+  # agree on the config format.
+  setMonitorMode =
+    if config.modules.nixos.desktop.configFormat == "lua" then
+      "hyprctl eval \"hl.monitor({ output = '${cfg.connector}', mode = '\${want}@60', position = 'auto', scale = '1' })\""
+    else
+      "hyprctl keyword monitor \"${cfg.connector},\${want}@60,auto,1\"";
 in
 {
   options.modules.nixos.vmGuest = {
@@ -93,7 +106,7 @@ in
               have="$(hyprctl monitors -j 2>/dev/null | jq -r --arg c "${cfg.connector}" '.[] | select(.name==$c) | "\(.width)x\(.height)"')"
               [ -n "$have" ] && [ "$want" != "$have" ] || continue
               echo "preferred $want != current $have: requesting"
-              hyprctl keyword monitor "${cfg.connector},''${want}@60,auto,1" >/dev/null
+              ${setMonitorMode} >/dev/null
             done
           '';
           serviceConfig.Restart = "always";
