@@ -33,6 +33,13 @@
 
   modules.nixos.parallels.guestTools = true;
 
+  # P9 Task 6: lanzaboote-signed boot. Keys were created with sbctl on
+
+  # 2026-09-02 (/var/lib/sbctl); enroll-keys --microsoft + Parallels EFI
+
+  # Secure Boot on complete the ceremony (hosts/stargazer/README.md §7).
+
+  modules.nixos.secureboot.enable = true;
   # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
   # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
   # unconditional and works identically from `github:andrey-moor/dotfiles#stargazer`.
