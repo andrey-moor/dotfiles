@@ -35,6 +35,19 @@ in
   };
 
   config = {
+    # Hyprland 0.56 ships no systemd session target, so define the one the
+    # exec-once below starts. Binding graphical-session.target lets user units
+    # WantedBy it (wayvnc) start with the compositor and stop with it.
+    systemd.user.targets.hyprland-session = {
+      unitConfig = {
+        Description = "Hyprland compositor session";
+        Documentation = [ "man:systemd.special(7)" ];
+        BindsTo = [ "graphical-session.target" ];
+        Wants = [ "graphical-session-pre.target" ];
+        After = [ "graphical-session-pre.target" ];
+      };
+    };
+
     programs.hyprland.enable = true;
 
     services.greetd = {
