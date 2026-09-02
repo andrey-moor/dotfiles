@@ -32,7 +32,15 @@ if $hm_vars_path != null {
 }
 
 # Nix environment (Determinate Systems installer)
-$env.NIX_SSL_CERT_FILE = '/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt'
+# CA bundle: the Nix default-profile path exists on macOS / standalone-HM
+# Linux; NixOS ships the system bundle under /etc/ssl/certs instead. A path
+# that does not exist breaks TLS for git/curl in nushell sessions.
+$env.NIX_SSL_CERT_FILE = (
+    [
+        '/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt'
+        '/etc/ssl/certs/ca-certificates.crt'
+    ] | where { |p| $p | path exists } | first
+)
 
 $env.PATH = ($env.PATH | split row (char esep)
     | prepend '/nix/var/nix/profiles/default/bin'
