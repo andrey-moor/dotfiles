@@ -185,3 +185,22 @@ inject the keypair into the installed system during the ISO session —
 `install -Dm600 ssh_host_ed25519_key /mnt/etc/ssh/ssh_host_ed25519_key` and
 `install -Dm644 ssh_host_ed25519_key.pub /mnt/etc/ssh/ssh_host_ed25519_key.pub`
 before `nixos-install` — so the very first boot already decrypts.
+
+## Amendment (2026-09-02, Task 4 execution) — clipboard and hypervisor coupling
+
+- **Parallels Tools on aarch64**: `prltoolsd`, shared folders (`prl_fsd` at `/mnt/psf`), time
+  sync and `prlcc` work; **clipboard (`prlcp`) does not** under Hyprland — tested both
+  directions, including on the XWayland X11 clipboard. Dynamic resolution needed our own
+  `virtio-gpu-resize` user service (the host updates the connector's preferred mode in
+  sysfs on window resize but emits no hotplug event; an explicit `hyprctl keyword monitor`
+  request works).
+- **Owner decision ("do the right thing, no rush")**: clipboard is NOT coupled to the
+  hypervisor. Seamless ⌘C/⌘V = use the VM through **wayvnc over the tailnet** with a VNC
+  client that syncs clipboards (TigerVNC Viewer, already a behemoth cask) — mature,
+  hypervisor-independent. Terminal flow (`ssh stargazer` from Ghostty) uses **OSC 52**
+  natively. Inside the Parallels window, `pbcopy`/`pbpaste` SSH shims over the tailnet
+  (requires macOS Remote Login) cover the occasional case. Explicitly rejected: custom
+  Mac↔Wayland sync daemons and unmaintained tools (lemonade, last release 2021).
+- Guest support is split into hypervisor-agnostic `modules/nixos/vm-guest.nix` (virtio,
+  virtio-gpu, resize follower) and Parallels-only `modules/nixos/parallels-guest.nix`, so a
+  move to UTM/QEMU keeps Hyprland + resizing.
