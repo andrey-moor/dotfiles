@@ -84,7 +84,7 @@ What `create` applies (do not re-do this in the Parallels GUI):
 | CPUs / RAM | 8 vCPU / 32 GB | behemoth is 16 cores / 128 GB and Nostromo takes 10 / 64 |
 | Disk | 256 GB expanding, **SATA** | Parallels offers ide/scsi/sata/nvme — *no virtio disk*; `disko.nix` targets `/dev/sda` |
 | Firmware | `--bios-type efi-arm64` | |
-| Secure Boot | **off** | until step 7 enrolls lanzaboote's keys |
+| Secure Boot | **off** | until step 7 enrolls our key as a MOK behind a Microsoft-signed shim |
 | vTPM | **absent** | Windows-only in Parallels; himmelblau can't use one anyway (upstream #1656) |
 | Network | **bridged** (LAN DHCP), **virtio** adapter | Shared NAT is broken on behemoth: its DHCP has never issued a lease (empty lease file; the spike VM fell back to IPv4LL, `stargazer-nixos` got only an `fe80::` address). Bridged got a LAN lease (`10.24.0.x/16`) immediately. MTU 1400 from `modules/nixos/parallels-guest.nix` stays harmless on bridged |
 | Video | virtio, 3D "Highest" | virgl acceleration |
@@ -506,67 +506,89 @@ NixOS side can fake it — himmelblau only ships the script's JSON, Intune
 decides. So this step is **required**, not optional. See
 `modules/nixos/secureboot.nix` for the module-side contract.
 
-Two facts make it work here: the Parallels EDK II aa64 firmware boots in **setup
-mode with an empty PK/KEK/db**, and `sbctl enroll-keys --microsoft` enrolls the
-Microsoft 2011 **and 2023** CAs alongside our own key — the 2023 one is what the
-discovery script's second check looks for once Secure Boot is on. `mokutil` (the
-only reader of `db` that script can use) is installed by
-`modules/nixos/himmelblau.nix`.
+**The custom-key path does not work here.** On 2026-09-02 it was done exactly by
+the book — firmware in setup mode, `sbctl create-keys`, lanzaboote on (`sbctl
+verify` clean), `sbctl enroll-keys --microsoft`, `prlctl set --efi-secure-boot
+on` — and the VM **halted within seconds of power-on**, no loader reached; with
+the flag back off, the signed systemd-boot **hung at its menu**. Parallels' EDK
+II aa64 trusts only Microsoft's CAs and ignores a custom PK/KEK/db. **Never
+enroll PK/KEK/db into this firmware.** Rollback then was snapshot `enrolled`.
+
+What works instead is the shim chain, enabled by
+`modules.nixos.secureboot.shim.enable` (already set on this host):
+
+```
+firmware (trusts Microsoft CAs)
+  └─ EFI/BOOT/BOOTAA64.EFI   = Debian's Microsoft-signed shimaa64.efi
+       └─ EFI/BOOT/grubaa64.efi = lanzaboote's systemd-boot, signed by our key
+            └─ EFI/Linux/*.efi  = lanzaboote's UKIs, signed by our key
+```
+
+`grubaa64.efi` is shim's compiled-in second-stage name on aarch64 — not GRUB.
+shim verifies the second stage and the UKIs against its **MOK** database, which
+the firmware never sees, so our key is enrolled once with MokManager instead of
+into `db`. A wrapper around `lzbt` re-lays this on every `nixos-rebuild switch`.
+
+### The ceremony
 
 ```bash
-# 1. Confirm the firmware is still in setup mode. If this says anything other
-#    than "disabled (setup)", STOP — Parallels installed a vendor PK and the
-#    custom-key path is closed.
-vm# bootctl status | head -20
-
-# 2. Create the signing keys BEFORE enabling the module — lanzaboote signs at
-#    switch time and needs /var/lib/sbctl to exist. sbctl is only in
-#    systemPackages once the module is on, so run it from nixpkgs:
+# a. Keys must exist before the first signed switch (sbctl only lands in
+#    systemPackages once the module is on), then switch with Secure Boot still
+#    OFF and reboot. The whole chain must boot unsigned first.
 vm# sudo nix run nixpkgs#sbctl -- create-keys
-```
-
-3. Enable the module in `hosts/stargazer/default.nix` (on behemoth), commit,
-   push:
-
-```nix
-  modules.nixos.secureboot.enable = true;
-```
-
-```bash
 vm# sudo nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer --refresh
-vm# sudo sbctl verify           # the ESP's files should all be signed
-```
+vm# ls /boot/EFI/BOOT      # BOOTAA64.EFI, grubaa64.efi, mmaa64.efi
+vm# sudo reboot            # must reach the systemd-boot menu and boot NixOS
 
-4. Enroll the keys, including Microsoft's, then flip Secure Boot on in Parallels
-   (VM stopped — there is no script verb for this):
+# b. Enroll our db certificate as a MOK. mokutil wants DER; sbctl writes PEM.
+vm# sudo openssl x509 -in /var/lib/sbctl/keys/db/db.pem -outform DER -out /tmp/db.der
+vm# sudo mokutil --import /tmp/db.der     # prompts for a one-shot password
+vm# sudo reboot
+#    MokManager takes over the console: Enroll MOK → View key → Continue → Yes
+#    → enter that password → Reboot.
+vm# sudo mokutil --list-enrolled | grep -i secure-boot   # our cert, after reboot
 
-```bash
-vm# sudo sbctl enroll-keys --microsoft
+# c. The original systemd-boot install left an NVRAM entry pointing straight at
+#    \EFI\systemd\systemd-bootaa64.efi — our key, which the firmware does not
+#    trust. Delete it so the firmware falls through to the removable path
+#    \EFI\BOOT\BOOTAA64.EFI, i.e. shim.
+vm# sudo nix run nixpkgs#efibootmgr -- -v            # look for "Linux Boot Manager"
+vm# sudo nix run nixpkgs#efibootmgr -- -b <NNNN> -B  # delete it if present
+
+# d. Only now turn Secure Boot on (VM stopped — no script verb for this).
 vm# sudo poweroff
 behemoth$ prlctl set stargazer-nixos --efi-secure-boot on
 behemoth$ ./scripts/stargazer-vm up
 ```
 
-5. After the LUKS prompt and login, verify:
+### Checks
 
 ```bash
-vm# bootctl status | head -20       # Secure Boot: enabled (user)
+vm# bootctl status | head -20       # Secure Boot: enabled
 vm# mokutil --sb-state              # SecureBoot enabled
-vm# mokutil --db | grep -i '2023'   # Microsoft UEFI CA 2023 present
+vm# mokutil --db | grep -i '2023'   # Microsoft UEFI CA 2023 — Parallels' own db,
+                                    # which is what the tenant script reads
+vm# aad-tool compliance-check
 ```
 
-6. Force a check-in (log out and back in) and confirm **Compliant** in the
-   portal. The discovery script now evaluates `SecureBootCA2023` for real — if
-   it reports `Missing`, `enroll-keys` was run without `--microsoft`; re-run it.
+`sudo sbctl verify` now reports `EFI/BOOT/BOOTAA64.EFI` and `EFI/BOOT/mmaa64.efi`
+as **not signed by our key**. That is correct — those are Microsoft's
+signatures. Everything lanzaboote owns (the UKIs, `EFI/systemd/*`,
+`EFI/BOOT/grubaa64.efi`) must still verify.
 
-**Rollback.** Secure Boot is never a boot requirement. If the VM will not boot:
+Then force a check-in (log out and back in) and confirm **Compliant** in the
+portal.
+
+**Rollback.** Secure Boot is never a boot requirement. Snapshot before step (d);
+if the VM will not boot:
 
 ```bash
 behemoth$ prlctl set stargazer-nixos --efi-secure-boot off
-behemoth$ ./scripts/stargazer-vm up          # boots again, unsigned
+behemoth$ ./scripts/stargazer-vm up          # boots again
 ```
 
-Then either pick an older generation in the boot menu or
+If it still will not boot, `./scripts/stargazer-vm restore <snapshot>`, or pick
+an older generation in the systemd-boot menu, or
 `nixos-rebuild switch --rollback`. The LUKS **passphrase slot is never removed**,
 so the disk is always openable regardless of firmware state.
 

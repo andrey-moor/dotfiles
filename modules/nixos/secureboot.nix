@@ -1,20 +1,47 @@
 # modules/nixos/secureboot.nix -- opt-in Secure Boot via lanzaboote (P9 Task 6)
 #
-# Off by default so the host installs with plain systemd-boot. Turning it on is
-# a two-step ceremony, documented in hosts/stargazer/README.md:
+# Off by default so the host installs with plain systemd-boot. Two modes:
 #
-#   1. Build+switch with this module still OFF, then create the keys:
-#        sudo nix run nixpkgs#sbctl -- create-keys   # sbctl is only installed once this module is on
-#   2. Set `modules.nixos.secureboot.enable = true`, switch, then
-#        sudo sbctl enroll-keys --microsoft      # 2023 CAs, not own-keys-only
-#      and flip Parallels' EFI Secure Boot on (`prlctl set <vm>
-#      --efi-secure-boot on`). Confirm `bootctl status` still reported `setup`
-#      before enrolling -- if Parallels installed a vendor PK, stop.
+#   A. custom keys (`enable`)             -- our PK/KEK/db in the firmware
+#   B. shim + MOK (`enable` + `shim.enable`) -- for firmware that only trusts
+#      Microsoft's CAs and ignores a custom PK/KEK/db. This is Parallels.
 #
-# `--microsoft` matters for compliance, not just for boot: the tenant's custom
-# compliance script looks for "Microsoft UEFI CA 2023" in `db` once Secure Boot
-# is on. sbctl >= 0.17 bundles those certificates. The reader it uses,
-# `mokutil`, is installed by modules/nixos/himmelblau.nix.
+# Why B exists: on 2026-09-02 mode A was done by the book on stargazer
+# (`sbctl create-keys` -> lanzaboote -> `sbctl enroll-keys --microsoft` ->
+# `prlctl set --efi-secure-boot on`) and the VM *halted within seconds of
+# power-on*, no loader reached; with the flag back off the signed systemd-boot
+# hung at its menu. Parallels' EDK II aa64 does not honour custom keys.
+# NEVER enroll PK/KEK/db into this firmware -- that is what froze the loader.
+#
+# Mode B chain: Microsoft-signed shim (Debian, aarch64) -> lanzaboote's signed
+# systemd-boot, renamed to `grubaa64.efi` (shim's compiled-in second-stage name)
+# -> lanzaboote's signed UKIs. shim verifies the second stage and the UKIs
+# against its own MOK database, which the firmware never sees, so our db cert is
+# enrolled once with MokManager instead of into PK/KEK/db.
+#
+# Ceremony for mode B (details and checks in hosts/stargazer/README.md §7):
+#
+#   1. `sudo nix run nixpkgs#sbctl -- create-keys` (keys must exist before the
+#      first signed switch), then switch with `enable`+`shim.enable` and
+#      Secure Boot still OFF, and reboot. The full chain must boot unsigned
+#      first -- if it does not, nothing after this is worth trying.
+#   2. Enroll our db certificate as a MOK, in DER (mokutil rejects PEM):
+#        sudo openssl x509 -in /var/lib/sbctl/keys/db/db.pem -outform DER -out /tmp/db.der
+#        sudo mokutil --import /tmp/db.der        # asks for a one-shot password
+#        sudo reboot                              # MokManager -> Enroll MOK -> reboot
+#   3. Delete any leftover "Linux Boot Manager" NVRAM entry (`efibootmgr -B`):
+#      it points straight at EFI/systemd/systemd-bootaa64.efi, signed by our
+#      key, which the firmware will refuse. The firmware must fall through to
+#      the removable path EFI/BOOT/BOOTAA64.EFI, which is shim.
+#   4. `prlctl set <vm> --efi-secure-boot on` (VM stopped), boot, then check
+#      `bootctl status`, `mokutil --sb-state`, `mokutil --db | grep 'UEFI CA 2023'`
+#      (that CA is Parallels' own db, which is what the tenant script reads) and
+#      `aad-tool compliance-check`.
+#
+# `sbctl verify` in mode B reports EFI/BOOT/BOOTAA64.EFI and EFI/BOOT/mmaa64.efi
+# as not signed by our key. That is correct and expected: they are Microsoft's
+# signatures. Everything lanzaboote owns -- the UKIs, EFI/systemd/systemd-*.efi
+# and EFI/BOOT/grubaa64.efi -- stays signed by us.
 #
 # The LUKS passphrase slot is never removed: Secure Boot is convenience plus
 # compliance, never a boot requirement.
@@ -30,12 +57,78 @@
 with lib;
 let
   cfg = config.modules.nixos.secureboot;
+
+  esp = config.boot.loader.efi.efiSysMountPoint;
+  shim = pkgs.callPackage ../../packages/shim-signed-debian { };
+  wrapperPath = makeBinPath [
+    pkgs.coreutils
+    pkgs.diffutils
+  ];
+  # What lanzaboote's own module sets as the default `boot.lanzaboote.package`
+  # (there is no `pkgs.lzbt`; the flake wires it in per-system).
+  lzbt = inputs.lanzaboote.packages.${pkgs.stdenv.hostPlatform.system}.lzbt;
+
+  # lanzaboote calls `${lib.getExe cfg.package} … install … <esp> <toplevel>`
+  # from its installHook, so wrapping the package is the one seam it offers
+  # (`installCommand` is readOnly). After a successful install the ESP is
+  # rearranged into the shim chain; lanzaboote overwrites BOOTAA64.EFI with
+  # systemd-boot on every install (it cannot read a version out of shim, and
+  # shim never verifies as ours), so this runs on every switch and is a no-op
+  # only for the parts that already match.
+  #
+  # fbaa64.efi is deliberately absent: shim launches the fallback instead of the
+  # second stage whenever it was loaded from \EFI\BOOT\BOOT*.EFI *and*
+  # \EFI\BOOT\fbaa64.efi exists. Without a BOOT.CSV to rebuild Boot#### entries
+  # from, that fallback just resets the machine -- a boot loop.
+  lzbtShim = pkgs.writeShellScriptBin "lzbt" ''
+    set -euo pipefail
+    export PATH=${wrapperPath}:$PATH
+
+    ${getExe lzbt} "$@"
+
+    for arg in "$@"; do
+      if [ "$arg" = "install" ]; then
+        mode=install
+      fi
+    done
+    [ "''${mode:-}" = "install" ] || exit 0
+
+    boot=${escapeShellArg esp}/EFI/BOOT
+    sdboot=${escapeShellArg esp}/EFI/systemd/systemd-bootaa64.efi
+
+    if [ ! -f "$sdboot" ]; then
+      echo "lzbt-shim: $sdboot missing, refusing to install the shim chain" >&2
+      exit 1
+    fi
+
+    place() {
+      if cmp -s "$1" "$2"; then
+        echo "lzbt-shim: $2 already current"
+        return 0
+      fi
+      echo "lzbt-shim: installing $2"
+      cp --no-preserve=mode "$1" "$2.tmp"
+      mv "$2.tmp" "$2"
+    }
+
+    # Second stage first: a half-applied chain must still be a bootable one.
+    place "$sdboot" "$boot/grubaa64.efi"
+    place ${shim}/shimaa64.efi "$boot/BOOTAA64.EFI"
+    place ${shim}/mmaa64.efi "$boot/mmaa64.efi"
+    sync "$boot"
+  '';
 in
 {
   imports = [ inputs.lanzaboote.nixosModules.lanzaboote ];
 
   options.modules.nixos.secureboot = {
     enable = mkEnableOption "lanzaboote-signed boot (Secure Boot with custom keys)";
+
+    shim.enable = mkEnableOption ''
+      chain-loading through a Microsoft-signed shim, with our key enrolled as a
+      MOK, for firmware that only trusts Microsoft's CAs and ignores a custom
+      PK/KEK/db (Parallels). aarch64 only; requires `enable`
+    '';
 
     pkiBundle = mkOption {
       type = types.str;
@@ -50,11 +143,16 @@ in
     boot.lanzaboote = {
       enable = true;
       inherit (cfg) pkiBundle;
+      package = mkIf cfg.shim.enable lzbtShim;
     };
 
-    environment.systemPackages = with pkgs; [
-      sbctl
-      mokutil
-    ];
+    environment.systemPackages =
+      with pkgs;
+      [
+        sbctl
+        mokutil
+      ]
+      # PEM -> DER for `mokutil --import`, which rejects sbctl's PEM.
+      ++ optional cfg.shim.enable openssl;
   };
 }

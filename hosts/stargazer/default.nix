@@ -33,21 +33,15 @@
 
   modules.nixos.parallels.guestTools = true;
 
-  # P9 Task 6: lanzaboote-signed boot. Keys were created with sbctl on
-
-  # 2026-09-02 (/var/lib/sbctl); enroll-keys --microsoft + Parallels EFI
-
-  # Secure Boot on complete the ceremony (hosts/stargazer/README.md §7).
-
-  # 2026-09-02: with lanzaboote + our PK/KEK/db enrolled, Parallels halts the VM
-
-  # when EFI Secure Boot is on, and the signed systemd-boot hangs at its menu
-
-  # even with it off. Rolled back to snapshot `enrolled`; stays off until a
-
-  # Parallels-compatible approach is proven (plan amendment).
-
-  modules.nixos.secureboot.enable = true; # attribution test 2026-09-02: signed loader, NO key enrollment
+  # P9 Task 6: lanzaboote-signed boot, chained behind a Microsoft-signed shim.
+  # Parallels' EDK II aa64 ignores a custom PK/KEK/db (enrolling ours halted the
+  # VM with Secure Boot on), so the only path to the tenant's SecureBootEnabled
+  # rule is shim -> our-key-signed systemd-boot -> our-key-signed UKIs, with the
+  # db cert enrolled as a MOK. Ceremony: hosts/stargazer/README.md §7.
+  modules.nixos.secureboot = {
+    enable = true;
+    shim.enable = true;
+  };
   # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
   # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
   # unconditional and works identically from `github:andrey-moor/dotfiles#stargazer`.
