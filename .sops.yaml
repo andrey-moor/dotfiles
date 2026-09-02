@@ -15,10 +15,10 @@ keys:
   # Until then the host cannot decrypt anything: wayvnc has no password and
   # himmelblau's tenant drop-in renders empty (both fail soft, see
   # modules/nixos/himmelblau.nix).
-  # - &stargazer age1PLACEHOLDER
+  - &stargazer age12rwzaw0r2spsgzyhhnaa9vmk9q3gel3y695wyc40qa5r44g0jcdqdf4us4
 creation_rules:
   - path_regex: secrets/.*\.yaml$
     key_groups:
       - age:
           - *admin
-          # - *stargazer
+          - *stargazer
