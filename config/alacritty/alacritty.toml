@@ -2,7 +2,9 @@
 # Matching ghostty settings as closely as possible
 
 [terminal]
-shell = { program = "/home/andreym/.nix-profile/bin/nu" }
+# "nu" resolves from the session PATH: valid on integrated-HM NixOS
+# (/etc/profiles/per-user) and standalone HM (~/.nix-profile) alike.
+shell = { program = "nu" }
 
 [window]
 padding = { x = 4, y = 4 }
