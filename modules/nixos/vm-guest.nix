@@ -119,7 +119,7 @@ in
                 [ "$dw" -gt 16 ] || [ "$dh" -gt 16 ] || continue
               fi
               echo "preferred $want != current $have (stable): requesting"
-              ${resizeCommand}
+              ${setMonitorMode}
               applied="$want"
             done
           '';

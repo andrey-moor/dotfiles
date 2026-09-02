@@ -123,6 +123,11 @@ in
       content = ''
         [${ph "domain"}]
         tenant_id = ${ph "tenant_id"}
+        # Static commercial-cloud endpoints, pinned so himmelblaud-tasks (Intune policy
+        # application) never depends on ODC federation discovery: without graph_url it
+        # failed with "federation provider not set" right after enrollment (2026-09-02).
+        authority_host = login.microsoftonline.com
+        graph_url = https://graph.microsoft.com
       '';
       mode = tenantRenderMode;
       restartUnits = [ "himmelblaud.service" ];
