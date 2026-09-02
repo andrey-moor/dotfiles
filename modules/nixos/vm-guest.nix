@@ -97,16 +97,30 @@ in
               done
               return 1
             }
+            # Debounce + hysteresis: Parallels reports a preferred mode 8 px
+            # narrower after every mode we apply, so chasing each change is a
+            # feedback loop (seen 2026-09-02: 1064 -> 1056 -> ... -> 1024). Only
+            # act when the host's value has been stable for 3 polls and differs
+            # from what we last applied by more than 16 px.
+            last_seen=""; stable=0; applied=""
             while sleep 2; do
               [ -r "$conn" ] || continue
               want="$(head -n1 "$conn")"
               [ -n "$want" ] || continue
+              if [ "$want" = "$last_seen" ]; then stable=$((stable + 1)); else stable=0; last_seen="$want"; fi
+              [ "$stable" -ge 3 ] || continue
               sig="$(live_sig)" || continue
               export HYPRLAND_INSTANCE_SIGNATURE="$sig"
               have="$(hyprctl monitors -j 2>/dev/null | jq -r --arg c "${cfg.connector}" '.[] | select(.name==$c) | "\(.width)x\(.height)"')"
               [ -n "$have" ] && [ "$want" != "$have" ] || continue
-              echo "preferred $want != current $have: requesting"
-              ${setMonitorMode} >/dev/null
+              if [ -n "$applied" ]; then
+                aw=''${applied%x*}; ww=''${want%x*}; ah=''${applied#*x}; wh=''${want#*x}
+                dw=$((aw - ww)); dh=$((ah - wh)); dw=''${dw#-}; dh=''${dh#-}
+                [ "$dw" -gt 16 ] || [ "$dh" -gt 16 ] || continue
+              fi
+              echo "preferred $want != current $have (stable): requesting"
+              ${resizeCommand}
+              applied="$want"
             done
           '';
           serviceConfig.Restart = "always";
