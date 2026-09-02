@@ -47,7 +47,7 @@
 
   # Parallels-compatible approach is proven (plan amendment).
 
-  modules.nixos.secureboot.enable = false;
+  modules.nixos.secureboot.enable = true; # attribution test 2026-09-02: signed loader, NO key enrollment
   # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
   # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
   # unconditional and works identically from `github:andrey-moor/dotfiles#stargazer`.
