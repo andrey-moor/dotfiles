@@ -184,6 +184,13 @@ in
         enable_kerberos_cache = true;
         ip_version = "ipv4-only";
         # Upstream's default is /bin/bash, which does not exist on NixOS.
+        # Intune policy/compliance fetch regularly takes > 10 s server-side; with the
+
+        # default the tasks daemon times out ("operation timed out") and compliance is
+
+        # never reported. Connect timeout is capped at 3 s regardless (login latency).
+
+        request_timeout = 60;
         shell = "/run/current-system/sw/bin/bash";
         user_map_file = config.sops.templates."himmelblau-user-map".path;
       };
