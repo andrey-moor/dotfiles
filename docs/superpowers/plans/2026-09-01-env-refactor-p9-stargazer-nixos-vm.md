@@ -204,3 +204,23 @@ before `nixos-install` — so the very first boot already decrypts.
 - Guest support is split into hypervisor-agnostic `modules/nixos/vm-guest.nix` (virtio,
   virtio-gpu, resize follower) and Parallels-only `modules/nixos/parallels-guest.nix`, so a
   move to UTM/QEMU keeps Hyprland + resizing.
+
+## Amendment (2026-09-02) — Task 6 Secure Boot: Parallels blocks the custom-key path
+
+Ceremony as planned: `sbctl create-keys` → lanzaboote on (signed UKIs + signed systemd-boot,
+`sbctl verify` clean) → `sbctl enroll-keys --microsoft` (PK/KEK/db written, firmware left
+setup mode, db contained "Microsoft UEFI CA 2023") → `prlctl set --efi-secure-boot on`.
+Result: the VM **halts within seconds of power-on** with Secure Boot on (no loader runs), and
+with the flag back off the *signed* systemd-boot **hangs at its menu** (countdown frozen, no
+input) — the unsigned pre-lanzaboote loader boots fine. Rolled back to snapshot `enrolled`
+(pre-lanzaboote, pre-enroll-keys); host sets `modules.nixos.secureboot.enable = false`
+(9beaafd). Interpretation: Parallels' EFI Secure Boot does not honour a custom PK/KEK/db on
+aarch64 Linux guests (forum reports agree: "secure boot continues not working" for Ubuntu ARM).
+
+Status: **compliant on 3 of 4 rules** (distribution, encryption, password policy); only
+"Secure Boot is not enabled" remains. Options recorded for the owner: (1) probe whether Parallels
+SB boots *any* Microsoft-signed chain on ARM (Ubuntu Server ARM ISO with SB on in the drill VM;
+cheap, decisive); (2) if yes, a shim + MOK chain (Microsoft-signed shim → our key via MokManager
+→ lanzaboote UKIs) — medium effort, unsupported by NixOS upstream; (3) accept SB non-compliance
+on this VM (Nostromo stays the compliant fallback); (4) a hypervisor where custom keys work
+(QEMU/OVMF-secboot) for the compliant role.
