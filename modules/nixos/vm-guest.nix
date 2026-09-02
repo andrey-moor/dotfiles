@@ -65,17 +65,34 @@ in
           partOf = [ "hyprland-session.target" ];
           wantedBy = [ "hyprland-session.target" ];
           after = [ "hyprland-session.target" ];
-          path = [ config.programs.hyprland.package ];
+          path = [
+            pkgs.jq
+            config.programs.hyprland.package
+          ];
           script = ''
             conn=/sys/class/drm/card1-${cfg.connector}/modes
-            last=""
-            while sleep 1; do
+            # Pick the Hyprland instance whose socket answers (stale dirs of
+            # previous sessions linger in $XDG_RUNTIME_DIR/hypr).
+            live_sig() {
+              local d
+              for d in "$XDG_RUNTIME_DIR"/hypr/*/; do
+                [ -S "$d.socket.sock" ] || continue
+                if HYPRLAND_INSTANCE_SIGNATURE="$(basename "$d")" timeout 2 hyprctl version >/dev/null 2>&1; then
+                  basename "$d"; return 0
+                fi
+              done
+              return 1
+            }
+            while sleep 2; do
               [ -r "$conn" ] || continue
               want="$(head -n1 "$conn")"
-              [ -n "$want" ] && [ "$want" != "$last" ] || continue
-              sig="$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -n1)"
-              [ -n "$sig" ] || continue
-              HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl keyword monitor "${cfg.connector},''${want}@60,auto,1" >/dev/null && last="$want"
+              [ -n "$want" ] || continue
+              sig="$(live_sig)" || continue
+              export HYPRLAND_INSTANCE_SIGNATURE="$sig"
+              have="$(hyprctl monitors -j 2>/dev/null | jq -r --arg c "${cfg.connector}" '.[] | select(.name==$c) | "\(.width)x\(.height)"')"
+              [ -n "$have" ] && [ "$want" != "$have" ] || continue
+              echo "preferred $want != current $have: requesting"
+              hyprctl keyword monitor "${cfg.connector},''${want}@60,auto,1" >/dev/null
             done
           '';
           serviceConfig.Restart = "always";
