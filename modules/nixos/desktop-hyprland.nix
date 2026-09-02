@@ -76,8 +76,13 @@ in
         no_hardware_cursors = true
       }
 
+      # Hand the session to systemd: greetd-launched Hyprland does not activate
+      # graphical-session.target by itself, and user units WantedBy it (wayvnc)
+      # otherwise stay dead. hyprland-session.target is shipped by the package.
+      exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE && systemctl --user start hyprland-session.target
       exec-once = waybar
       exec-once = mako
+      ${lib.optionalString config.hardware.parallels.enable "exec-once = prlcc"}
 
       $mod = SUPER
       bind = $mod, Return, exec, ${cfg.terminal}
