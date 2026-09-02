@@ -45,6 +45,9 @@ $env.PATH = ($env.PATH | split row (char esep)
     | prepend $"($env.HOME)/.cargo/bin"
     | prepend $"($env.HOME)/.npm-global/bin"
     | prepend $"($env.HOME)/.local/bin"
+    # NixOS: setuid wrappers (sudo, ...) live here and must beat the
+    # non-setuid copies in /run/current-system/sw/bin. Harmless elsewhere.
+    | prepend '/run/wrappers/bin'
 )
 
 # GPG/SSH agent setup
