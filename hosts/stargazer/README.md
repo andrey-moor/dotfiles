@@ -735,13 +735,22 @@ survived (`systemctl cat himmelblaud-tasks`).
 
 **`glxinfo -B` says llvmpipe, or GL version is too low.**
 virtio-gpu's DRM driver did not bind, and `simpledrm` is still holding the
-framebuffer. `modules/nixos/parallels-guest.nix` loads `virtio_gpu` in the
+framebuffer. `modules/nixos/vm-guest.nix` loads `virtio_gpu` in the
 initrd for exactly this reason. Check `dmesg | grep -i 'virtio_gpu\|simpledrm'`
 and `ls /dev/dri`. Also confirm the VM really has 3D acceleration
 (`prlctl list -i stargazer-nixos | grep -i '3d\|video'`). Note the ceiling:
 **Parallels caps Linux guests at OpenGL 4.0**, which is why the terminal is
 Alacritty (GL 3.3) and not Ghostty (needs 4.3) — llvmpipe is the *failure*
 signal, GL 4.0 is not.
+
+**Host<->guest clipboard does not work.**
+Known, unsolved. Parallels Tools' clipboard helper (`prlcp`) does nothing under
+Wayland/XWayland on aarch64 — tested 2026-09-02, neither direction, not even on
+the X11 clipboard. A hypervisor-independent path is TBD. Note the guest module
+split while you are here: `modules/nixos/vm-guest.nix` holds everything generic
+to virtio/virtio-gpu (initrd modules, graphics, the `virtio-gpu-resize` follower
+that tracks host window resizes), and `modules/nixos/parallels-guest.nix` only
+the Parallels-specific bits (Tools, MTU, the `prlcc` autostart).
 
 **greetd loops back to the login prompt.**
 Almost always the session command failing instantly. Read

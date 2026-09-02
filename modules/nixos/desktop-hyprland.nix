@@ -32,34 +32,15 @@ in
       default = "alacritty";
       description = "Terminal launched by the Hyprland keybind. Alacritty (GL 3.3) renders on virgl; Ghostty >= 1.2 needs GL 4.3, which Parallels does not give Linux guests.";
     };
+
+    extraExecOnce = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Extra commands rendered as `exec-once =` lines. Lets guest/hardware modules add session autostarts without this module knowing about them.";
+    };
   };
 
   config = {
-    # Dynamic resolution under Parallels: on a window resize the host updates
-    # the virtio-gpu connector's preferred mode in sysfs but emits no hotplug
-    # event, so Hyprland keeps its stale mode list. prlcc cannot help on
-    # Wayland (it uses xrandr). Poll the preferred mode and request it.
-    systemd.user.services.parallels-resize = lib.mkIf config.hardware.parallels.enable {
-      description = "Follow the Parallels window size (virtio-gpu preferred mode -> Hyprland)";
-      partOf = [ "hyprland-session.target" ];
-      wantedBy = [ "hyprland-session.target" ];
-      after = [ "hyprland-session.target" ];
-      path = [ config.programs.hyprland.package ];
-      script = ''
-        conn=/sys/class/drm/card1-Virtual-1/modes
-        last=""
-        while sleep 1; do
-          [ -r "$conn" ] || continue
-          want="$(head -n1 "$conn")"
-          [ -n "$want" ] && [ "$want" != "$last" ] || continue
-          sig="$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -n1)"
-          [ -n "$sig" ] || continue
-          HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl keyword monitor "Virtual-1,''${want}@60,auto,1" >/dev/null && last="$want"
-        done
-      '';
-      serviceConfig.Restart = "always";
-    };
-
     # Hyprland 0.56 ships no systemd session target, so define the one the
     # exec-once below starts. Binding graphical-session.target lets user units
     # WantedBy it (wayvnc) start with the compositor and stop with it.
@@ -120,7 +101,7 @@ in
       exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE && systemctl --user start hyprland-session.target
       exec-once = waybar
       exec-once = mako
-      ${lib.optionalString config.hardware.parallels.enable "exec-once = prlcc"}
+      ${concatStringsSep "\n" (map (c: "exec-once = ${c}") cfg.extraExecOnce)}
 
       $mod = SUPER
       bind = $mod, Return, exec, ${cfg.terminal}
