@@ -58,6 +58,8 @@ in
         # the first enrollment attempt, 2026-09-02.
         IPv6AcceptRA = false;
       };
+      # Do not take the DHCP-advertised resolvers (see modules/nixos/base.nix).
+      dhcpV4Config.UseDNS = false;
       linkConfig.MTUBytes = toString cfg.mtu;
     };
   };

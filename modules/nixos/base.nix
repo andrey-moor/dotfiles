@@ -38,6 +38,24 @@
     };
   };
 
+  # Reliable DNS. The DHCP-provided LAN resolvers intermittently fail to answer
+  # (cold lookups measured up to 5 s while systemd-resolved waits to fail over);
+  # himmelblau's Entra probe caps connect+DNS at 3 s, so every unlucky login
+  # ended in PAM_ABORT "Network down" (2026-09-02). Public resolvers answer in
+  # ~65 ms; resolved caches; Tailscale keeps MagicDNS via split DNS.
+  networking.nameservers = [
+    "1.1.1.1"
+    "8.8.8.8"
+  ];
+  services.resolved = {
+    enable = true;
+    dnssec = "false";
+    fallbackDns = [
+      "9.9.9.9"
+      "1.0.0.1"
+    ];
+  };
+
   services.tailscale.enable = true;
 
   # Default-deny at the edge; everything we run (sshd, wayvnc) is reachable
