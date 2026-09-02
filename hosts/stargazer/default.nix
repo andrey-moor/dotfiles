@@ -57,16 +57,18 @@
     home.stateVersion = "24.05";
     home.enableNixpkgsReleaseCheck = false; # Using pkgs.main for some packages
 
+    # Parallels Tools (userspace-only on aarch64): dynamic resolution,
+    # clipboard, shared folders. Opt-in; watch for Hyprland irritation.
+    modules.nixos.parallels.guestTools = true;
+
     modules.linux.wayvnc = {
       passwordFile = config.sops.secrets."wayvnc-stargazer".path;
       monitor = "Virtual-1";
       gpu = false; # virtio-gpu has no DMA-BUF/H.264 path here
       renderCursor = true;
-      # Left on the module default 0.0.0.0 on purpose: the tailnet binding is
-      # enforced by networking.firewall (default deny, trustedInterfaces =
-      # tailscale0) in modules/nixos/base.nix, and this host's 100.x address is
-      # not known until it first joins the tailnet (Task 4). Pin it here once
-      # it is.
+      # Tailnet address (node joined 2026-09-02). The firewall (default deny,
+      # trustedInterfaces = tailscale0) enforces tailnet-only reach as well.
+      address = "100.114.228.95";
     };
   };
 
