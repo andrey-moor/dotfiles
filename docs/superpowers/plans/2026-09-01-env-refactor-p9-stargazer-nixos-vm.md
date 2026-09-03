@@ -299,3 +299,17 @@ Two facts learned: (1) NixOS installs the bootloader **before** activation (`nix
 (runbook §4). (2) `sbctl verify` needs `--disable-landlock` to follow the symlinks. The old
 in-guest key was moved to `/root/sbctl-db.{key,pem}.pre-sops` (identical material; delete after
 the fire drill).
+
+## Amendment (2026-09-03) — fire drill PASSED (45 min), runbook proven from the pushed flake
+
+`stargazer-drill` built from `create` → `iso` → `enroll-mok` (before any OS) → §4 (incl. 4.3b
+pre-placed signing key) → `nixos-install` (15 min) → first boot → Secure Boot on. Every
+checkable criterion passed on the first boot: secrets decrypted (tenant, user map, sbctl key),
+LUKS2, greetd, nixos-upgrade timer, MokList present before SB was ever enabled, then with SB on
+`bootctl` "enabled (user)" and `sbverify --list` → `CN=Database Key` on loader + UKI. Tailnet
+under `stargazer-drill`, SSH closed on LAN / open on tailnet, `~/.config/nvim` resolves after
+cloning. Fixes found and applied during the drill: `op read op://…` rejects parentheses in the
+item name and the note is not a bare identity file (README §3/§4.3b use `op item get … | grep
+AGE-SECRET-KEY`); `sbctl verify` cannot work with the sops layout (no KEK) → `sbverify --list`
+(sbsigntool now installed in shim mode); §8 criteria rewritten to what an unenrolled VM can
+prove (no greeter login possible). Real VM: pre-sops key backups deleted.

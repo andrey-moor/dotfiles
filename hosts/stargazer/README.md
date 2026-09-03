@@ -165,7 +165,10 @@ so hand it to sops through a short-lived temp file rather than installing it:
 
 ```bash
 behemoth$ agekey="$(mktemp)"; chmod 600 "$agekey"
-behemoth$ op read "op://Private/sops age key (dotfiles admin)/notesPlain" > "$agekey"
+behemoth$ op item get "sops age key (dotfiles admin)" --vault Private --fields notesPlain --reveal \
+            | grep -oE 'AGE-SECRET-KEY-1[A-Z0-9]+' > "$agekey"
+#          (`op read op://…` rejects the parentheses in the item name, and the
+#          note's raw value does not parse as an age identity file as-is)
 behemoth$ export SOPS_AGE_KEY_FILE="$agekey"
 behemoth$ nix run nixpkgs#sops -- updatekeys -y secrets/wayvnc.yaml
 behemoth$ nix run nixpkgs#sops -- updatekeys -y secrets/stargazer-tenant.yaml
@@ -334,7 +337,7 @@ first activation, so nothing is left behind.
 ```bash
 behemoth$ export SOPS_AGE_KEY_FILE="$agekey"           # from step 3
 behemoth$ nix run nixpkgs#sops -- -d --extract '["db.key"]' secrets/stargazer-sbctl.yaml \
-            | ssh nixos@<ip> 'sudo install -Dm400 /dev/stdin /mnt/var/lib/sbctl/keys/db/db.key'
+            | ssh nixos@<ip> 'sudo sh -c "umask 077; cat > /mnt/var/lib/sbctl/keys/db/db.key"'
 behemoth$ scp hosts/stargazer/secureboot/db.pem hosts/stargazer/secureboot/GUID nixos@<ip>:/tmp/
 behemoth$ ssh nixos@<ip> '
   sudo install -Dm400 /tmp/db.pem /mnt/var/lib/sbctl/keys/db/db.pem
@@ -624,11 +627,12 @@ vm# mokutil --db --short            # Microsoft UEFI CA 2023 — Parallels' own 
 vm# aad-tool compliance-check       # from the graphical session, not over ssh
 ```
 
-`sudo sbctl verify --disable-landlock` (sbctl's sandbox cannot follow the key
-symlinks into `/run/secrets` and the store) reports `EFI/BOOT/BOOTAA64.EFI` and
-`EFI/BOOT/mmaa64.efi` as **not signed by our key**. That is correct — those are Microsoft's
-signatures. Everything lanzaboote owns (the UKIs, `EFI/systemd/*`,
-`EFI/BOOT/grubaa64.efi`) must still verify.
+Signature check: `sudo sbverify --list <file>` prints the signer.
+`EFI/BOOT/grubaa64.efi`, `EFI/systemd/*` and every `EFI/Linux/*.efi` must show
+`CN=Database Key`; `EFI/BOOT/BOOTAA64.EFI` and `mmaa64.efi` show Microsoft's
+CAs (2011 and 2023). Do not use `sbctl verify` on this host: it wants
+`keys/KEK/KEK.key`, which the sops layout deliberately omits, and its Landlock
+sandbox cannot follow the key symlinks.
 
 Then force a check-in (log out and back in) and confirm **Compliant** in the
 portal.
@@ -651,35 +655,57 @@ so the disk is always openable regardless of firmware state.
 ## 8. Fire drill
 
 The point is to prove this document, from scratch, without touching the real VM.
+Last run: **2026-09-03, passed, 45 minutes** (14:24 `create` → 15:09 last
+check; `nixos-install` itself took 15 minutes, himmelblau's Rust crates being
+the only uncached build).
 
 ```bash
 behemoth$ ./scripts/stargazer-vm --drill create
 behemoth$ ./scripts/stargazer-vm --drill iso
+behemoth$ ./scripts/stargazer-vm --drill up          # creates NVRAM.dat
+behemoth$ ./scripts/stargazer-vm --drill down        # (or prlctl stop --kill: it is only the installer)
+behemoth$ ./scripts/stargazer-vm --drill enroll-mok  # MokList before the OS exists
 behemoth$ ./scripts/stargazer-vm --drill up
 ```
 
-Then repeat **steps 4 and 5** against `stargazer-drill`, with three deltas:
+Then run **step 4** (4.1 through 4.4, including 4.3b) against
+`stargazer-drill`, with these deltas:
 
 - **Reuse the step-3 host key.** It is already a sops recipient, so no repo
   change is needed and the drill VM decrypts on its first boot exactly like the
   real one. (Two live machines sharing a host key is fine for a VM that lives
   for an hour and is then destroyed.)
+- **Boot order.** After `nixos-install`: `prlctl set stargazer-drill
+  --device-bootorder "hdd0 cdrom0"` and disconnect `cdrom0`.
+- **Do not log in at the greeter, and do not enroll.** An unenrolled VM has no
+  credential that can open a session (identity comes from Entra; there is no
+  local password), and a second Entra join would create a duplicate device
+  object. Everything below is checked from behemoth with `prlctl exec` (guest
+  tools are up ~5 s after the LUKS prompt is answered) or over the tailnet.
 - **`tailscale up --hostname stargazer-drill`** — otherwise it fights the real
-  host for the `stargazer` node name.
-- **Do not enroll.** Skip step 6 entirely; a second Entra join would create a
-  duplicate device object in the tenant.
+  host for the `stargazer` node name. `tailscale logout` before destroying.
+- **Secure Boot too**: `stargazer-vm --drill secure-boot on` after a clean
+  power-off, boot again, check `bootctl status`.
 
 Success criteria — all of them, or the runbook has a gap that must be fixed
 here before it is trusted:
 
-- [ ] boots to a Hyprland session after the LUKS passphrase
-- [ ] `glxinfo -B` renderer is virgl; Alacritty renders
-- [ ] tailnet up, SSH reachable only over it
-- [ ] `10-tenant.conf` decrypted (non-empty, real domain)
-- [ ] `systemctl list-timers nixos-upgrade.timer` present
-- [ ] `~/.config/nvim` resolves after cloning `~/dotfiles`
+- [x] LUKS prompt → greetd active; `/dev/dri/renderD128` present
+- [x] `10-tenant.conf`, the user map and `/run/secrets/sbctl-db-key` decrypted
+      on the first boot (step-3 payoff)
+- [x] `cryptsetup status cryptroot` active, LUKS2
+- [x] `systemctl list-timers nixos-upgrade.timer` present
+- [x] `mokutil --list-enrolled --short` shows `Database Key` before Secure Boot
+      is ever turned on
+- [x] with Secure Boot on: `bootctl status` → `enabled (user)`,
+      `sbverify --list` → `CN=Database Key` on `grubaa64.efi` and the UKI
+- [x] tailnet up under the drill name; SSH times out on the LAN address and
+      works on the `100.x` one
+- [x] `~/.config/nvim` resolves after cloning `~/dotfiles`
 
-Target: **under 90 minutes** wall clock, most of it the `nixos-install` build.
+Not provable in the drill: the Hyprland session, virgl rendering and wayvnc,
+which all need a logged-in user. They were verified on the real VM (§5).
+
 Record the actual time. Any hand-fix you had to invent is a repo bug — fix the
 module, push, and re-run the drill until it passes clean.
 

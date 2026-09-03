@@ -49,11 +49,13 @@
 #      (that CA is Parallels' own db, which is what the tenant script reads) and
 #      `aad-tool compliance-check`.
 #
-# `sbctl verify --disable-landlock` (the sandbox cannot follow the key symlinks
-# into /run/secrets and /nix/store) in mode B reports EFI/BOOT/BOOTAA64.EFI and
-# EFI/BOOT/mmaa64.efi as not signed by our key. That is correct and expected:
-# they are Microsoft's signatures. Everything lanzaboote owns -- the UKIs,
-# EFI/systemd/systemd-*.efi and EFI/BOOT/grubaa64.efi -- stays signed by us.
+# Checking signatures: `sbverify --list <file>` (sbsigntool, installed in mode
+# B) prints the signer. Everything lanzaboote owns -- the UKIs,
+# EFI/systemd/systemd-*.efi and EFI/BOOT/grubaa64.efi -- shows `CN=Database
+# Key`; EFI/BOOT/BOOTAA64.EFI and mmaa64.efi show Microsoft's CAs. `sbctl
+# verify` is not usable here: it insists on keys/KEK/KEK.key, which the sops
+# layout deliberately does not ship, and its Landlock sandbox cannot follow the
+# symlinks anyway.
 #
 # The LUKS passphrase slot is never removed: Secure Boot is convenience plus
 # compliance, never a boot requirement.
@@ -170,7 +172,11 @@ in
         sbctl
         mokutil
       ]
-      # PEM -> DER for `mokutil --import`, which rejects sbctl's PEM.
-      ++ optional cfg.shim.enable openssl;
+      # openssl: PEM -> DER when a cert has to be handed to mokutil.
+      # sbsigntool: `sbverify --list` is the signature check in shim mode.
+      ++ optionals cfg.shim.enable [
+        openssl
+        sbsigntool
+      ];
   };
 }
