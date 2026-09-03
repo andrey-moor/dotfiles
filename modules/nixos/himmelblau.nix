@@ -242,6 +242,24 @@ in
       "d /etc/krb5.conf.d 0755 root root -"
       "d /etc/himmelblau 0755 root root -"
       "C /etc/himmelblau/himmelblau.conf 0644 root root - ${mainConfigSeed}"
+      # FIX 5. Intune "scripts" policies are scheduled by writing
+      # /etc/cron.d/policy_<id>; the path is hard-coded upstream and the whole
+      # policy run aborts when the directory is missing. NixOS has no cron.d
+      # (vixie cron does not read it), so this only makes the write succeed --
+      # the tenant's scripts are not executed on a schedule. Open follow-up.
+      "d /etc/cron.d 0755 root root -"
+    ];
+
+    # FIX 4 (compliance). The tenant's custom-compliance discovery script is run
+    # by himmelblaud-tasks and probes the firmware db with `mokutil --db`,
+    # falling back to `efi-readvar` and `openssl` + `strings`. The unit's PATH
+    # is systemd's minimal one, so every probe was skipped and the device
+    # reported "Microsoft UEFI CA 2023 certificate is missing" while `mokutil
+    # --db` in a shell listed it (2026-09-03).
+    systemd.services.himmelblaud-tasks.path = with pkgs; [
+      mokutil
+      openssl
+      binutils # strings
     ];
 
     # FIX 3 (226/NAMESPACE). himmelblaud-tasks mounts /run/himmelblaud, which

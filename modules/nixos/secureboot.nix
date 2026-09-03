@@ -17,7 +17,15 @@
 # systemd-boot, renamed to `grubaa64.efi` (shim's compiled-in second-stage name)
 # -> lanzaboote's signed UKIs. shim verifies the second stage and the UKIs
 # against its own MOK database, which the firmware never sees, so our db cert is
-# enrolled once with MokManager instead of into PK/KEK/db.
+# enrolled once as a MOK instead of into PK/KEK/db.
+#
+# MokManager cannot do that enrollment on Parallels: its "press any key" screen
+# never gets a timer tick or a keypress (Secure Boot on or off), so a
+# `mokutil --import` request either hangs the boot or, with the countdown
+# working, times out and is discarded. MokList is written offline instead:
+# NVRAM.dat is a plain EDK II variable store and virt-fw-vars adds the cert to
+# it (`scripts/stargazer-vm enroll-mok`). The same freeze hits systemd-boot
+# once Secure Boot is enforcing, hence `settings.timeout = "menu-disabled"`.
 #
 # Ceremony for mode B (details and checks in hosts/stargazer/README.md §7):
 #
@@ -25,10 +33,8 @@
 #      first signed switch), then switch with `enable`+`shim.enable` and
 #      Secure Boot still OFF, and reboot. The full chain must boot unsigned
 #      first -- if it does not, nothing after this is worth trying.
-#   2. Enroll our db certificate as a MOK, in DER (mokutil rejects PEM):
-#        sudo openssl x509 -in /var/lib/sbctl/keys/db/db.pem -outform DER -out /tmp/db.der
-#        sudo mokutil --import /tmp/db.der        # asks for a one-shot password
-#        sudo reboot                              # MokManager -> Enroll MOK -> reboot
+#   2. Copy /var/lib/sbctl/keys/db/db.pem to behemoth, stop the VM and run
+#      `scripts/stargazer-vm enroll-mok db.pem`.
 #   3. Delete any leftover "Linux Boot Manager" NVRAM entry (`efibootmgr -B`):
 #      it points straight at EFI/systemd/systemd-bootaa64.efi, signed by our
 #      key, which the firmware will refuse. The firmware must fall through to
@@ -144,6 +150,12 @@ in
       enable = true;
       inherit (cfg) pkiBundle;
       package = mkIf cfg.shim.enable lzbtShim;
+      # With Secure Boot enforcing, Parallels' firmware stops delivering timer
+      # and key events to EFI applications: systemd-boot's countdown never
+      # ticks and its menu ignores the keyboard (MokManager freezes the same
+      # way). `menu-disabled` starts the default entry without waiting on any
+      # event, so the menu is simply never offered on this host.
+      settings.timeout = mkIf cfg.shim.enable "menu-disabled";
     };
 
     environment.systemPackages =

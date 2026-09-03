@@ -49,6 +49,9 @@ usage: stargazer-vm [--drill] <verb> [args]
                       (needs Accessibility permission for this terminal)
   snapshot <name>     take a named snapshot
   restore <name>      switch to a named snapshot (VM is stopped first)
+  enroll-mok <pem>    write an x509 cert into the firmware's MokList (VM must be
+                      stopped; NVRAM.dat is backed up first)
+  secure-boot on|off  flip the Parallels Secure Boot flag (VM must be stopped)
   destroy             delete the VM (double confirmation)
 
 Target VM: $VMNAME
@@ -312,6 +315,60 @@ EOF
       exit 1
     }
     prlctl snapshot-switch "$VMNAME" --id "$snap"
+    ;;
+
+  enroll-mok)
+    require_vm
+    cert="${1:?usage: stargazer-vm enroll-mok <cert.pem>}"
+    [ -r "$cert" ] || {
+      echo "cannot read $cert" >&2
+      exit 1
+    }
+    [ "$(prlctl list -a 2>/dev/null | awk -v n="$VMNAME" '$NF==n{print $2}')" = "stopped" ] || {
+      echo "$VMNAME must be stopped (the firmware writes NVRAM.dat on shutdown)" >&2
+      exit 1
+    }
+    # MokManager (shim's interactive enrollment UI) never gets a timer tick or a
+    # keypress on Parallels' aa64 firmware, so `mokutil --import` + reboot can
+    # never complete here. NVRAM.dat is a plain EDK II variable store, though,
+    # and virt-fw-vars writes MokList into it directly (boot-services-only,
+    # non-volatile — the same attributes MokManager would use). shim picks it up
+    # on the next boot and mirrors it to MokListRT.
+    nvram="$(prlctl list -i "$VMNAME" | sed -n 's/^Home: *//p')NVRAM.dat"
+    [ -f "$nvram" ] || {
+      echo "no NVRAM at $nvram" >&2
+      exit 1
+    }
+    backup="$nvram.bak-$(date +%Y%m%d-%H%M%S)"
+    cp "$nvram" "$backup"
+    echo "NVRAM backed up to $backup"
+    # 605dab50-… is shim's own GUID, the owner mokutil stamps on MOK entries.
+    nix shell nixpkgs#python3Packages.virt-firmware -c virt-fw-vars \
+      -i "$nvram" --add-mok 605dab50-e046-4300-abb6-3dd810dd8b23 "$cert" -o "$nvram.new"
+    mv "$nvram.new" "$nvram"
+    nix shell nixpkgs#python3Packages.virt-firmware -c virt-fw-vars -i "$nvram" --print |
+      grep -E '^MokList ' || {
+      echo "MokList missing after write — restoring $backup" >&2
+      cp "$backup" "$nvram"
+      exit 1
+    }
+    ;;
+
+  secure-boot)
+    require_vm
+    state="${1:?usage: stargazer-vm secure-boot on|off}"
+    case "$state" in
+      on | off) ;;
+      *)
+        echo "usage: stargazer-vm secure-boot on|off" >&2
+        exit 1
+        ;;
+    esac
+    [ "$(prlctl list -a 2>/dev/null | awk -v n="$VMNAME" '$NF==n{print $2}')" = "stopped" ] || {
+      echo "$VMNAME must be stopped" >&2
+      exit 1
+    }
+    prlctl set "$VMNAME" --efi-secure-boot "$state"
     ;;
 
   destroy)
