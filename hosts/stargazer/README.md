@@ -500,6 +500,10 @@ behemoth$ ./scripts/stargazer-vm snapshot enrolled
 
 ## 7. Secure Boot (required for full compliance)
 
+Everything in this section that exists only because of Parallels is catalogued,
+with evidence and a "what changes on another hypervisor" column, in
+`docs/parallels-workarounds.md`.
+
 The tenant runs a custom-compliance discovery script that reports
 `SecureBootEnabled`, and the tenant-side rule requires `"true"`. Nothing on the
 NixOS side can fake it — himmelblau only ships the script's JSON, Intune
@@ -526,8 +530,28 @@ firmware (trusts Microsoft CAs)
 
 `grubaa64.efi` is shim's compiled-in second-stage name on aarch64 — not GRUB.
 shim verifies the second stage and the UKIs against its **MOK** database, which
-the firmware never sees, so our key is enrolled once with MokManager instead of
-into `db`. A wrapper around `lzbt` re-lays this on every `nixos-rebuild switch`.
+the firmware never sees, so our key is enrolled once as a MOK instead of into
+`db`. A wrapper around `lzbt` re-lays this on every `nixos-rebuild switch`.
+
+**MokManager does not work on this firmware either.** shim's interactive
+enrollment UI ("Press any key to perform MOK management") never receives a
+timer tick or a keypress on Parallels' aa64 EDK II, Secure Boot on *or* off —
+tested 2026-09-02 with the countdown, with `mokutil --timeout -1` (menu shown,
+keyboard dead) and with real keys at the console. A `mokutil --import` request
+therefore either hangs the boot or, when the countdown happens to run, times
+out and is silently discarded. The enrollment is done offline instead:
+`NVRAM.dat` in the `.pvm` bundle is a plain EDK II variable store, and
+`virt-fw-vars` (virt-firmware) writes `MokList` into it with the attributes
+MokManager would have used. shim reads it on the next boot and mirrors it to
+`MokListRT`, which is what `mokutil --list-enrolled` shows.
+
+The same event freeze hits systemd-boot once Secure Boot is enforcing: its
+"Boot in 5s" never counts down and Enter is ignored. The module therefore sets
+`timeout menu-disabled`, so systemd-boot starts the default entry without
+waiting on any event. Consequence: **there is no boot menu on this host.** To
+pick an older generation, turn Secure Boot off (the countdown works then) and
+run `sudo bootctl set-timeout-oneshot 10` before rebooting, or use
+`nixos-rebuild switch --rollback`.
 
 ### The ceremony
 
@@ -538,15 +562,16 @@ into `db`. A wrapper around `lzbt` re-lays this on every `nixos-rebuild switch`.
 vm# sudo nix run nixpkgs#sbctl -- create-keys
 vm# sudo nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer --refresh
 vm# ls /boot/EFI/BOOT      # BOOTAA64.EFI, grubaa64.efi, mmaa64.efi
-vm# sudo reboot            # must reach the systemd-boot menu and boot NixOS
+vm# sudo reboot            # must boot NixOS through shim (no menu is shown)
 
-# b. Enroll our db certificate as a MOK. mokutil wants DER; sbctl writes PEM.
-vm# sudo openssl x509 -in /var/lib/sbctl/keys/db/db.pem -outform DER -out /tmp/db.der
-vm# sudo mokutil --import /tmp/db.der     # prompts for a one-shot password
-vm# sudo reboot
-#    MokManager takes over the console: Enroll MOK → View key → Continue → Yes
-#    → enter that password → Reboot.
-vm# sudo mokutil --list-enrolled | grep -i secure-boot   # our cert, after reboot
+# b. Copy our db certificate out and write it into the firmware's MokList.
+#    The VM must be stopped: the firmware writes NVRAM.dat on shutdown and
+#    reads it at power-on. The verb backs NVRAM.dat up first.
+behemoth$ ssh stargazer 'sudo cat /var/lib/sbctl/keys/db/db.pem' > /tmp/db.pem
+behemoth$ ./scripts/stargazer-vm down
+behemoth$ ./scripts/stargazer-vm enroll-mok /tmp/db.pem   # prints "MokList : blob: …"
+behemoth$ ./scripts/stargazer-vm up
+vm# sudo mokutil --list-enrolled --short   # "Database Key" next to Debian's CA
 
 # c. The original systemd-boot install left an NVRAM entry pointing straight at
 #    \EFI\systemd\systemd-bootaa64.efi — our key, which the firmware does not
@@ -555,20 +580,22 @@ vm# sudo mokutil --list-enrolled | grep -i secure-boot   # our cert, after reboo
 vm# sudo nix run nixpkgs#efibootmgr -- -v            # look for "Linux Boot Manager"
 vm# sudo nix run nixpkgs#efibootmgr -- -b <NNNN> -B  # delete it if present
 
-# d. Only now turn Secure Boot on (VM stopped — no script verb for this).
+# d. Only now turn Secure Boot on. Parallels provisions PK/KEK/db (Microsoft's
+#    CAs) at power-on when the flag is set; MokList is left alone.
 vm# sudo poweroff
-behemoth$ prlctl set stargazer-nixos --efi-secure-boot on
+behemoth$ ./scripts/stargazer-vm secure-boot on
 behemoth$ ./scripts/stargazer-vm up
 ```
 
 ### Checks
 
 ```bash
-vm# bootctl status | head -20       # Secure Boot: enabled
+vm# bootctl status | head -20       # Secure Boot: enabled (user)
 vm# mokutil --sb-state              # SecureBoot enabled
-vm# mokutil --db | grep -i '2023'   # Microsoft UEFI CA 2023 — Parallels' own db,
+vm# mokutil --list-enrolled --short # Debian Secure Boot CA + Database Key
+vm# mokutil --db --short            # Microsoft UEFI CA 2023 — Parallels' own db,
                                     # which is what the tenant script reads
-vm# aad-tool compliance-check
+vm# aad-tool compliance-check       # from the graphical session, not over ssh
 ```
 
 `sudo sbctl verify` now reports `EFI/BOOT/BOOTAA64.EFI` and `EFI/BOOT/mmaa64.efi`
@@ -690,20 +717,75 @@ behemoth$ rm -f ~/Parallels/ArchBase-Template.pvm.tar.zst   # optional, ~big
 
 ## 10. Troubleshooting
 
-**`ip` returns nothing, `169.254.x`, or only an `fe80::` address.**
-The adapter is on the Parallels **shared** network, whose DHCP server on
-behemoth has never issued a lease (its lease file is empty; the spike VM fell
-back to IPv4LL and `stargazer-nixos` got no IPv4 at all). This is not a guest
-problem — don't go debugging `systemd-networkd`. Fix it at the hypervisor, with
-the VM stopped:
+**The boot sits at "Boot in 5s" or at shim's blue "Press any key to perform
+MOK management" screen and ignores the keyboard.** Parallels' aa64 firmware
+stops delivering timer and key events to EFI applications — always for
+MokManager, and for systemd-boot whenever Secure Boot is enforcing. Nothing is
+wrong with the ESP. Hard-reset (`prlctl reset`), and if a MOK request was
+pending it has been discarded: enroll with `stargazer-vm enroll-mok` instead
+(§7). systemd-boot is configured `menu-disabled` for the same reason; §7 says
+how to reach the menu when you need an older generation.
+
+**Compliance fails only on "Microsoft UEFI CA 2023 certificate is missing"
+although `mokutil --db` lists it.** The tenant's discovery script probes db with
+`mokutil`, `efi-readvar` or `openssl`+`strings`, and himmelblaud-tasks runs it
+with the unit's PATH. The module puts those tools on that PATH
+(`systemd.services.himmelblaud-tasks.path`); if the rule still fails, the
+daemon is running with a stale environment — `sudo systemctl restart
+himmelblaud-tasks`, then `aad-tool compliance-check` (the first verdict after a
+report can still be the server's previous state; run it twice).
+
+**Login works but `aad-tool compliance-check` fails with "could not acquire
+tokens", and the journal shows `AADSTS70000: Provided grant is invalid` on
+every refresh.** The cached refresh token is one Entra has since rotated —
+seen after restoring a *live* snapshot, which rolls `/var/cache/himmelblaud`
+back to an older token. Hello-PIN logins keep succeeding (they unseal the
+cached PRT locally), so it looks healthy until something needs Graph or Intune.
+Fix from inside the graphical session, then re-run the check:
 
 ```bash
-behemoth$ prlctl set stargazer-nixos --device-set net0 --type bridged --iface default
+vm$ aad-tool auth-test --name andreym --force-reauth   # password + MFA, mints a fresh PRT
+vm$ aad-tool compliance-check
 ```
 
-A bridged adapter gets a LAN lease (`10.24.0.x/16` here) on the next boot.
-`scripts/stargazer-vm create` has defaulted to bridged since `5bae01e`, so only
-older VMs need this.
+Prefer snapshots of a *stopped* VM for anything you expect to restore.
+
+**`ip` returns nothing, `169.254.x`, or only an `fe80::` address — on shared
+*or* bridged.** Not a guest problem; don't go debugging `systemd-networkd`.
+Parallels' networking on behemoth runs on Apple's vmnet framework, and it
+wedges: `prl_naptd` (Shared NAT + DHCP) dies on a wake-from-sleep with a network
+change and never recovers, and vmnet's sharing service can be held by another
+hypervisor client — on 2026-09-03 the **Claude desktop app's sandbox VM**
+(`…/Application Support/Claude/vm_bundles/claudevm.bundle`, a
+Virtualization.framework process). This is what made Shared look broken during
+the install (empty lease file) and, once wedged, breaks *bridged-over-Wi-Fi*
+too. Diagnose on behemoth:
+
+```bash
+behemoth$ grep prl_naptd /Library/Logs/parallels.log | tail   # "Failed to start: error 1235",
+                                                             # "applevisor status callback: 1009" (= sharing service busy),
+                                                             # "Shared: failed to bind via vmnet"
+behemoth$ ps -Ao pid,etime,command | grep -E 'prl_naptd start|InternetSharing|Virtualization.framework' | grep -v grep
+behemoth$ ifconfig | grep -E '^(vmenet|bridge1)'               # one vmenet per running VM
+```
+
+Recovery, in this order (each step needs the previous one's result):
+
+1. Quit whatever else uses vmnet (the Claude desktop app, Docker/OrbStack, UTM).
+2. `sudo kill <prl_naptd pid>` — its watchdog respawns it within a minute. A
+   plain `kill -HUP` makes the *same* stale process retry and keeps failing.
+3. If it still logs `failed to bind via vmnet`: `sudo kill <InternetSharing pid>`
+   (macOS respawns it on the next vmnet request), then replug **every** running
+   VM's NIC (Devices → Network → Disconnect/Connect, or `prlctl set <vm>
+   --device-set net0 --disconnect` / `--connect`) — killing it detaches all
+   `vmenet` interfaces — and kill `prl_naptd` once more.
+4. In the guest: `sudo networkctl reconfigure enp0s5`.
+
+Settings → Network → **Restore Defaults** does the same as step 2 but does not
+help while the sharing service is held. `stargazer-vm create` uses **bridged**
+(gets a real LAN lease, `10.24.x/16` at the office, `10.0.0.x/24` at home,
+including over Wi-Fi once vmnet is healthy); Shared NAT is the fallback when a
+network refuses foreign MACs.
 
 *Fallback, shared mode only:* `./scripts/stargazer-vm ip` prints the **IPv6
 link-local** address when there is no usable IPv4; use it with the bridge scope,

@@ -224,3 +224,60 @@ cheap, decisive); (2) if yes, a shim + MOK chain (Microsoft-signed shim → our 
 → lanzaboote UKIs) — medium effort, unsupported by NixOS upstream; (3) accept SB non-compliance
 on this VM (Nostromo stays the compliant fallback); (4) a hypervisor where custom keys work
 (QEMU/OVMF-secboot) for the compliant role.
+
+## Amendment (2026-09-02) — Task 6 outcome: Secure Boot ON via shim + offline MokList
+
+Option (2) from the previous amendment shipped, with two Parallels-specific twists:
+
+- **Chain**: Debian trixie's Microsoft-signed `shimaa64.efi` (dual-signed, MS UEFI CA 2011 +
+  2023) as `EFI/BOOT/BOOTAA64.EFI` → lanzaboote's signed systemd-boot as `EFI/BOOT/grubaa64.efi`
+  (shim's compiled-in second-stage name) → lanzaboote UKIs. `modules/nixos/secureboot.nix`
+  (`shim.enable`) wraps `lzbt` to re-lay the ESP on every switch;
+  `packages/shim-signed-debian` pins the .debs. Parallels' db (provisioned at power-on with the
+  flag set) carries "Microsoft UEFI CA 2023", which is what the tenant's discovery script reads.
+- **MokManager is unusable on this firmware**: its countdown never ticks and it takes no keys,
+  Secure Boot on or off (also with `mokutil --timeout -1`: menu drawn, keyboard dead; real keys
+  at the console, not just synthetic ones). A `mokutil --import` request therefore hangs the
+  boot, or times out and is discarded. **Enrollment is done offline**: `NVRAM.dat` in the `.pvm`
+  is a plain EDK II varstore; `virt-fw-vars --add-mok` writes `MokList` into it
+  (`scripts/stargazer-vm enroll-mok <db.pem>`, VM stopped, NVRAM backed up). shim honours it and
+  mirrors it to `MokListRT` (`mokutil --list-enrolled` shows "Database Key").
+- **Under enforcing Secure Boot the same event freeze hits systemd-boot** ("Boot in 5s" frozen,
+  Enter ignored) — this, not custom keys, was the "signed loader hangs" of the previous
+  amendment. Fix: `boot.lanzaboote.settings.timeout = "menu-disabled"` (starts the default entry
+  without waiting on any event). No boot menu on this host; recovery = Secure Boot off +
+  `bootctl set-timeout-oneshot 10`, or `nixos-rebuild switch --rollback`.
+- **Verified**: `bootctl status` → "Secure Boot: enabled (user)", `mokutil --sb-state` enabled,
+  MokList = Debian CA + Database Key, db = Microsoft CAs incl. UEFI CA 2023. Snapshot `secureboot`.
+- **Side effect worth knowing**: restoring the *live* snapshot `mok-staged` rolled
+  `/var/cache/himmelblaud` back, and every token refresh since fails with `AADSTS70000` while
+  Hello-PIN logins still succeed. Fix: `aad-tool auth-test --name andreym --force-reauth` from
+  the graphical session (README §10). Snapshot stopped VMs.
+- `stargazer-vm` gained `enroll-mok <pem>` and `secure-boot on|off`.
+
+## Amendment (2026-09-03) — Task 6 closed: `aad-tool compliance-check` → **passed**
+
+With Secure Boot on, the tenant's "Secure Boot is not enabled" rule cleared and a second
+custom-compliance rule surfaced: "Microsoft UEFI CA 2023 certificate is missing". Root cause was
+not the firmware (Parallels' db has the CA) but himmelblaud-tasks' minimal PATH: the discovery
+script probes db with `mokutil` / `efi-readvar` / `openssl`+`strings`, found none, and reported
+"Missing". Fixed declaratively in `modules/nixos/himmelblau.nix` (FIX 4:
+`systemd.services.himmelblaud-tasks.path = [ mokutil openssl binutils ]`). Note the
+`nixos-rebuild switch` restart of the tasks unit came up with the *old* environment; an explicit
+`systemctl restart himmelblaud-tasks` was needed before the script saw the tools.
+
+Also fixed: Intune "scripts" policies aborted the whole policy run with "Failed to create cron
+file" — `/etc/cron.d` now exists via tmpfiles (FIX 5), but nothing executes those cron entries on
+NixOS (open follow-up; the two tenant scripts seen are a git `credential.azreposCredentialType
+oauth` setter and one longer script, neither compliance-relevant).
+
+Side quest that cost the morning: **behemoth's Parallels networking was wedged** — `prl_naptd`
+had died on a Sep 1 wake-from-sleep (`error 1235`) and could not rebind because Apple's vmnet
+sharing service was held (`applevisor status callback: 1009` = busy) by the Claude desktop app's
+sandbox VM and a stale `InternetSharing`. This is what made Shared DHCP "never issue a lease"
+during the install and, once wedged, broke bridged-over-Wi-Fi too. Recovery recipe in README §10.
+Bridged works fine on Wi-Fi with healthy vmnet, so the declared adapter stays bridged.
+
+Also: `aad-tool auth-test --name <UPN> --force-reauth` (the short name resolves as a local user
+and fails with "domain in account_id") re-minted the PRT after the snapshot-restore token
+rollback. Snapshots: `secureboot`, `compliant`.
