@@ -322,6 +322,26 @@ behemoth$ ssh nixos@<ip> '
   shred -u /tmp/stargazer_host_ed25519_key'
 ```
 
+**4.3b — pre-place the Secure Boot signing material.** `nixos-install` runs
+lanzaboote's bootloader step *without* activating the system, so the files that
+sops-nix and tmpfiles would create at activation must already be under `/mnt`
+or the install fails with `Failed to read public key from
+/var/lib/sbctl/keys/db/db.pem`. The private half needs the admin age key
+(same short-lived temp file as step 3); the public half and GUID are plain
+files in the repo. sops-nix replaces the regular key file with its symlink on
+first activation, so nothing is left behind.
+
+```bash
+behemoth$ export SOPS_AGE_KEY_FILE="$agekey"           # from step 3
+behemoth$ nix run nixpkgs#sops -- -d --extract '["db.key"]' secrets/stargazer-sbctl.yaml \
+            | ssh nixos@<ip> 'sudo install -Dm400 /dev/stdin /mnt/var/lib/sbctl/keys/db/db.key'
+behemoth$ scp hosts/stargazer/secureboot/db.pem hosts/stargazer/secureboot/GUID nixos@<ip>:/tmp/
+behemoth$ ssh nixos@<ip> '
+  sudo install -Dm400 /tmp/db.pem /mnt/var/lib/sbctl/keys/db/db.pem
+  sudo install -Dm644 /tmp/GUID   /mnt/var/lib/sbctl/GUID'
+behemoth$ rm -f "$agekey"; unset SOPS_AGE_KEY_FILE
+```
+
 **4.4 — install.** Run it **detached**, so an SSH drop cannot kill the build:
 
 ```bash
@@ -556,20 +576,26 @@ run `sudo bootctl set-timeout-oneshot 10` before rebooting, or use
 ### The ceremony
 
 ```bash
-# a. Keys must exist before the first signed switch (sbctl only lands in
-#    systemPackages once the module is on), then switch with Secure Boot still
-#    OFF and reboot. The whole chain must boot unsigned first.
-vm# sudo nix run nixpkgs#sbctl -- create-keys
+# a. Signing keys. There is no `sbctl create-keys`: every stargazer signs with
+#    the same db key pair -- private half in secrets/stargazer-sbctl.yaml
+#    (sops, placed at /var/lib/sbctl/keys/db/db.key at activation), public half
+#    and sbctl GUID in hosts/stargazer/secureboot/ (tmpfiles symlinks). A fresh
+#    install has them from step 4 (pre-placed under /mnt). On a system that
+#    switches to this layout for the first time, activate BEFORE the bootloader
+#    step -- lanzaboote installs the loader before activation and fails with
+#    "Failed to read public key" if the files are not there yet:
+vm# sudo nixos-rebuild test   --flake github:andrey-moor/dotfiles#stargazer --refresh
 vm# sudo nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer --refresh
 vm# ls /boot/EFI/BOOT      # BOOTAA64.EFI, grubaa64.efi, mmaa64.efi
 vm# sudo reboot            # must boot NixOS through shim (no menu is shown)
 
-# b. Copy our db certificate out and write it into the firmware's MokList.
-#    The VM must be stopped: the firmware writes NVRAM.dat on shutdown and
-#    reads it at power-on. The verb backs NVRAM.dat up first.
-behemoth$ ssh stargazer 'sudo cat /var/lib/sbctl/keys/db/db.pem' > /tmp/db.pem
+# b. Write the db certificate into the firmware's MokList. The VM must be
+#    stopped: the firmware writes NVRAM.dat on shutdown and reads it at
+#    power-on. The verb backs NVRAM.dat up first and defaults to the repo cert.
+#    This can be done right after the first power-on of a new VM (step 2),
+#    before the install -- the certificate does not depend on the guest.
 behemoth$ ./scripts/stargazer-vm down
-behemoth$ ./scripts/stargazer-vm enroll-mok /tmp/db.pem   # prints "MokList : blob: …"
+behemoth$ ./scripts/stargazer-vm enroll-mok       # prints "MokList : blob: …"
 behemoth$ ./scripts/stargazer-vm up
 vm# sudo mokutil --list-enrolled --short   # "Database Key" next to Debian's CA
 
@@ -598,8 +624,9 @@ vm# mokutil --db --short            # Microsoft UEFI CA 2023 — Parallels' own 
 vm# aad-tool compliance-check       # from the graphical session, not over ssh
 ```
 
-`sudo sbctl verify` now reports `EFI/BOOT/BOOTAA64.EFI` and `EFI/BOOT/mmaa64.efi`
-as **not signed by our key**. That is correct — those are Microsoft's
+`sudo sbctl verify --disable-landlock` (sbctl's sandbox cannot follow the key
+symlinks into `/run/secrets` and the store) reports `EFI/BOOT/BOOTAA64.EFI` and
+`EFI/BOOT/mmaa64.efi` as **not signed by our key**. That is correct — those are Microsoft's
 signatures. Everything lanzaboote owns (the UKIs, `EFI/systemd/*`,
 `EFI/BOOT/grubaa64.efi`) must still verify.
 
@@ -782,7 +809,8 @@ Recovery, in this order (each step needs the previous one's result):
 4. In the guest: `sudo networkctl reconfigure enp0s5`.
 
 Settings → Network → **Restore Defaults** does the same as step 2 but does not
-help while the sharing service is held. `stargazer-vm create` uses **bridged**
+help while the sharing service is held. Toggling the Mac's Wi-Fi also detaches
+the bridged guest NIC: replug it (step 3) and re-run step 4. `stargazer-vm create` uses **bridged**
 (gets a real LAN lease, `10.24.x/16` at the office, `10.0.0.x/24` at home,
 including over Wi-Fi once vmnet is healthy); Shared NAT is the fallback when a
 network refuses foreign MACs.

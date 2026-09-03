@@ -281,3 +281,21 @@ Bridged works fine on Wi-Fi with healthy vmnet, so the declared adapter stays br
 Also: `aad-tool auth-test --name <UPN> --force-reauth` (the short name resolves as a local user
 and fails with "domain in account_id") re-minted the PRT after the snapshot-restore token
 rollback. Snapshots: `secureboot`, `compliant`.
+
+## Amendment (2026-09-03) — signing keys as a sops secret (owner decision, reproducibility)
+
+`sbctl create-keys` inside each VM made the MOK certificate unknowable before install. Now one db
+key pair serves every stargazer: private half in `secrets/stargazer-sbctl.yaml` (age, admin +
+stargazer recipients; encryption needs only the public recipients, no admin key was used), public
+half + sbctl GUID committed under `hosts/stargazer/secureboot/`. `hosts/stargazer/default.nix`
+places them at `/var/lib/sbctl` (sops `path` symlink for the key, tmpfiles `L+` for pem/GUID).
+`stargazer-vm enroll-mok` defaults to the repo certificate, so MokList can be written right after
+the first power-on of a new VM. Verified on the live VM: `nixos-rebuild switch` re-signed the shim
+chain with the sops key (same certificate, fingerprint F1:8F:56:56…), Secure Boot still enabled.
+
+Two facts learned: (1) NixOS installs the bootloader **before** activation (`nixos-install` runs
+`switch-to-configuration boot` only), so the first switch introducing these files needs
+`nixos-rebuild test` first, and a fresh install needs the three files pre-placed under `/mnt`
+(runbook §4). (2) `sbctl verify` needs `--disable-landlock` to follow the symlinks. The old
+in-guest key was moved to `/root/sbctl-db.{key,pem}.pre-sops` (identical material; delete after
+the fire drill).

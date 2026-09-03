@@ -49,8 +49,9 @@ usage: stargazer-vm [--drill] <verb> [args]
                       (needs Accessibility permission for this terminal)
   snapshot <name>     take a named snapshot
   restore <name>      switch to a named snapshot (VM is stopped first)
-  enroll-mok <pem>    write an x509 cert into the firmware's MokList (VM must be
-                      stopped; NVRAM.dat is backed up first)
+  enroll-mok [pem]    write an x509 cert into the firmware's MokList (VM must be
+                      stopped; NVRAM.dat is backed up first). Defaults to the
+                      repo's hosts/stargazer/secureboot/db.pem
   secure-boot on|off  flip the Parallels Secure Boot flag (VM must be stopped)
   destroy             delete the VM (double confirmation)
 
@@ -319,7 +320,10 @@ EOF
 
   enroll-mok)
     require_vm
-    cert="${1:?usage: stargazer-vm enroll-mok <cert.pem>}"
+    # The signing key pair is shared by every stargazer instance (private half
+    # in secrets/stargazer-sbctl.yaml), so the certificate is known before the
+    # VM exists and this can run right after `create` + first power-on.
+    cert="${1:-$(cd "$(dirname "$0")/.." && pwd)/hosts/stargazer/secureboot/db.pem}"
     [ -r "$cert" ] || {
       echo "cannot read $cert" >&2
       exit 1

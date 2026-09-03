@@ -29,12 +29,17 @@
 #
 # Ceremony for mode B (details and checks in hosts/stargazer/README.md §7):
 #
-#   1. `sudo nix run nixpkgs#sbctl -- create-keys` (keys must exist before the
-#      first signed switch), then switch with `enable`+`shim.enable` and
-#      Secure Boot still OFF, and reboot. The full chain must boot unsigned
-#      first -- if it does not, nothing after this is worth trying.
-#   2. Copy /var/lib/sbctl/keys/db/db.pem to behemoth, stop the VM and run
-#      `scripts/stargazer-vm enroll-mok db.pem`.
+#   1. Signing keys: stargazer does not `sbctl create-keys`; the host module
+#      places one shared db key pair under /var/lib/sbctl (private half from
+#      sops, public half + GUID from hosts/stargazer/secureboot/). Because the
+#      bootloader installer runs BEFORE activation, the very first switch that
+#      introduces those files must be preceded by `nixos-rebuild test` (or, on
+#      a fresh install, the files pre-placed under /mnt) -- otherwise lzbt fails
+#      with "Failed to read public key" and nothing is activated.
+#      Switch with `enable`+`shim.enable` and Secure Boot still OFF, reboot; the
+#      full chain must boot unsigned first.
+#   2. Stop the VM and run `scripts/stargazer-vm enroll-mok` (defaults to the
+#      repo certificate).
 #   3. Delete any leftover "Linux Boot Manager" NVRAM entry (`efibootmgr -B`):
 #      it points straight at EFI/systemd/systemd-bootaa64.efi, signed by our
 #      key, which the firmware will refuse. The firmware must fall through to
@@ -44,10 +49,11 @@
 #      (that CA is Parallels' own db, which is what the tenant script reads) and
 #      `aad-tool compliance-check`.
 #
-# `sbctl verify` in mode B reports EFI/BOOT/BOOTAA64.EFI and EFI/BOOT/mmaa64.efi
-# as not signed by our key. That is correct and expected: they are Microsoft's
-# signatures. Everything lanzaboote owns -- the UKIs, EFI/systemd/systemd-*.efi
-# and EFI/BOOT/grubaa64.efi -- stays signed by us.
+# `sbctl verify --disable-landlock` (the sandbox cannot follow the key symlinks
+# into /run/secrets and /nix/store) in mode B reports EFI/BOOT/BOOTAA64.EFI and
+# EFI/BOOT/mmaa64.efi as not signed by our key. That is correct and expected:
+# they are Microsoft's signatures. Everything lanzaboote owns -- the UKIs,
+# EFI/systemd/systemd-*.efi and EFI/BOOT/grubaa64.efi -- stays signed by us.
 #
 # The LUKS passphrase slot is never removed: Secure Boot is convenience plus
 # compliance, never a boot requirement.

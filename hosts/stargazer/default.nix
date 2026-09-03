@@ -55,7 +55,28 @@
     # its three tenant secrets at secrets/stargazer-tenant.yaml.
     defaultSopsFile = ../../secrets/wayvnc.yaml;
     secrets."wayvnc-stargazer".owner = "andreym";
+
+    # Secure Boot signing key. One key pair for every stargazer instance, so the
+    # db certificate is known before a VM exists and `stargazer-vm enroll-mok`
+    # can run at creation time instead of after `sbctl create-keys` inside the
+    # guest. Private half here (age-encrypted); public half and sbctl's owner
+    # GUID are plain files in ./secureboot, placed by tmpfiles below. Only the
+    # db key exists: in shim mode nothing is ever enrolled into PK/KEK.
+    secrets."sbctl-db-key" = {
+      sopsFile = ../../secrets/stargazer-sbctl.yaml;
+      key = "db.key";
+      path = "/var/lib/sbctl/keys/db/db.key";
+      mode = "0400";
+    };
   };
+
+  systemd.tmpfiles.rules = [
+    "d /var/lib/sbctl 0700 root root -"
+    "d /var/lib/sbctl/keys 0700 root root -"
+    "d /var/lib/sbctl/keys/db 0700 root root -"
+    "L+ /var/lib/sbctl/keys/db/db.pem - - - - ${./secureboot/db.pem}"
+    "L+ /var/lib/sbctl/GUID - - - - ${./secureboot/GUID}"
+  ];
 
   home-manager.users.andreym = {
     # linux/{firefox,wayvnc}.nix rather than the home/linux.nix bundle: the
