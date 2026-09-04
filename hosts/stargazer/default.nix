@@ -10,6 +10,7 @@
 
 {
   config,
+  pkgs,
   ...
 }:
 
@@ -70,6 +71,12 @@
     };
   };
 
+  # FIDO2/WebAuthn in the browser (Firefox has CTAP built in) needs the user
+  # to reach the security key's hidraw node; libfido2's udev rules tag them
+  # `uaccess` so the seat owner gets an ACL. Without them access depends on
+  # whatever logind happens to grant.
+  services.udev.packages = [ pkgs.libfido2 ];
+
   systemd.tmpfiles.rules = [
     "d /var/lib/sbctl 0700 root root -"
     "d /var/lib/sbctl/keys 0700 root root -"
@@ -87,6 +94,7 @@
       ../../home/dev.nix
       ../../home/dev/python.nix
       ../../home/linux/firefox.nix
+      ../../home/linux/firefox-entra-sso.nix
       ../../home/linux/wayvnc.nix
     ];
 
