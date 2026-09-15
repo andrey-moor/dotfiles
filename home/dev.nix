@@ -17,6 +17,7 @@
     ./dev/neovim.nix
     ./dev/nix.nix
     ./dev/opencode.nix
+    ./dev/poppler.nix
     ./dev/rust.nix
     ./dev/terraform.nix
     ./dev/vscode.nix

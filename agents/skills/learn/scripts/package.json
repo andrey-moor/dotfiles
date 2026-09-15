@@ -1,0 +1,10 @@
+{
+  "name": "learn-study-builder",
+  "private": true,
+  "type": "module",
+  "description": "Render a study Markdown file into an interactive single-file study page",
+  "dependencies": {
+    "marked": "^18.0.0",
+    "yaml": "^2.8.0"
+  }
+}

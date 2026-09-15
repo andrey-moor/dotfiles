@@ -56,6 +56,7 @@ let
       "document-skills@anthropic-agent-skills" = true;
       "example-skills@anthropic-agent-skills" = true;
       "agent-browser@agent-browser" = true;
+      "diagram-design@diagram-design" = true;
     };
     extraKnownMarketplaces = {
       claude-plugins-official.source = {
@@ -69,6 +70,10 @@ let
       agent-browser.source = {
         source = "github";
         repo = "vercel-labs/agent-browser";
+      };
+      diagram-design.source = {
+        source = "github";
+        repo = "cathrynlavery/diagram-design";
       };
     };
   };
@@ -172,6 +177,9 @@ in
       ]
       # Skills fan out to both Claude Code and the vendor-neutral ~/.agents dir
       # (read by codex/copilot, wired in later tasks).
+      # The links must stay out-of-store: a skill's scripts/setup.sh installs
+      # Node packages into its own folder. Run each setup.sh once per machine
+      # and again when its package.json changes.
       ++ map (name: {
         ".claude/skills/${name}".source = mkAgentsLink "skills/${name}";
         ".agents/skills/${name}".source = mkAgentsLink "skills/${name}";

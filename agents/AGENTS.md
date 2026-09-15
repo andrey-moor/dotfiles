@@ -43,3 +43,7 @@ Always-on rules for any coding agent (Claude Code, Codex, Copilot, opencode) in 
 - Commit and push only when asked.
 - Never commit secrets — no hardcoded API keys, tokens, or endpoints;
   `op://` references are fine (pointers, not secrets).
+
+## Writing
+
+- Any text a person will read in generated output, whatever the file format (Markdown, HTML, docx, slides, email, UI copy, commit messages), follows the `plain-prose` skill. Load it for the words even when another skill owns the layout or the code.

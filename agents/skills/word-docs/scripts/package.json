@@ -1,0 +1,11 @@
+{
+  "name": "word-docs-builder",
+  "private": true,
+  "type": "module",
+  "description": "Markdown to .docx builder using Word's current default styles",
+  "dependencies": {
+    "docx": "^9.5.1",
+    "marked": "^18.0.0",
+    "yaml": "^2.8.0"
+  }
+}

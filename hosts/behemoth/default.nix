@@ -98,6 +98,7 @@
       "fantastical"
       "granola"
       "ia-presenter"
+      "libreoffice" # word-docs skill previews
       "obsidian"
       # Communication
       "zoom"

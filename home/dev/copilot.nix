@@ -24,8 +24,9 @@
 # Skills: the vendor-neutral ~/.agents/skills fan-out (claude.nix) covers
 # copilot; nothing is declared here.
 #
-# The superpowers plugin is installed imperatively, once:
+# The superpowers and diagram-design plugins are installed imperatively, once:
 #   copilot plugin install obra/superpowers
+#   copilot plugin install cathrynlavery/diagram-design
 # (the old chezmoi run_onchange installer is retired). That
 # installer also filtered a spurious nix-openssl "Cannot open directory
 # .../etc/ssl/certs" stderr warning; no wrapper is added here -- if the

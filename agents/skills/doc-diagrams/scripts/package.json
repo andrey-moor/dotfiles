@@ -1,0 +1,9 @@
+{
+  "name": "doc-diagrams-renderer",
+  "private": true,
+  "type": "module",
+  "description": "Render diagram-design HTML files to PNG and standalone SVG for documents",
+  "dependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}
