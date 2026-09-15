@@ -9,10 +9,12 @@
 # `askPassword` is disko's default when neither passwordFile nor a keyFile is
 # given, which is the interactive prompt we want at install and at cold boot.
 
+{ lib, ... }:
 {
   disko.devices.disk.main = {
     type = "disk";
-    device = "/dev/sda";
+    # mkDefault: hosts/stargazer-fusion sets /dev/nvme0n1.
+    device = lib.mkDefault "/dev/sda";
     content = {
       type = "gpt";
       partitions = {

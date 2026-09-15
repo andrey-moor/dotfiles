@@ -3,7 +3,7 @@
 # Users, SSH, tailnet, firewall, nix settings, refresh-on-start. Desktop,
 # hypervisor and identity concerns live in the sibling modules.
 
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 
 {
   # The one local account. home-manager's NixOS module reads and writes
@@ -90,7 +90,9 @@
   # on a VM that is suspended more often than it is running.
   system.autoUpgrade = {
     enable = true;
-    flake = "github:andrey-moor/dotfiles#stargazer";
+    # Follows the hostname so every host upgrades to its own configuration; a
+    # literal `#stargazer` would switch any other NixOS host onto that one.
+    flake = "github:andrey-moor/dotfiles#${config.networking.hostName}";
     flags = [ ];
     allowReboot = false;
     persistent = true;

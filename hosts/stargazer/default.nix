@@ -3,35 +3,21 @@
 # Successor to the hand-installed Omarchy/Arch VM: declarative from the ISO up,
 # LUKS+btrfs via disko, integrated home-manager reusing the home/ bundles,
 # minimal Hyprland on virtio-gpu, Entra join + Intune enrollment via himmelblau.
-#
-# Deliberately absent: Rosetta, nixGL, home/linux/intune.nix (the Arch-era
-# portal/broker stack, which stays for rocinante) and Ghostty as the terminal
-# (Parallels caps Linux guests at OpenGL 4.0; ghostty >= 1.2 needs 4.3).
+# Everything hypervisor-neutral is in ./common.nix; this file is the Parallels
+# layer (the Fusion trial is ../stargazer-fusion).
 
-{
-  config,
-  pkgs,
-  ...
-}:
+{ ... }:
 
 {
   imports = [
-    ./hardware.nix
-    ./disko.nix
-    ../../modules/nixos/base.nix
+    ./common.nix
     ../../modules/nixos/parallels-guest.nix
-    ../../modules/nixos/desktop-hyprland.nix
-    ../../modules/nixos/himmelblau.nix
-    ../../modules/nixos/intune-identity.nix
-    ../../modules/nixos/secureboot.nix
   ];
 
   networking.hostName = "stargazer";
 
   # Parallels Tools (userspace-only on aarch64): dynamic resolution,
-
   # clipboard, shared folders. Opt-in; watch for Hyprland irritation.
-
   modules.nixos.parallels.guestTools = true;
 
   # P9 Task 6: lanzaboote-signed boot, chained behind a Microsoft-signed shim.
@@ -43,39 +29,19 @@
     enable = true;
     shim.enable = true;
   };
-  # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
-  # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
-  # unconditional and works identically from `github:andrey-moor/dotfiles#stargazer`.
-  modules.nixos.himmelblau.enable = true;
 
-  sops = {
-    # First host done the §10 way: the recipient is derived from this machine's
-    # SSH host key (ssh-to-age), so no master key is ever copied in.
-    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-    # Per-secret `sopsFile` overrides this; modules/nixos/himmelblau.nix points
-    # its three tenant secrets at secrets/stargazer-tenant.yaml.
-    defaultSopsFile = ../../secrets/wayvnc.yaml;
-    secrets."wayvnc-stargazer".owner = "andreym";
-
-    # Secure Boot signing key. One key pair for every stargazer instance, so the
-    # db certificate is known before a VM exists and `stargazer-vm enroll-mok`
-    # can run at creation time instead of after `sbctl create-keys` inside the
-    # guest. Private half here (age-encrypted); public half and sbctl's owner
-    # GUID are plain files in ./secureboot, placed by tmpfiles below. Only the
-    # db key exists: in shim mode nothing is ever enrolled into PK/KEK.
-    secrets."sbctl-db-key" = {
-      sopsFile = ../../secrets/stargazer-sbctl.yaml;
-      key = "db.key";
-      path = "/var/lib/sbctl/keys/db/db.key";
-      mode = "0400";
-    };
+  # Secure Boot signing key. One key pair for every stargazer instance, so the
+  # db certificate is known before a VM exists and `stargazer-vm enroll-mok`
+  # can run at creation time instead of after `sbctl create-keys` inside the
+  # guest. Private half here (age-encrypted); public half and sbctl's owner
+  # GUID are plain files in ./secureboot, placed by tmpfiles below. Only the
+  # db key exists: in shim mode nothing is ever enrolled into PK/KEK.
+  sops.secrets."sbctl-db-key" = {
+    sopsFile = ../../secrets/stargazer-sbctl.yaml;
+    key = "db.key";
+    path = "/var/lib/sbctl/keys/db/db.key";
+    mode = "0400";
   };
-
-  # FIDO2/WebAuthn in the browser (Firefox has CTAP built in) needs the user
-  # to reach the security key's hidraw node; libfido2's udev rules tag them
-  # `uaccess` so the seat owner gets an ACL. Without them access depends on
-  # whatever logind happens to grant.
-  services.udev.packages = [ pkgs.libfido2 ];
 
   systemd.tmpfiles.rules = [
     "d /var/lib/sbctl 0700 root root -"
@@ -85,34 +51,6 @@
     "L+ /var/lib/sbctl/GUID - - - - ${./secureboot/GUID}"
   ];
 
-  home-manager.users.andreym = {
-    # linux/{firefox,wayvnc}.nix rather than the home/linux.nix bundle: the
-    # bundle also carries linux/intune.nix, whose x86_64 .deb/Rosetta stack has
-    # no place on a NixOS host (himmelblau replaces it here).
-    imports = [
-      ../../home/core.nix
-      ../../home/dev.nix
-      ../../home/dev/python.nix
-      ../../home/linux/firefox.nix
-      ../../home/linux/firefox-entra-sso.nix
-      ../../home/linux/wayvnc.nix
-    ];
-
-    home.stateVersion = "24.05";
-    home.enableNixpkgsReleaseCheck = false; # Using pkgs.main for some packages
-
-    modules.linux.wayvnc = {
-      passwordFile = config.sops.secrets."wayvnc-stargazer".path;
-      monitor = "Virtual-1";
-      gpu = false; # virtio-gpu has no DMA-BUF/H.264 path here
-      renderCursor = true;
-      # Tailnet address (node joined 2026-09-02). The firewall (default deny,
-      # trustedInterfaces = tailscale0) enforces tailnet-only reach as well.
-      address = "100.114.228.95";
-    };
-  };
-
-  # Matches the pinned nixpkgs release. Never derived from the spoofed
-  # /etc/os-release -- system.nixos.* stays honest (see intune-identity.nix).
-  system.stateVersion = "26.11";
+  # Tailnet address (node joined 2026-09-02).
+  home-manager.users.andreym.modules.linux.wayvnc.address = "100.114.228.95";
 }
