@@ -50,8 +50,8 @@ let
   execOnce = [
     # Hand the session to systemd: greetd-launched Hyprland does not activate
     # graphical-session.target by itself, and user units WantedBy it (wayvnc)
-    # otherwise stay dead.
-    "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE && systemctl --user start hyprland-session.target"
+    # otherwise stay dead. DISPLAY is for user units that talk to XWayland.
+    "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE && systemctl --user start hyprland-session.target"
     "waybar"
     "mako"
   ]

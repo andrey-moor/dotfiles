@@ -1,0 +1,317 @@
+#!/usr/bin/env bash
+# VMware Fusion lifecycle for the stargazer-fusion VM (2026-09 re-platform
+# trial of hosts/stargazer-fusion).
+#
+# The VM definition lives here, not in Fusion's GUI: `create` writes the whole
+# .vmx. vmcli's own `VM Create` only produces a skeleton (no disk attached, no
+# NIC, no CD-ROM). Every command targets $VMX, which can only ever be the
+# stargazer-fusion bundle.
+#
+# Fusion itself cannot be declared in the flake: Broadcom's download needs a
+# portal account and a trade-compliance form, and the Homebrew cask was
+# disabled for that reason (hosts/stargazer/README.md, docs/parallels-workarounds.md).
+set -euo pipefail
+
+VMNAME="stargazer-fusion"
+VMDIR="$HOME/Virtual Machines.localized/$VMNAME.vmwarevm"
+VMX="$VMDIR/$VMNAME.vmx"
+PUB="/Applications/VMware Fusion.app/Contents/Public"
+VMCLI="$PUB/vmcli"
+VMRUN="$PUB/vmrun"
+
+# Shared with scripts/stargazer-vm, whose `iso` verb downloads and verifies it.
+ISO="$HOME/Parallels/iso/nixos-minimal-aarch64-linux.iso"
+
+# behemoth is 16 cores / 128 GB; Nostromo (Parallels) takes 10 / 64.
+CPUS=8
+MEMSIZE=16384
+DISK_SIZE="256GB"
+MIN_FREE_GB=150
+GRAPHICS_MEMORY_KB=4194304
+
+usage() {
+  cat >&2 <<EOF
+usage: stargazer-fusion-vm <verb> [args]
+
+  create                write the .vmx and a ${DISK_SIZE} growable NVMe disk (refuses if
+                        the VM exists or ~ has less than ${MIN_FREE_GB} GB free)
+  up                    power on in a Fusion window
+  down | kill           soft / hard power off
+  status                power state, tools state, IP
+  ip                    guest IPv4 from Fusion's NAT DHCP leases
+  screenshot <file>     capture the console
+  type <text>           type <text> + Return at the console
+  key <name>            send one key: enter esc tab backspace space up down left right
+                        f1..f12 ctrl-c ctrl-d
+  set <key> <value>     set a .vmx entry (VM must be off)
+  cdrom on|off          connect or disconnect the installer ISO at next power-on
+  snapshot <name>       take a snapshot
+  restore <name>        revert to a snapshot (VM is stopped first)
+  destroy               delete the VM (double confirmation)
+
+VM: $VMX
+EOF
+}
+
+require_vm() {
+  [ -f "$VMX" ] || {
+    echo "$VMNAME does not exist — run 'stargazer-fusion-vm create'" >&2
+    exit 1
+  }
+}
+
+is_running() {
+  "$VMRUN" -T fusion list 2>/dev/null | grep -qF "$VMX"
+}
+
+require_stopped() {
+  if is_running; then
+    echo "$VMNAME must be powered off" >&2
+    exit 1
+  fi
+}
+
+# `MKS sendKeySequence` types printable text exactly (verified with every US
+# punctuation character); non-printing keys go through `MKS sendKeyEvent`,
+# which takes vSphere's USB HID encoding `(usage << 16) | 7` and a HID
+# modifier bitmask (1 = Ctrl). Bare HID usage IDs are silently ignored.
+hid_key() {
+  "$VMCLI" "$VMX" MKS sendKeyEvent "$((($1 << 16) | 7))" "$2" >/dev/null
+}
+
+named_key() {
+  case "$1" in
+    enter) hid_key 40 0 ;;
+    esc) hid_key 41 0 ;;
+    backspace) hid_key 42 0 ;;
+    tab) hid_key 43 0 ;;
+    space) hid_key 44 0 ;;
+    right) hid_key 79 0 ;;
+    left) hid_key 80 0 ;;
+    down) hid_key 81 0 ;;
+    up) hid_key 82 0 ;;
+    f[1-9] | f1[0-2]) hid_key $((57 + ${1#f})) 0 ;;
+    ctrl-c) hid_key 6 1 ;;
+    ctrl-d) hid_key 7 1 ;;
+    *)
+      echo "unknown key '$1'" >&2
+      exit 1
+      ;;
+  esac
+}
+
+guest_ipv4() {
+  local mac
+  mac="$(sed -n 's/^ethernet0\.generatedAddress = "\(.*\)"$/\1/p' "$VMX" | tr '[:upper:]' '[:lower:]')"
+  [ -n "$mac" ] || return 0
+  # ISC dhcpd lease file. Blocks are not in time order, and the firmware's
+  # network-boot attempt takes short leases of its own, so pick the lease for
+  # this MAC with the latest `starts` ("YYYY/MM/DD HH:MM:SS" sorts as text).
+  awk -v mac="$mac" '
+    $1 == "lease" { ip = $2; starts = "" }
+    $1 == "starts" { starts = $3 " " $4 }
+    $1 == "hardware" && $2 == "ethernet" {
+      gsub(";", "", $3)
+      if (tolower($3) == mac && starts > best) { best = starts; found = ip }
+    }
+    END { if (found) print found }
+  ' /var/db/vmware/vmnet-dhcpd-vmnet8.leases 2>/dev/null
+}
+
+CMD="${1:-}"
+[ -n "$CMD" ] || {
+  usage
+  exit 1
+}
+shift || true
+
+case "$CMD" in
+  create)
+    [ ! -e "$VMDIR" ] || {
+      echo "$VMDIR already exists — destroy it first" >&2
+      exit 1
+    }
+    [ -x "$VMCLI" ] || {
+      echo "VMware Fusion is not installed" >&2
+      exit 1
+    }
+    [ -f "$ISO" ] || {
+      echo "no installer ISO at $ISO — run 'stargazer-vm iso' (it downloads and verifies it)" >&2
+      exit 1
+    }
+    free_gb="$(df -k "$HOME" | awk 'NR==2 {printf "%d", $4 / 1048576}')"
+    [ "$free_gb" -ge "$MIN_FREE_GB" ] || {
+      echo "only ${free_gb} GB free; need at least ${MIN_FREE_GB} GB" >&2
+      exit 1
+    }
+    mkdir -p "$VMDIR"
+    # Arm guests on Apple silicon are EFI-only. Secure Boot starts off: the
+    # NixOS installer ISO is not signed, and the trial enables it only after
+    # our keys are enrolled (hosts/stargazer-fusion). The display uses the full
+    # Retina pixel count, and hosts/stargazer-fusion sets Hyprland's scale to 2
+    # to match. VMware keeps HID devices, a YubiKey included, on the host
+    # unless both usb.generic.allowHID keys are set. uuid.action = keep stops
+    # Fusion from pausing a power-on to ask whether the VM was moved or copied.
+    # That question blocks vmrun until someone clicks, and the copy answer gives
+    # the VM a new hardware UUID and MAC address.
+    cat >"$VMX" <<EOF
+.encoding = "UTF-8"
+config.version = "8"
+virtualHW.version = "22"
+displayName = "$VMNAME"
+uuid.action = "keep"
+guestOS = "arm-other6xlinux-64"
+firmware = "efi"
+numvcpus = "$CPUS"
+cpuid.coresPerSocket = "$CPUS"
+memsize = "$MEMSIZE"
+nvram = "$VMNAME.nvram"
+svga.present = "TRUE"
+mks.enable3d = "TRUE"
+svga.graphicsMemoryKB = "$GRAPHICS_MEMORY_KB"
+gui.fitGuestUsingNativeDisplayResolution = "TRUE"
+pciBridge0.present = "TRUE"
+pciBridge4.present = "TRUE"
+pciBridge4.virtualDev = "pcieRootPort"
+pciBridge4.functions = "8"
+pciBridge5.present = "TRUE"
+pciBridge5.virtualDev = "pcieRootPort"
+pciBridge5.functions = "8"
+pciBridge6.present = "TRUE"
+pciBridge6.virtualDev = "pcieRootPort"
+pciBridge6.functions = "8"
+pciBridge7.present = "TRUE"
+pciBridge7.virtualDev = "pcieRootPort"
+pciBridge7.functions = "8"
+vmci0.present = "TRUE"
+hpet0.present = "TRUE"
+nvme0.present = "TRUE"
+nvme0:0.present = "TRUE"
+nvme0:0.fileName = "$VMNAME.vmdk"
+sata0.present = "TRUE"
+sata0:1.present = "TRUE"
+sata0:1.deviceType = "cdrom-image"
+sata0:1.fileName = "$ISO"
+sata0:1.startConnected = "TRUE"
+ethernet0.present = "TRUE"
+ethernet0.connectionType = "nat"
+ethernet0.virtualDev = "vmxnet3"
+ethernet0.addressType = "generated"
+usb.present = "TRUE"
+ehci.present = "TRUE"
+usb_xhci.present = "TRUE"
+usb.generic.allowHID = "TRUE"
+usb.generic.allowLastHID = "TRUE"
+sound.present = "TRUE"
+sound.virtualDev = "hdaudio"
+sound.autoDetect = "TRUE"
+tools.syncTime = "TRUE"
+tools.upgrade.policy = "manual"
+EOF
+    "$VMCLI" Disk Create -f "$VMDIR/$VMNAME.vmdk" -a lsilogic -s "$DISK_SIZE" -t 0
+    echo "created $VMNAME (${CPUS} vCPU, ${MEMSIZE} MB, ${DISK_SIZE} NVMe; ${free_gb} GB free). next: stargazer-fusion-vm up"
+    ;;
+
+  up)
+    require_vm
+    "$VMRUN" -T fusion start "$VMX" gui
+    ;;
+
+  down)
+    require_vm
+    "$VMRUN" -T fusion stop "$VMX" soft
+    ;;
+
+  kill)
+    require_vm
+    "$VMRUN" -T fusion stop "$VMX" hard
+    ;;
+
+  status)
+    require_vm
+    "$VMCLI" "$VMX" Power query 2>&1 | grep -iE 'state' || true
+    is_running && echo "running" || echo "not running"
+    echo "ip: $(guest_ipv4)"
+    ;;
+
+  ip)
+    require_vm
+    ip="$(guest_ipv4)"
+    [ -n "$ip" ] || {
+      echo "no lease for $VMNAME yet — is it up?" >&2
+      exit 1
+    }
+    echo "$ip"
+    ;;
+
+  screenshot)
+    require_vm
+    out="${1:?usage: stargazer-fusion-vm screenshot <file>}"
+    "$VMCLI" "$VMX" MKS captureScreenshot "$out" >/dev/null
+    echo "$out"
+    ;;
+
+  type)
+    require_vm
+    "$VMCLI" "$VMX" MKS sendKeySequence "${1:?usage: stargazer-fusion-vm type \"<text>\"}" >/dev/null
+    named_key enter
+    ;;
+
+  key)
+    require_vm
+    named_key "${1:?usage: stargazer-fusion-vm key <name>}"
+    ;;
+
+  set)
+    require_vm
+    require_stopped
+    "$VMCLI" "$VMX" ConfigParams SetEntry "${1:?key}" "${2:?value}"
+    ;;
+
+  cdrom)
+    require_vm
+    require_stopped
+    case "${1:-}" in
+      on) "$VMCLI" "$VMX" ConfigParams SetEntry sata0:1.startConnected TRUE ;;
+      off) "$VMCLI" "$VMX" ConfigParams SetEntry sata0:1.startConnected FALSE ;;
+      *)
+        echo "usage: stargazer-fusion-vm cdrom on|off" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  snapshot)
+    require_vm
+    "$VMRUN" -T fusion snapshot "$VMX" "${1:?usage: stargazer-fusion-vm snapshot <name>}"
+    ;;
+
+  restore)
+    require_vm
+    name="${1:?usage: stargazer-fusion-vm restore <name>}"
+    is_running && "$VMRUN" -T fusion stop "$VMX" hard
+    "$VMRUN" -T fusion revertToSnapshot "$VMX" "$name"
+    ;;
+
+  destroy)
+    require_vm
+    echo "About to PERMANENTLY DELETE $VMDIR."
+    read -r -p "Type the VM name to continue: " confirm1
+    [ "$confirm1" = "$VMNAME" ] || {
+      echo "aborted" >&2
+      exit 1
+    }
+    read -r -p "This cannot be undone. Type DESTROY to confirm: " confirm2
+    [ "$confirm2" = "DESTROY" ] || {
+      echo "aborted" >&2
+      exit 1
+    }
+    is_running && "$VMRUN" -T fusion stop "$VMX" hard
+    "$VMRUN" -T fusion deleteVM "$VMX"
+    ;;
+
+  *)
+    usage
+    exit 1
+    ;;
+esac

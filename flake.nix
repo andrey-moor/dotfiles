@@ -203,6 +203,36 @@
           ];
         };
 
+      # The same machine on VMware Fusion (2026-09 re-platform trial); shares
+      # hosts/stargazer/common.nix, differs only in the hypervisor layer.
+      nixosConfigurations.stargazer-fusion =
+        let
+          system = "aarch64-linux";
+          pkgs = mkPkgs system;
+          dotfilesDir = "/home/andreym/dotfiles";
+        in
+        nixpkgs.lib.nixosSystem {
+          inherit system;
+
+          specialArgs = { inherit inputs dotfilesDir; };
+
+          modules = [
+            { nixpkgs.pkgs = lib.mkDefault pkgs; }
+            home-manager.nixosModules.home-manager
+            {
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+              home-manager.backupFileExtension = "backup";
+              home-manager.extraSpecialArgs = { inherit inputs dotfilesDir; };
+              home-manager.sharedModules = homeBase;
+            }
+            sops-nix.nixosModules.sops
+            inputs.disko.nixosModules.disko
+            inputs.himmelblau.nixosModules.himmelblau
+            ./hosts/stargazer-fusion
+          ];
+        };
+
       formatter = forAllSystems (system: (mkPkgs system).nixfmt);
 
       devShells = forAllSystems (system: {
