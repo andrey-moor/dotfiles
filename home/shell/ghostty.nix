@@ -9,75 +9,22 @@
 
 with lib;
 let
-  # On aarch64-linux VMs with virtio_gpu/virgl, OpenGL 4.3+ is required but
-  # virtio only provides OpenGL 4.0. The Nix-built ghostty has EGL issues with
-  # software rendering, so we use the system ghostty (/bin/ghostty) which works
-  # with Mesa's LLVMpipe (LIBGL_ALWAYS_SOFTWARE=1).
-  # See: https://github.com/ghostty-org/ghostty/issues/2025
-  # On x86_64-linux, wrap with nixGL for GPU support.
-  # On macOS, use Homebrew.
-  #
-  # Creates a wrapper that calls /bin/ghostty (system package) with software rendering.
-  # Includes share/ from nix ghostty for bat syntax, dbus services, etc.
-  # Requires ghostty to be installed via system package manager (e.g., pacman on Arch).
-  systemGhosttyWrapper = pkgs.symlinkJoin {
-    name = "ghostty-system-wrapper";
-    paths = [
-      (pkgs.writeShellScriptBin "ghostty" ''
-        export LIBGL_ALWAYS_SOFTWARE=1
-        exec /bin/ghostty "$@"
-      '')
-      # Include share/ from nix ghostty for bat syntax, terminfo, etc.
-      pkgs.ghostty
-    ];
-    meta.mainProgram = "ghostty";
-    postBuild = ''
-      # Remove the nix ghostty binary, keep only our wrapper
-      rm -f $out/bin/.ghostty-wrapped
-      # Remove desktop files - we provide our own via xdg.desktopEntries
-      rm -rf $out/share/applications
-      rm -rf $out/share/dbus-1
-    '';
-  };
-
+  # macOS: Homebrew cask. x86_64-linux (rocinante, not NixOS): nixGL for the
+  # host GPU. aarch64-linux (NixOS VMs): the Nix build as-is; it needs OpenGL
+  # 4.3 from the guest GPU, which VMware Fusion provides (SVGA3D) and Parallels
+  # does not (virgl caps at 4.0 there, so that host uses Alacritty).
   ghosttyPkg =
     if pkgs.stdenv.isDarwin then
-      null # macOS uses Homebrew
+      null
     else if pkgs.stdenv.isAarch64 then
-      lib.hiPrio systemGhosttyWrapper # Use system ghostty with software rendering
+      pkgs.ghostty
     else
-      lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty); # x86_64: needs nixGL
+      lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);
 in
 {
   config = {
     # Ensure ghostty terminfo is found by tmux/ncurses (e.g. when SSH-ing in)
     home.sessionVariables.TERMINFO_DIRS = "$HOME/.nix-profile/share/terminfo:/usr/share/terminfo";
-
-    # On aarch64-linux, override the desktop file to use our wrapper with software rendering
-    # This fixes the Omarchy wrapper bug (escaped $is_apple_silicon variable)
-    # Uses home.file to place in ~/.local/share/applications/ which has higher XDG priority
-    home.file = mkIf (pkgs.stdenv.isLinux && pkgs.stdenv.isAarch64) {
-      ".local/share/applications/com.mitchellh.ghostty.desktop" = {
-        force = true; # Override existing file
-        text = ''
-          [Desktop Entry]
-          Version=1.0
-          Name=Ghostty
-          Type=Application
-          Comment=A terminal emulator
-          TryExec=${systemGhosttyWrapper}/bin/ghostty
-          Exec=${systemGhosttyWrapper}/bin/ghostty %U
-          Icon=com.mitchellh.ghostty
-          Categories=System;TerminalEmulator;
-          Keywords=terminal;tty;pty;
-          StartupNotify=true
-          StartupWMClass=com.mitchellh.ghostty
-          Terminal=false
-          X-TerminalArgExec=-e
-          X-TerminalArgDir=--working-directory=
-        '';
-      };
-    };
 
     # On macOS, ghostty is installed via Homebrew cask
     # On Linux, wrap with nixGL for GPU acceleration
