@@ -2,6 +2,7 @@
 #
 # Host-specific dev tools are imported by the host instead:
 #   copilot   behemoth, rocinante
+#   herdr     behemoth
 #   hunk      behemoth, rocinante
 #   lmstudio  rocinante
 #   python    rocinante, stargazer

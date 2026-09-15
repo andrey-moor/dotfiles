@@ -121,6 +121,7 @@
       "gcloud-cli" # renamed upstream from google-cloud-sdk
       # Utilities
       "balenaetcher"
+      "virtualhereserver"
       "tigervnc" # renamed upstream from tigervnc-viewer
     ];
     brews = [
@@ -152,6 +153,7 @@
         ../../home/dev.nix
         ../../home/darwin.nix
         ../../home/dev/copilot.nix
+        ../../home/dev/herdr.nix
         ../../home/dev/hunk.nix
       ];
 
