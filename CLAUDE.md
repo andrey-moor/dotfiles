@@ -150,13 +150,11 @@ Secure Boot and the fire drill. It is the only install doc.
 sudo nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer --refresh
 ```
 
-**NixOS VM guest layer:** `modules/nixos/vm-guest.nix` is hypervisor-agnostic (virtio
-initrd modules, `virtio_gpu`, `hardware.graphics`, and the `virtio-gpu-resize` user
-service — options `modules.nixos.vmGuest.{connector,followResize,resizePollInterval,resizeStablePolls,resizeHysteresis}`).
-`modules/nixos/parallels-guest.nix` imports it and adds only Parallels specifics
-(options `modules.nixos.parallels.{guestTools,mtu}`, `hardware.parallels.enable`, the
-declarative MTU, and the `prlcc` autostart via `modules.nixos.desktop.extraExecOnce`).
-Moving to another virtio-gpu hypervisor means importing `vm-guest.nix` directly.
+**NixOS VM guest layer:** `modules/nixos/vm-guest.nix` holds the graphics stack and the
+`virtio-gpu-resize` follower (options `modules.nixos.vmGuest.{connector,followResize,resizePollInterval,resizeStablePolls,resizeHysteresis}`).
+`modules/nixos/vmware-guest.nix` imports it and adds the Fusion pieces: the vmwgfx Hyprland
+patch, open-vm-tools, the copy/paste agent and its clipboard bridge, and fast resize timing.
+Another hypervisor means a new guest module that imports `vm-guest.nix`.
 
 **Notes:**
 - `system.autoUpgrade` refreshes from the same `github:` ref daily (persistent timer)

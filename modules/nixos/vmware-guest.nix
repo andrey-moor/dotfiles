@@ -5,13 +5,13 @@
 # records why each piece exists.
 #
 # What matters on Fusion:
-#   - Graphics: vmwgfx (SVGA3D, OpenGL 4.3), not virtio-gpu. The DRM
+#   - Graphics: vmwgfx (SVGA3D, OpenGL 4.3). The DRM
 #     connector is still "Virtual-1". On window resize Fusion sends
 #     `Resolution_Set` to open-vm-tools, which updates the connector's
 #     preferred mode, but Hyprland does not switch to it on its own (tested
 #     2026-09-14). The virtio-gpu-resize follower from vm-guest.nix does that
 #     job here too, so it stays on (its default).
-#   - NIC: vmxnet3 (or e1000e), DHCP on a normal LAN/NAT lease; no MTU hack.
+#   - NIC: vmxnet3 (or e1000e), DHCP on a normal LAN/NAT lease.
 #   - Disk: NVMe (hosts/stargazer/disko.nix).
 #   - Tools: open-vm-tools (shared folders via vmhgfs-fuse, time sync,
 #     resolution, copy/paste). The copy/paste agent speaks X11, so it runs
@@ -115,9 +115,8 @@
   # a mode switch after the root is mounted.
   boot.initrd.kernelModules = [ "vmwgfx" ];
 
-  # Same shape as parallels-guest.nix minus the MTU rule: no router
-  # advertisements (himmelblau's short connect timeout vs a v6 default route
-  # with no egress) and our own resolvers, not the lease's.
+  # No router advertisements (himmelblau's short connect timeout vs a v6
+  # default route with no egress) and our own resolvers, not the lease's.
   networking.useDHCP = false;
   networking.useNetworkd = true;
   systemd.network.networks."10-primary" = {

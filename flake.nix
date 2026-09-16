@@ -174,7 +174,7 @@
           ++ [ ./hosts/rocinante ];
         };
 
-      # aarch64 Parallels VM on behemoth (NixOS, integrated home-manager)
+      # aarch64 NixOS VM on VMware Fusion, hosted by behemoth, with integrated home-manager
       nixosConfigurations.stargazer =
         let
           system = "aarch64-linux";
