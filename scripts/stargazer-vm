@@ -1,132 +1,138 @@
 #!/usr/bin/env bash
-# Parallels lifecycle for the stargazer NixOS VM.
+# VMware Fusion lifecycle for the stargazer VM.
 #
-# This box also hosts Nostromo (a live, domain-joined corporate Windows VM) and
-# spike-himmelblau-arm (the enrolled P2 reference VM). Neither may ever be
-# mutated. Every prlctl call below therefore targets $VMNAME, which can only
-# ever be "stargazer-nixos" or, with --drill, "stargazer-drill".
+# The VM definition lives here, not in Fusion's GUI: `create` writes the whole
+# .vmx. vmcli's own `VM Create` only produces a skeleton, with no disk, NIC or
+# CD-ROM. Every command targets $VMX, which can only ever be the stargazer
+# bundle or, with --drill, the stargazer-drill bundle.
+#
+# Fusion itself cannot be declared in the flake. Broadcom's download needs a
+# portal account and a trade-compliance form, and the Homebrew cask was
+# disabled for that reason (docs/vmware-fusion-workarounds.md).
 set -euo pipefail
 
-VMNAME="stargazer-nixos"
+VMNAME="stargazer"
 if [ "${1:-}" = "--drill" ]; then
   VMNAME="stargazer-drill"
   shift
 fi
-
 case "$VMNAME" in
-  stargazer-nixos | stargazer-drill) ;;
+  stargazer | stargazer-drill) ;;
   *)
     echo "refusing to operate on '$VMNAME'" >&2
     exit 1
     ;;
 esac
 
-PARALLELS_DIR="$HOME/Parallels"
-ISO_DIR="$PARALLELS_DIR/iso"
+VMDIR="$HOME/Virtual Machines.localized/$VMNAME.vmwarevm"
+VMX="$VMDIR/$VMNAME.vmx"
+PUB="/Applications/VMware Fusion.app/Contents/Public"
+VMCLI="$PUB/vmcli"
+VMRUN="$PUB/vmrun"
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+
+ISO_DIR="$HOME/Virtual Machines.localized/iso"
 ISO="$ISO_DIR/nixos-minimal-aarch64-linux.iso"
 ISO_URL="https://channels.nixos.org/nixos-unstable/latest-nixos-minimal-aarch64-linux.iso"
 
-# Sizing per the P9 plan: behemoth is 16 cores / 128 GB and Nostromo takes
-# 10 / 64. Do not oversize.
+# behemoth is 16 cores / 128 GB, and Nostromo (Parallels) takes 10 / 64.
 CPUS=8
-MEMSIZE=32768
-DISK_MB=262144
+MEMSIZE=16384
+DISK_SIZE="256GB"
 MIN_FREE_GB=150
+GRAPHICS_MEMORY_KB=4194304
 
 usage() {
   cat >&2 <<EOF
 usage: stargazer-vm [--drill] <verb> [args]
 
-  create              create the VM (refuses if it exists, or if $PARALLELS_DIR
-                      has less than ${MIN_FREE_GB} GB free)
-  iso                 download + verify the NixOS aarch64 minimal ISO, attach it
-                      and boot from it
-  up | down           start / stop
-  suspend | resume    suspend / resume
-  status              state, IP addresses, boot order
-  ip                  best-effort guest address (IPv4, else IPv6 link-local)
-  console-type <cmd>  type <cmd> + Return into the VM's Parallels window
-                      (needs Accessibility permission for this terminal)
-  snapshot <name>     take a named snapshot
-  restore <name>      switch to a named snapshot (VM is stopped first)
-  enroll-mok [pem]    write an x509 cert into the firmware's MokList (VM must be
-                      stopped; NVRAM.dat is backed up first). Defaults to the
-                      repo's hosts/stargazer/secureboot/db.pem
-  secure-boot on|off  flip the Parallels Secure Boot flag (VM must be stopped)
-  destroy             delete the VM (double confirmation)
+  iso                   download and verify the NixOS aarch64 minimal ISO
+  create                write the .vmx and a ${DISK_SIZE} growable NVMe disk (refuses if
+                        the VM exists, the ISO is missing, or ~ has less than ${MIN_FREE_GB} GB free)
+  up                    power on in a Fusion window
+  down | kill           soft / hard power off
+  suspend | resume      suspend / resume in a Fusion window
+  status                power state, IP
+  ip                    guest IPv4 from Fusion's NAT DHCP leases
+  screenshot <file>     capture the console
+  type <text>           type <text> + Return at the console
+  key <name>            send one key: enter esc tab backspace space up down left right
+                        f1..f12 ctrl-c ctrl-d
+  set <key> <value>     set a .vmx entry (VM must be off)
+  cdrom on|off          connect or disconnect the installer ISO at next power-on
+  secure-boot on|off    append hosts/stargazer/secureboot/db.pem to the firmware db and
+                        enable Secure Boot, or disable it (VM must be off)
+  snapshot <name>       take a snapshot
+  restore <name>        revert to a snapshot (VM is stopped first)
+  destroy               delete the VM (double confirmation)
 
-Target VM: $VMNAME
+VM: $VMX
 EOF
 }
 
 require_vm() {
-  prlctl list -i "$VMNAME" >/dev/null 2>&1 || {
+  [ -f "$VMX" ] || {
     echo "$VMNAME does not exist — run 'stargazer-vm create'" >&2
     exit 1
   }
 }
 
-free_gb() {
-  # df -k on macOS: 4th column is available 1K-blocks.
-  df -k "$PARALLELS_DIR" | awk 'NR==2 {printf "%d", $4 / 1048576}'
+is_running() {
+  "$VMRUN" -T fusion list 2>/dev/null | grep -qF "$VMX"
 }
 
-wait_for_stopped() {
-  for _ in $(seq 1 24); do
-    [ "$(prlctl list -a 2>/dev/null | awk -v n="$VMNAME" '$NF==n{print $2}')" = "stopped" ] && return 0
-    sleep 5
-  done
-  return 1
+require_stopped() {
+  if is_running; then
+    echo "$VMNAME must be powered off" >&2
+    exit 1
+  fi
 }
 
-# `prlctl snapshot-switch` only accepts --id, and plain `snapshot-list` does not
-# print names, so names have to be resolved through the JSON form. python must
-# not raise on empty/invalid input: with no snapshots prlctl writes nothing and
-# exits non-zero, which `set -o pipefail` would otherwise propagate.
-resolve_snapshot_id() {
-  local name="$1"
-  prlctl snapshot-list "$VMNAME" --json 2>/dev/null | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-except (json.JSONDecodeError, ValueError):
-    sys.exit(0)
-for k, v in d.items():
-    if v.get('name') == '$name':
-        print(k.strip('{}'))
-        break
-"
+# `MKS sendKeySequence` types printable text exactly (verified with every US
+# punctuation character); non-printing keys go through `MKS sendKeyEvent`,
+# which takes vSphere's USB HID encoding `(usage << 16) | 7` and a HID
+# modifier bitmask (1 = Ctrl). Bare HID usage IDs are silently ignored.
+hid_key() {
+  "$VMCLI" "$VMX" MKS sendKeyEvent "$((($1 << 16) | 7))" "$2" >/dev/null
 }
 
-get_mac() {
-  prlctl list -i "$VMNAME" 2>/dev/null |
-    sed -n 's/.*mac=\([0-9A-Fa-f]\{12\}\).*/\1/p' | head -1 || true
+named_key() {
+  case "$1" in
+    enter) hid_key 40 0 ;;
+    esc) hid_key 41 0 ;;
+    backspace) hid_key 42 0 ;;
+    tab) hid_key 43 0 ;;
+    space) hid_key 44 0 ;;
+    right) hid_key 79 0 ;;
+    left) hid_key 80 0 ;;
+    down) hid_key 81 0 ;;
+    up) hid_key 82 0 ;;
+    f[1-9] | f1[0-2]) hid_key $((57 + ${1#f})) 0 ;;
+    ctrl-c) hid_key 6 1 ;;
+    ctrl-d) hid_key 7 1 ;;
+    *)
+      echo "unknown key '$1'" >&2
+      exit 1
+      ;;
+  esac
 }
 
-get_ipv4() {
-  prlctl list -i "$VMNAME" 2>/dev/null | grep 'IP Addresses' |
-    grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 || true
-}
-
-# The spike VM's dhcpcd lost its shared-network lease and fell back to IPv4LL,
-# leaving it reachable only over IPv6 link-local on the Parallels bridge. Expect
-# the same fragility here rather than reporting a useless 169.254 address.
-get_ipv6_ll() {
-  local mac colon_mac
-  mac="$(get_mac)"
+guest_ipv4() {
+  local mac
+  mac="$(sed -n 's/^ethernet0\.generatedAddress = "\(.*\)"$/\1/p' "$VMX" | tr '[:upper:]' '[:lower:]')"
   [ -n "$mac" ] || return 0
-  colon_mac="$(echo "$mac" | sed 's/../&:/g; s/:$//' | tr '[:upper:]' '[:lower:]')"
-  # ndp -an prints "fe80::…%bridgeN  <mac>  bridgeN …"; leading zeros in the
-  # MAC are stripped there, so compare octet-wise.
-  ndp -an 2>/dev/null | awk -v mac="$colon_mac" '
-    function norm(m,   parts, i, out) {
-      n = split(m, parts, ":")
-      out = ""
-      for (i = 1; i <= n; i++) out = out sprintf("%02x", strtonum("0x" parts[i])) (i < n ? ":" : "")
-      return out
+  # ISC dhcpd lease file. Blocks are not in time order, and the firmware's
+  # network-boot attempt takes short leases of its own, so pick the lease for
+  # this MAC with the latest `starts` ("YYYY/MM/DD HH:MM:SS" sorts as text).
+  awk -v mac="$mac" '
+    $1 == "lease" { ip = $2; starts = "" }
+    $1 == "starts" { starts = $3 " " $4 }
+    $1 == "hardware" && $2 == "ethernet" {
+      gsub(";", "", $3)
+      if (tolower($3) == mac && starts > best) { best = starts; found = ip }
     }
-    $1 ~ /^fe80::/ && norm($2) == mac { print $1; exit }
-  '
+    END { if (found) print found }
+  ' /var/db/vmware/vmnet-dhcpd-vmnet8.leases 2>/dev/null
 }
 
 CMD="${1:-}"
@@ -138,43 +144,161 @@ shift || true
 
 case "$CMD" in
   create)
-    if prlctl list -i "$VMNAME" >/dev/null 2>&1; then
-      echo "$VMNAME already exists — destroy it first" >&2
+    [ ! -e "$VMDIR" ] || {
+      echo "$VMDIR already exists — destroy it first" >&2
       exit 1
-    fi
-    mkdir -p "$PARALLELS_DIR"
-    free="$(free_gb)"
-    if [ "$free" -lt "$MIN_FREE_GB" ]; then
-      echo "only ${free} GB free in $PARALLELS_DIR; need at least ${MIN_FREE_GB} GB" >&2
+    }
+    [ -x "$VMCLI" ] || {
+      echo "VMware Fusion is not installed" >&2
       exit 1
-    fi
-    echo "creating $VMNAME (${CPUS} vCPU, ${MEMSIZE} MB RAM, ${DISK_MB} MB disk; ${free} GB free)"
+    }
+    [ -f "$ISO" ] || {
+      echo "no installer ISO at $ISO — run 'stargazer-vm iso' (it downloads and verifies it)" >&2
+      exit 1
+    }
+    free_gb="$(df -k "$HOME" | awk 'NR==2 {printf "%d", $4 / 1048576}')"
+    [ "$free_gb" -ge "$MIN_FREE_GB" ] || {
+      echo "only ${free_gb} GB free; need at least ${MIN_FREE_GB} GB" >&2
+      exit 1
+    }
+    mkdir -p "$VMDIR"
+    # Arm guests on Apple silicon are EFI-only. Secure Boot starts off: the
+    # NixOS installer ISO is not signed. It goes on later, when `secure-boot on`
+    # appends our db certificate (README §7). The display uses the full Retina
+    # pixel count, and hosts/stargazer sets Hyprland's scale to 2 to match.
+    # VMware keeps HID devices, a YubiKey included, on the host
+    # unless both usb.generic.allowHID keys are set. uuid.action = keep stops
+    # Fusion from pausing a power-on to ask whether the VM was moved or copied.
+    # That question blocks vmrun until someone clicks, and the copy answer gives
+    # the VM a new hardware UUID and MAC address.
+    cat >"$VMX" <<EOF
+.encoding = "UTF-8"
+config.version = "8"
+virtualHW.version = "22"
+displayName = "$VMNAME"
+uuid.action = "keep"
+guestOS = "arm-other6xlinux-64"
+firmware = "efi"
+numvcpus = "$CPUS"
+cpuid.coresPerSocket = "$CPUS"
+memsize = "$MEMSIZE"
+nvram = "$VMNAME.nvram"
+svga.present = "TRUE"
+mks.enable3d = "TRUE"
+svga.graphicsMemoryKB = "$GRAPHICS_MEMORY_KB"
+gui.fitGuestUsingNativeDisplayResolution = "TRUE"
+pciBridge0.present = "TRUE"
+pciBridge4.present = "TRUE"
+pciBridge4.virtualDev = "pcieRootPort"
+pciBridge4.functions = "8"
+pciBridge5.present = "TRUE"
+pciBridge5.virtualDev = "pcieRootPort"
+pciBridge5.functions = "8"
+pciBridge6.present = "TRUE"
+pciBridge6.virtualDev = "pcieRootPort"
+pciBridge6.functions = "8"
+pciBridge7.present = "TRUE"
+pciBridge7.virtualDev = "pcieRootPort"
+pciBridge7.functions = "8"
+vmci0.present = "TRUE"
+hpet0.present = "TRUE"
+nvme0.present = "TRUE"
+nvme0:0.present = "TRUE"
+nvme0:0.fileName = "$VMNAME.vmdk"
+sata0.present = "TRUE"
+sata0:1.present = "TRUE"
+sata0:1.deviceType = "cdrom-image"
+sata0:1.fileName = "$ISO"
+sata0:1.startConnected = "TRUE"
+ethernet0.present = "TRUE"
+ethernet0.connectionType = "nat"
+ethernet0.virtualDev = "vmxnet3"
+ethernet0.addressType = "generated"
+usb.present = "TRUE"
+ehci.present = "TRUE"
+usb_xhci.present = "TRUE"
+usb.generic.allowHID = "TRUE"
+usb.generic.allowLastHID = "TRUE"
+sound.present = "TRUE"
+sound.virtualDev = "hdaudio"
+sound.autoDetect = "TRUE"
+tools.syncTime = "TRUE"
+tools.upgrade.policy = "manual"
+EOF
+    "$VMCLI" Disk Create -f "$VMDIR/$VMNAME.vmdk" -a lsilogic -s "$DISK_SIZE" -t 0
+    echo "created $VMNAME (${CPUS} vCPU, ${MEMSIZE} MB, ${DISK_SIZE} NVMe; ${free_gb} GB free). next: stargazer-vm up"
+    ;;
 
-    prlctl create "$VMNAME" --distribution linux --no-hdd
-    prlctl set "$VMNAME" --cpus "$CPUS" --memsize "$MEMSIZE"
-    # Parallels 27 documents --bios-type; the spike script's undocumented
-    # --efi-boot is the same switch on older builds.
-    prlctl set "$VMNAME" --bios-type efi-arm64
-    # Secure Boot stays off until P9 Task 6 enrolls lanzaboote's keys, and there
-    # is deliberately no vTPM: Parallels documents it as Windows-only, and
-    # himmelblau's Nix build cannot use a TPM anyway (upstream #1656).
-    prlctl set "$VMNAME" --efi-secure-boot off
+  up)
+    require_vm
+    "$VMRUN" -T fusion start "$VMX" gui
+    ;;
 
-    # SATA, because Parallels offers no virtio disk interface; hosts/stargazer/
-    # disko.nix targets /dev/sda accordingly.
-    prlctl set "$VMNAME" --device-add hdd --size "$DISK_MB" --type expand --iface sata
-    # Bridged, not shared: on behemoth the Parallels shared-network DHCP has
-    # never issued a lease (spike VM fell back to IPv4LL; stargazer-nixos got
-    # no IPv4 at all on 2026-09-01). Bridged gets a LAN lease like Nostromo.
-    prlctl set "$VMNAME" --device-set net0 --type bridged --iface default --adapter-type virtio
-    prlctl set "$VMNAME" --video-adapter-type virtio --3d-accelerate highest
-    prlctl set "$VMNAME" --auto-share-smart-card on # YubiKey at the local console
+  down)
+    require_vm
+    "$VMRUN" -T fusion stop "$VMX" soft
+    ;;
 
-    echo "created $VMNAME. next: stargazer-vm iso"
+  kill)
+    require_vm
+    "$VMRUN" -T fusion stop "$VMX" hard
+    ;;
+
+  status)
+    require_vm
+    "$VMCLI" "$VMX" Power query 2>&1 | grep -iE 'state' || true
+    is_running && echo "running" || echo "not running"
+    echo "ip: $(guest_ipv4)"
+    ;;
+
+  ip)
+    require_vm
+    ip="$(guest_ipv4)"
+    [ -n "$ip" ] || {
+      echo "no lease for $VMNAME yet — is it up?" >&2
+      exit 1
+    }
+    echo "$ip"
+    ;;
+
+  screenshot)
+    require_vm
+    out="${1:?usage: stargazer-vm screenshot <file>}"
+    "$VMCLI" "$VMX" MKS captureScreenshot "$out" >/dev/null
+    echo "$out"
+    ;;
+
+  type)
+    require_vm
+    "$VMCLI" "$VMX" MKS sendKeySequence "${1:?usage: stargazer-vm type \"<text>\"}" >/dev/null
+    named_key enter
+    ;;
+
+  key)
+    require_vm
+    named_key "${1:?usage: stargazer-vm key <name>}"
+    ;;
+
+  set)
+    require_vm
+    require_stopped
+    "$VMCLI" "$VMX" ConfigParams SetEntry "${1:?key}" "${2:?value}"
+    ;;
+
+  cdrom)
+    require_vm
+    require_stopped
+    case "${1:-}" in
+      on) "$VMCLI" "$VMX" ConfigParams SetEntry sata0:1.startConnected TRUE ;;
+      off) "$VMCLI" "$VMX" ConfigParams SetEntry sata0:1.startConnected FALSE ;;
+      *)
+        echo "usage: stargazer-vm cdrom on|off" >&2
+        exit 1
+        ;;
+    esac
     ;;
 
   iso)
-    require_vm
     mkdir -p "$ISO_DIR"
     tmp="$(mktemp -d "$ISO_DIR/.dl.XXXXXX")"
     trap 'rm -rf "$tmp"' EXIT
@@ -191,193 +315,61 @@ case "$CMD" in
     fi
     mv "$tmp/iso" "$ISO"
     echo "ISO at $ISO"
-
-    if prlctl list -i "$VMNAME" | grep -q '^ *cdrom0'; then
-      prlctl set "$VMNAME" --device-set cdrom0 --image "$ISO" --connect
-    else
-      prlctl set "$VMNAME" --device-add cdrom --image "$ISO" --iface sata --connect
-    fi
-    # Without --connect the firmware sees no bootable device and drops to its
-    # setup menu (seen on the first stargazer-nixos boot).
-    prlctl set "$VMNAME" --device-bootorder "cdrom0 hdd0"
-    ;;
-
-  up)
-    require_vm
-    prlctl start "$VMNAME"
-    ;;
-
-  down)
-    require_vm
-    prlctl stop "$VMNAME"
     ;;
 
   suspend)
     require_vm
-    prlctl suspend "$VMNAME"
+    "$VMRUN" -T fusion suspend "$VMX" hard
     ;;
 
   resume)
     require_vm
-    prlctl resume "$VMNAME"
-    ;;
-
-  status)
-    require_vm
-    prlctl list -i "$VMNAME" | grep -E 'State|IP Addresses|Boot order|EFI|Secure'
-    ;;
-
-  ip)
-    require_vm
-    ipv4="$(get_ipv4)"
-    case "$ipv4" in
-      169.254.*)
-        echo "warning: guest reports the IPv4 link-local address $ipv4 — its DHCP lease is gone" >&2
-        ipv4=""
-        ;;
-    esac
-    if [ -n "$ipv4" ]; then
-      echo "$ipv4"
-      exit 0
-    fi
-    ll="$(get_ipv6_ll)"
-    if [ -n "$ll" ]; then
-      echo "no usable IPv4; reachable over IPv6 link-local:" >&2
-      echo "$ll"
-      exit 0
-    fi
-    echo "no address found — is the VM up? (stargazer-vm status)" >&2
-    exit 1
-    ;;
-
-  console-type)
-    require_vm
-    cmd="${1:?usage: stargazer-vm console-type \"<command>\"}"
-    # The NixOS installer ISO ships no Parallels guest tools, so `prlctl exec`
-    # is unavailable and the console can only be driven by synthetic keystrokes.
-    # Two rules learned during the 2026-09-02 install are encoded here:
-    # Parallels swallows `keystroke "."`, so periods go through `key code 47`;
-    # and anything that steals focus mid-typing (a 1Password/Touch ID prompt, a
-    # notification) delivers the rest of the keystrokes to whatever is in front,
-    # so focus is re-checked before Return is pressed.
-    keys=""
-    rest="$cmd"
-    while [ -n "$rest" ]; do
-      chunk="${rest%%.*}"
-      if [ -n "$chunk" ]; then
-        keys="$keys    keystroke \"$(printf '%s' "$chunk" | sed 's/\\/\\\\/g; s/"/\\"/g')\"
-"
-      fi
-      if [ "$chunk" = "$rest" ]; then
-        rest=""
-      else
-        rest="${rest#*.}"
-        keys="$keys    key code 47
-"
-      fi
-    done
-
-    if ! osascript <<EOF
-tell application "Parallels Desktop" to activate
-delay 0.5
-tell application "System Events" to tell process "Parallels Desktop"
-    perform action "AXRaise" of window "$VMNAME"
-    delay 0.5
-    if name of front window is not "$VMNAME" then error "front window is not $VMNAME"
-$keys
-    delay 0.2
-    if name of front window is not "$VMNAME" then error "focus was stolen while typing — nothing was submitted"
-    key code 36
-end tell
-EOF
-    then
-      echo "console-type failed — is Accessibility granted to this terminal, and is $VMNAME's window open?" >&2
-      exit 1
-    fi
-    ;;
-
-  snapshot)
-    require_vm
-    name="${1:?usage: stargazer-vm snapshot <name>}"
-    prlctl snapshot "$VMNAME" -n "$name"
-    ;;
-
-  restore)
-    require_vm
-    name="${1:?usage: stargazer-vm restore <name>}"
-    snap="$(resolve_snapshot_id "$name")" || true
-    [ -n "$snap" ] || {
-      echo "no snapshot named '$name' on $VMNAME" >&2
-      exit 1
-    }
-    prlctl stop "$VMNAME" --kill 2>/dev/null || true
-    wait_for_stopped || {
-      echo "$VMNAME did not stop — refusing to switch snapshots" >&2
-      exit 1
-    }
-    prlctl snapshot-switch "$VMNAME" --id "$snap"
-    ;;
-
-  enroll-mok)
-    require_vm
-    # The signing key pair is shared by every stargazer instance (private half
-    # in secrets/stargazer-sbctl.yaml), so the certificate is known before the
-    # VM exists and this can run right after `create` + first power-on.
-    cert="${1:-$(cd "$(dirname "$0")/.." && pwd)/hosts/stargazer/secureboot/db.pem}"
-    [ -r "$cert" ] || {
-      echo "cannot read $cert" >&2
-      exit 1
-    }
-    [ "$(prlctl list -a 2>/dev/null | awk -v n="$VMNAME" '$NF==n{print $2}')" = "stopped" ] || {
-      echo "$VMNAME must be stopped (the firmware writes NVRAM.dat on shutdown)" >&2
-      exit 1
-    }
-    # MokManager (shim's interactive enrollment UI) never gets a timer tick or a
-    # keypress on Parallels' aa64 firmware, so `mokutil --import` + reboot can
-    # never complete here. NVRAM.dat is a plain EDK II variable store, though,
-    # and virt-fw-vars writes MokList into it directly (boot-services-only,
-    # non-volatile — the same attributes MokManager would use). shim picks it up
-    # on the next boot and mirrors it to MokListRT.
-    nvram="$(prlctl list -i "$VMNAME" | sed -n 's/^Home: *//p')NVRAM.dat"
-    [ -f "$nvram" ] || {
-      echo "no NVRAM at $nvram" >&2
-      exit 1
-    }
-    backup="$nvram.bak-$(date +%Y%m%d-%H%M%S)"
-    cp "$nvram" "$backup"
-    echo "NVRAM backed up to $backup"
-    # 605dab50-… is shim's own GUID, the owner mokutil stamps on MOK entries.
-    nix shell nixpkgs#python3Packages.virt-firmware -c virt-fw-vars \
-      -i "$nvram" --add-mok 605dab50-e046-4300-abb6-3dd810dd8b23 "$cert" -o "$nvram.new"
-    mv "$nvram.new" "$nvram"
-    nix shell nixpkgs#python3Packages.virt-firmware -c virt-fw-vars -i "$nvram" --print |
-      grep -E '^MokList ' || {
-      echo "MokList missing after write — restoring $backup" >&2
-      cp "$backup" "$nvram"
-      exit 1
-    }
+    "$VMRUN" -T fusion start "$VMX" gui
     ;;
 
   secure-boot)
     require_vm
-    state="${1:?usage: stargazer-vm secure-boot on|off}"
-    case "$state" in
-      on | off) ;;
+    require_stopped
+    case "${1:-}" in
+      on)
+        openssl x509 -in "$REPO/hosts/stargazer/secureboot/db.pem" -outform DER -out "$VMDIR/stargazer-db.der"
+        # Fusion loads the default key set and dbDefault.file0 when it creates
+        # the NVRAM file (seen 2026-09-14), so the first enable moves the old
+        # file aside. Later enables keep the NVRAM, which already holds our
+        # certificate.
+        if [ ! -e "$VMDIR/$VMNAME.nvram.pre-sb" ] && [ -e "$VMDIR/$VMNAME.nvram" ]; then
+          mv "$VMDIR/$VMNAME.nvram" "$VMDIR/$VMNAME.nvram.pre-sb"
+        fi
+        "$VMCLI" "$VMX" ConfigParams SetEntry uefi.secureBoot.enabled TRUE
+        "$VMCLI" "$VMX" ConfigParams SetEntry uefi.secureBoot.dbDefault.file0 stargazer-db.der
+        "$VMCLI" "$VMX" ConfigParams SetEntry uefi.secureBoot.dbDefault.append TRUE
+        ;;
+      off)
+        "$VMCLI" "$VMX" ConfigParams SetEntry uefi.secureBoot.enabled FALSE
+        ;;
       *)
         echo "usage: stargazer-vm secure-boot on|off" >&2
         exit 1
         ;;
     esac
-    [ "$(prlctl list -a 2>/dev/null | awk -v n="$VMNAME" '$NF==n{print $2}')" = "stopped" ] || {
-      echo "$VMNAME must be stopped" >&2
-      exit 1
-    }
-    prlctl set "$VMNAME" --efi-secure-boot "$state"
+    grep -E '^uefi\.secureBoot' "$VMX"
+    ;;
+
+  snapshot)
+    require_vm
+    "$VMRUN" -T fusion snapshot "$VMX" "${1:?usage: stargazer-vm snapshot <name>}"
+    ;;
+
+  restore)
+    require_vm
+    name="${1:?usage: stargazer-vm restore <name>}"
+    is_running && "$VMRUN" -T fusion stop "$VMX" hard
+    "$VMRUN" -T fusion revertToSnapshot "$VMX" "$name"
     ;;
 
   destroy)
     require_vm
-    echo "About to PERMANENTLY DELETE the VM '$VMNAME' and its disks."
+    echo "About to PERMANENTLY DELETE $VMDIR."
     read -r -p "Type the VM name to continue: " confirm1
     [ "$confirm1" = "$VMNAME" ] || {
       echo "aborted" >&2
@@ -388,8 +380,8 @@ EOF
       echo "aborted" >&2
       exit 1
     }
-    prlctl stop "$VMNAME" --kill 2>/dev/null || true
-    prlctl delete "$VMNAME"
+    is_running && "$VMRUN" -T fusion stop "$VMX" hard
+    "$VMRUN" -T fusion deleteVM "$VMX"
     ;;
 
   *)

@@ -142,8 +142,8 @@ Hyprland on vmwgfx with a vendored patch, Entra join + Intune enrollment via him
 **Install:** `hosts/stargazer/README.md` is the runbook — VM creation through enrollment,
 Secure Boot and the fire drill. It is the only install doc.
 
-**VM lifecycle:** `scripts/stargazer-vm <create|iso|up|down|suspend|resume|status|ip|snapshot|restore|destroy>`
-(hard-coded to `stargazer-nixos`; `--drill` targets `stargazer-drill`).
+**VM lifecycle:** `scripts/stargazer-vm <iso|create|up|down|kill|suspend|resume|status|ip|screenshot|type|key|set|cdrom|secure-boot|snapshot|restore|destroy>`
+(VMware Fusion; hard-coded to `stargazer`, `--drill` targets `stargazer-drill`).
 
 **Build/switch (from within stargazer):**
 ```bash
