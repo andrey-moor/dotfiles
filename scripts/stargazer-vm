@@ -158,7 +158,7 @@ case "$CMD" in
     }
     free_gb="$(df -k "$HOME" | awk 'NR==2 {printf "%d", $4 / 1048576}')"
     [ "$free_gb" -ge "$MIN_FREE_GB" ] || {
-      echo "only ${free_gb} GB free; need at least ${MIN_FREE_GB} GB" >&2
+      echo "only ${free_gb} GB free. Need at least ${MIN_FREE_GB} GB." >&2
       exit 1
     }
     mkdir -p "$VMDIR"
@@ -226,7 +226,7 @@ tools.syncTime = "TRUE"
 tools.upgrade.policy = "manual"
 EOF
     "$VMCLI" Disk Create -f "$VMDIR/$VMNAME.vmdk" -a lsilogic -s "$DISK_SIZE" -t 0
-    echo "created $VMNAME (${CPUS} vCPU, ${MEMSIZE} MB, ${DISK_SIZE} NVMe; ${free_gb} GB free). next: stargazer-vm up"
+    echo "created $VMNAME: ${CPUS} vCPU, ${MEMSIZE} MB, ${DISK_SIZE} NVMe, ${free_gb} GB free. next: stargazer-vm up"
     ;;
 
   up)
@@ -333,12 +333,19 @@ EOF
     case "${1:-}" in
       on)
         openssl x509 -in "$REPO/hosts/stargazer/secureboot/db.pem" -outform DER -out "$VMDIR/stargazer-db.der"
-        # Fusion loads the default key set and dbDefault.file0 when it creates
-        # the NVRAM file (seen 2026-09-14), so the first enable moves the old
-        # file aside. Later enables keep the NVRAM, which already holds our
-        # certificate.
-        if [ ! -e "$VMDIR/$VMNAME.nvram.pre-sb" ] && [ -e "$VMDIR/$VMNAME.nvram" ]; then
-          mv "$VMDIR/$VMNAME.nvram" "$VMDIR/$VMNAME.nvram.pre-sb"
+        # Fusion loads its default key set and dbDefault.file0 only while it
+        # creates the NVRAM file (seen 2026-09-14). An existing variable store
+        # is used as it stands, so an enable that follows `restore pre-sb`
+        # would run against a store that never learned our certificate, and the
+        # firmware would refuse the signed loader. Every enable therefore
+        # starts from a fresh store. The first one keeps the pre-Secure-Boot
+        # file as the backup, and later ones drop the store they replace.
+        if [ -e "$VMDIR/$VMNAME.nvram" ]; then
+          if [ -e "$VMDIR/$VMNAME.nvram.pre-sb" ]; then
+            rm "$VMDIR/$VMNAME.nvram"
+          else
+            mv "$VMDIR/$VMNAME.nvram" "$VMDIR/$VMNAME.nvram.pre-sb"
+          fi
         fi
         "$VMCLI" "$VMX" ConfigParams SetEntry uefi.secureBoot.enabled TRUE
         "$VMCLI" "$VMX" ConfigParams SetEntry uefi.secureBoot.dbDefault.file0 stargazer-db.der

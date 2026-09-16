@@ -195,11 +195,15 @@ recipient is an invisible no-op, and the first boot comes up domain-less.
 **4.1 get a shell.** The installer autologs `nixos` at the console with an
 **empty password**, and sshd rejects empty passwords, so SSH is closed until the
 guest has a key. There are no guest tools on the ISO, so this line is typed at
-the console, by hand or with `./scripts/stargazer-vm type '<line>'`:
+the console by hand:
 
 ```
 iso# sudo sh -c 'echo nameserver 1.1.1.1 > /etc/resolv.conf'; mkdir -p ~/.ssh && curl -fsSL https://github.com/andrey-moor.keys > ~/.ssh/authorized_keys && echo KEYS-OK
 ```
+
+By hand, not through `./scripts/stargazer-vm type`. The line contains single
+quotes, behemoth's shell re-parses the argument before the script ever sees it,
+and the guest gets nothing usable. Keep `type` for lines with no quotes in them.
 
 The resolv.conf half comes first because **Fusion's NAT DNS proxy does not
 resolve on behemoth**. The lease hands the guest the gateway as its only
@@ -406,6 +410,15 @@ behemoth$ ./scripts/stargazer-vm snapshot installed
 
 ## 6. Enrollment ceremony (owner, local console + YubiKey)
 
+Start from a snapshot, taken with the VM stopped. A failed Entra join is much
+cheaper to retry from one than to unpick by hand:
+
+```bash
+vm# sudo poweroff                                    # if it is still running
+behemoth$ ./scripts/stargazer-vm snapshot pre-enroll
+behemoth$ ./scripts/stargazer-vm up
+```
+
 **This must happen at the Fusion console, not over SSH.** The first factor is a
 FIDO security key (passwordless), and a `pam_himmelblau` FIDO prompt over SSH is
 a dead end. `enable_passwordless_security_key` needs a local console.
@@ -537,8 +550,10 @@ behemoth$ ./scripts/stargazer-vm secure-boot off
 behemoth$ ./scripts/stargazer-vm up          # boots again
 ```
 
-Or `./scripts/stargazer-vm restore pre-sb`. The LUKS **passphrase slot is never
-removed**, so the disk is always openable regardless of firmware state.
+Or `./scripts/stargazer-vm restore pre-sb`. Either way a later
+`secure-boot on` regenerates the firmware's variable store from scratch, so our
+certificate reaches `db` again. The LUKS **passphrase slot is never removed**,
+so the disk is always openable regardless of firmware state.
 
 ---
 
@@ -626,7 +641,8 @@ vm# nix-env --list-generations --profile /nix/var/nix/profiles/system
 behemoth$ ./scripts/stargazer-vm restore installed     # stops the VM first
 ```
 
-Snapshots this runbook creates, in order: `installed`, `enrolled`, `pre-sb`.
+Snapshots this runbook creates, in order: `installed`, `pre-enroll`,
+`enrolled`, `pre-sb`.
 
 **Suspend and resume.** `./scripts/stargazer-vm suspend` and
 `./scripts/stargazer-vm resume`. A resumed VM keeps LUKS unlocked and its
