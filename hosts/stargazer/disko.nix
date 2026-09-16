@@ -1,20 +1,16 @@
 # hosts/stargazer/disko.nix -- single-disk LUKS2 + btrfs layout
 #
-# /dev/sda, not /dev/vda: Parallels offers ide/scsi/sata/nvme disk interfaces
-# and no virtio disk, so the boot disk is SATA. Networking and the GPU are
-# virtio.
+# /dev/nvme0n1: VMware Fusion gives Arm guests an NVMe boot disk.
 #
 # The LUKS passphrase slot is the portable baseline and is never removed --
 # it is what the fire drill proves and what makes the image hypervisor-neutral.
 # `askPassword` is disko's default when neither passwordFile nor a keyFile is
 # given, which is the interactive prompt we want at install and at cold boot.
 
-{ lib, ... }:
-{
+_: {
   disko.devices.disk.main = {
     type = "disk";
-    # mkDefault: hosts/stargazer-fusion sets /dev/nvme0n1.
-    device = lib.mkDefault "/dev/sda";
+    device = "/dev/nvme0n1";
     content = {
       type = "gpt";
       partitions = {

@@ -1,56 +1,37 @@
-# Stargazer -- aarch64 NixOS VM on Parallels (nix-darwin's behemoth hosts it)
+# Stargazer -- aarch64 NixOS VM on VMware Fusion (nix-darwin's behemoth hosts it)
 #
-# Successor to the hand-installed Omarchy/Arch VM: declarative from the ISO up,
-# LUKS+btrfs via disko, integrated home-manager reusing the home/ bundles,
-# minimal Hyprland on virtio-gpu, Entra join + Intune enrollment via himmelblau.
-# Everything hypervisor-neutral is in ./common.nix; this file is the Parallels
-# layer (the Fusion trial is ../stargazer-fusion).
+# Declarative from the ISO up: LUKS+btrfs via disko, integrated home-manager
+# reusing the home/ bundles, Hyprland on vmwgfx, Entra join and Intune
+# enrollment via himmelblau. Everything that does not depend on the hypervisor
+# is in ./common.nix. This file is the Fusion layer. Install and ceremonies are
+# in ./README.md, and docs/vmware-fusion-workarounds.md says why each Fusion
+# piece exists.
 
 { ... }:
 
 {
   imports = [
     ./common.nix
-    ../../modules/nixos/parallels-guest.nix
+    ../../modules/nixos/vmware-guest.nix
   ];
 
   networking.hostName = "stargazer";
 
-  # Parallels Tools (userspace-only on aarch64): dynamic resolution,
-  # clipboard, shared folders. Opt-in; watch for Hyprland irritation.
-  modules.nixos.parallels.guestTools = true;
+  # scripts/stargazer-vm sets gui.fitGuestUsingNativeDisplayResolution, so
+  # Fusion gives the guest the Mac's full Retina pixel count. Scale 2 keeps
+  # text at its usual size and makes it sharp. The resize follower reuses this
+  # scale for every mode it applies.
+  modules.nixos.desktop.monitor = "Virtual-1,preferred,auto,2";
 
-  # P9 Task 6: lanzaboote-signed boot, chained behind a Microsoft-signed shim.
-  # Parallels' EDK II aa64 ignores a custom PK/KEK/db (enrolling ours halted the
-  # VM with Secure Boot on), so the only path to the tenant's SecureBootEnabled
-  # rule is shim -> our-key-signed systemd-boot -> our-key-signed UKIs, with the
-  # db cert enrolled as a MOK. Ceremony: hosts/stargazer/README.md §7.
-  modules.nixos.secureboot = {
-    enable = true;
-    shim.enable = true;
-  };
+  # Plain lanzaboote. The firmware trusts our db certificate once the VM
+  # definition appends it to VMware's default db (`scripts/stargazer-vm
+  # secure-boot on`, README §7). ./common.nix wires the signing key.
+  modules.nixos.secureboot.enable = true;
 
-  # Secure Boot signing key. One key pair for every stargazer instance, so the
-  # db certificate is known before a VM exists and `stargazer-vm enroll-mok`
-  # can run at creation time instead of after `sbctl create-keys` inside the
-  # guest. Private half here (age-encrypted); public half and sbctl's owner
-  # GUID are plain files in ./secureboot, placed by tmpfiles below. Only the
-  # db key exists: in shim mode nothing is ever enrolled into PK/KEK.
-  sops.secrets."sbctl-db-key" = {
-    sopsFile = ../../secrets/stargazer-sbctl.yaml;
-    key = "db.key";
-    path = "/var/lib/sbctl/keys/db/db.key";
-    mode = "0400";
-  };
-
-  systemd.tmpfiles.rules = [
-    "d /var/lib/sbctl 0700 root root -"
-    "d /var/lib/sbctl/keys 0700 root root -"
-    "d /var/lib/sbctl/keys/db 0700 root root -"
-    "L+ /var/lib/sbctl/keys/db/db.pem - - - - ${./secureboot/db.pem}"
-    "L+ /var/lib/sbctl/GUID - - - - ${./secureboot/GUID}"
-  ];
-
-  # Tailnet address (node joined 2026-09-02).
-  home-manager.users.andreym.modules.linux.wayvnc.address = "100.114.228.95";
+  # SSH on Fusion's NAT network (vmnet8, reachable only from behemoth), in
+  # addition to the tailnet. VMware's guest operations need a guest password,
+  # which does not exist here, so this is how behemoth reaches a fresh install
+  # before it joins the tailnet. Key-only as everywhere. The name follows the
+  # vmxnet3 PCI slot Fusion assigns, which the .vmx keeps.
+  networking.firewall.interfaces.enp2s0.allowedTCPPorts = [ 22 ];
 }

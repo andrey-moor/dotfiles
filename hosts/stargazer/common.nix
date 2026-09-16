@@ -1,17 +1,15 @@
 # hosts/stargazer/common.nix -- everything about stargazer that does not depend
 # on the hypervisor.
 #
-# Two hosts share this: ./default.nix (Parallels, the machine in use) and
-# ../stargazer-fusion (VMware Fusion, the 2026-09 re-platform trial). Each
-# adds its guest module, disk device, Secure Boot mode and hostname on top.
+# ./default.nix adds the hypervisor layer (VMware Fusion) on top: the guest
+# module, the Retina scale, the Secure Boot switch and SSH on the NAT link.
 #
 # Deliberately absent: Rosetta, nixGL, home/linux/intune.nix (the Arch-era
 # portal/broker stack, which stays for rocinante) and Ghostty as the terminal
-# (a per-host choice: needs OpenGL 4.3, which Parallels does not give Linux).
+# (a per-host choice, revisited by the P9b desktop spec).
 
 {
   config,
-  lib,
   pkgs,
   ...
 }:
@@ -27,8 +25,6 @@
     ../../modules/nixos/secureboot.nix
   ];
 
-  networking.hostName = lib.mkDefault "stargazer";
-
   # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
   # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
   # unconditional and works identically from `github:andrey-moor/dotfiles#…`.
@@ -36,14 +32,34 @@
 
   sops = {
     # First host done the §10 way: the recipient is derived from this machine's
-    # SSH host key (ssh-to-age), so no master key is ever copied in. The Fusion
-    # trial reuses the same pre-generated host key, as the fire drill does.
+    # SSH host key (ssh-to-age), so no master key is ever copied in. Every
+    # rebuild reuses that host key, parked in 1Password (README §3).
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
     # Per-secret `sopsFile` overrides this; modules/nixos/himmelblau.nix points
     # its three tenant secrets at secrets/stargazer-tenant.yaml.
     defaultSopsFile = ../../secrets/wayvnc.yaml;
     secrets."wayvnc-stargazer".owner = "andreym";
+
+    # Secure Boot signing key. One key pair for every stargazer instance, so
+    # the db certificate is known before a VM exists and the VM definition can
+    # carry it. The private half is age-encrypted here. The public half and
+    # sbctl's owner GUID are plain files in ./secureboot, placed by tmpfiles
+    # below. Only the db key exists: the firmware keeps VMware's PK and KEK.
+    secrets."sbctl-db-key" = {
+      sopsFile = ../../secrets/stargazer-sbctl.yaml;
+      key = "db.key";
+      path = "/var/lib/sbctl/keys/db/db.key";
+      mode = "0400";
+    };
   };
+
+  systemd.tmpfiles.rules = [
+    "d /var/lib/sbctl 0700 root root -"
+    "d /var/lib/sbctl/keys 0700 root root -"
+    "d /var/lib/sbctl/keys/db 0700 root root -"
+    "L+ /var/lib/sbctl/keys/db/db.pem - - - - ${./secureboot/db.pem}"
+    "L+ /var/lib/sbctl/GUID - - - - ${./secureboot/GUID}"
+  ];
 
   # FIDO2/WebAuthn in the browser (Firefox has CTAP built in) needs the user
   # to reach the security key's hidraw node; libfido2's udev rules tag them

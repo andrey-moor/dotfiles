@@ -1,10 +1,10 @@
 # modules/nixos/vmware-guest.nix -- VMware Fusion (Apple silicon) guest specifics
 #
-# Imports the hypervisor-agnostic vm-guest.nix and adds only what Fusion
-# needs. Written for the 2026-09 re-platform trial of stargazer; see
-# docs/parallels-workarounds.md for what each Parallels-only piece was.
+# Imports the hypervisor-agnostic vm-guest.nix and adds what Fusion needs.
+# stargazer's hypervisor layer since 2026-09. docs/vmware-fusion-workarounds.md
+# records why each piece exists.
 #
-# Differences from Parallels that matter here:
+# What matters on Fusion:
 #   - Graphics: vmwgfx (SVGA3D, OpenGL 4.3), not virtio-gpu. The DRM
 #     connector is still "Virtual-1". On window resize Fusion sends
 #     `Resolution_Set` to open-vm-tools, which updates the connector's
@@ -12,7 +12,7 @@
 #     2026-09-14). The virtio-gpu-resize follower from vm-guest.nix does that
 #     job here too, so it stays on (its default).
 #   - NIC: vmxnet3 (or e1000e), DHCP on a normal LAN/NAT lease; no MTU hack.
-#   - Disk: NVMe (see hosts/stargazer-fusion for the disko device).
+#   - Disk: NVMe (hosts/stargazer/disko.nix).
 #   - Tools: open-vm-tools (shared folders via vmhgfs-fuse, time sync,
 #     resolution, copy/paste). The copy/paste agent speaks X11, so it runs
 #     against XWayland (see `headless` below).

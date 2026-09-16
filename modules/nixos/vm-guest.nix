@@ -1,10 +1,10 @@
 # modules/nixos/vm-guest.nix -- hypervisor-agnostic virtio guest support
 #
-# Everything here holds for any virtio/virtio-gpu hypervisor (Parallels today,
-# UTM/QEMU later): the initrd modules that bring the real DRM driver up before
-# the compositor, the graphics stack, and the resize follower that keeps
-# Hyprland's mode in step with the host window. Hypervisor-specific plumbing
-# lives next door in parallels-guest.nix, which imports this file.
+# The initrd modules that bring the real DRM driver up before the compositor,
+# the graphics stack, and the resize follower that keeps Hyprland's mode in
+# step with the host window. modules/nixos/vmware-guest.nix imports this file
+# and adds the Fusion plumbing. The option defaults are the tuning Parallels
+# needed. Fusion overrides them.
 
 {
   lib,

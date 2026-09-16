@@ -108,7 +108,7 @@ Frequently-edited configs live in `config/{nvim,nushell,alacritty}` and are depl
 
 - **behemoth**: macOS workstation (aarch64-darwin)
 - **rocinante**: x86_64 Arch Linux (Omarchy) workstation, accessed via Tailscale
-- **stargazer**: aarch64 NixOS VM on Parallels (behemoth), LUKS root, Intune-enrolled
+- **stargazer**: aarch64 NixOS VM on VMware Fusion (behemoth), LUKS root, Intune-enrolled
 
 ### Behemoth (macOS)
 
@@ -133,11 +133,11 @@ nix run home-manager -- switch --flake .#rocinante -b backup
 - Native x86_64 — no Rosetta needed
 - See `hosts/rocinante/README.md` for full setup instructions
 
-### Stargazer (NixOS VM on Parallels)
+### Stargazer (NixOS VM on VMware Fusion)
 
-Fallback devbox: aarch64 NixOS VM on Parallels, declared as `nixosConfigurations.stargazer`
+Fallback devbox: aarch64 NixOS VM on VMware Fusion, declared as `nixosConfigurations.stargazer`
 (`hosts/stargazer/` + `modules/nixos/`). disko LUKS2 + btrfs, integrated home-manager,
-minimal Hyprland on virtio-gpu, Entra join + Intune enrollment via himmelblau.
+Hyprland on vmwgfx with a vendored patch, Entra join + Intune enrollment via himmelblau.
 
 **Install:** `hosts/stargazer/README.md` is the runbook — VM creation through enrollment,
 Secure Boot and the fire drill. It is the only install doc.

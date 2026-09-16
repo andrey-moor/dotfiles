@@ -1,7 +1,7 @@
 # hosts/stargazer/hardware.nix -- generic aarch64 EFI virtual machine
 #
 # There is no hardware-configuration.nix here on purpose: the machine is a
-# Parallels VM whose devices are fully described by modules/nixos/parallels-guest.nix,
+# VMware Fusion VM whose devices are described by modules/nixos/vmware-guest.nix,
 # and every filesystem comes from hosts/stargazer/disko.nix.
 
 { lib, ... }:
