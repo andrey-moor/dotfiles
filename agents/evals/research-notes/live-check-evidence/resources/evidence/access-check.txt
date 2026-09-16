@@ -1,0 +1,11 @@
+# command: reportctl access check --cluster reporting-prod --all-databases
+# host: build-agent-07
+# time: 2026-09-15T08:12:44Z
+# exit: 3
+database        permission   result
+sales_daily     read         allowed
+sales_daily     write        denied (403)
+finance_ledger  read         denied (403)
+finance_ledger  write        denied (403)
+audit_events    read         allowed
+summary: 2 of 5 checks allowed

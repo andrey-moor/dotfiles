@@ -1,0 +1,5 @@
+{
+  "name": "doc-skills",
+  "version": "0.1.0",
+  "description": "Test harness manifest for the document and learning skills: word-docs, plain-prose, doc-diagrams, learn, research-notes. Used only by claude plugin eval."
+}

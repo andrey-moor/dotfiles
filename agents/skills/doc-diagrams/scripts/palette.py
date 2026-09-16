@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 HOME = Path.home()
+SKILL_PROFILES = Path(__file__).resolve().parent.parent / "profiles"
 CLAUDE_CACHE = HOME / ".claude/plugins/cache/diagram-design/diagram-design"
 COPILOT_PLUGIN = HOME / ".copilot/installed-plugins/_direct/cathrynlavery--diagram-design"
 PROFILES = HOME / ".diagram-design/profiles"
@@ -101,13 +102,19 @@ def shipped_roles() -> dict[str, str]:
     return light_roles(plugin_root() / "skills/diagram-design/references/style-guide.md")
 
 
+def profile_path(name: str) -> Path:
+    """The saved profile in ~/.diagram-design/profiles, else the copy that ships with this skill."""
+    for folder in (PROFILES, SKILL_PROFILES):
+        path = folder / f"{name}.md"
+        if path.is_file():
+            return path
+    raise SystemExit(f"profile {name} not found in {PROFILES} or {SKILL_PROFILES}")
+
+
 def profile_roles(name: str) -> dict[str, str]:
     if name == "default":
         return shipped_roles()
-    path = PROFILES / f"{name}.md"
-    if not path.is_file():
-        raise SystemExit(f"profile not found: {path}")
-    return light_roles(path)
+    return light_roles(profile_path(name))
 
 
 def color_maps(name: str) -> tuple[dict, dict, dict, frozenset]:

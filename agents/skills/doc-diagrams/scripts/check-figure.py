@@ -6,8 +6,9 @@ Usage: check-figure.py figure.html... [--profile NAME]
 Runs the plugin's self_check.py; verify-geometry.py with label masks up to 20px tall, because the
 presentation type ramp draws 16px masks that the plugin's 14px limit would skip; verify-motion.py for
 step-mode figures; and lint-skin.py, with each color finding judged against the profile instead of
-the shipped palette. It also fails when a shipped color that the profile changes is still in the file.
-Exit 1 on any finding.
+the shipped palette. It also fails when a shipped color that the profile changes is still in the file,
+and when a label mask inside a tinted zone is not filled with the color under it, which shows as a
+pale patch on white paper. Exit 1 on any finding.
 """
 from __future__ import annotations
 
@@ -19,9 +20,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from palette import COLOR, applied_profile, color_maps, plugin_root, profile_colors, profile_name, recolor, rgb  # noqa: E402
+from palette import COLOR, applied_profile, color_maps, normalize, plugin_root, profile_colors, profile_name, profile_roles, recolor, rgb  # noqa: E402
 
 PRESENTATION_MASK_MAX_H = 20.0
+MASK_MIN_W, MASK_MAX_W, MASK_MIN_H = 20.0, 200.0, 8.0  # the plugin's label-mask size bounds
+RECT = re.compile(r"<rect\b([^>]*?)/?>", re.S)
+ATTRIBUTE = re.compile(r"([\w:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
+ROUNDING = 1  # per channel, for colors written as rounded hex
 # Every "path:line: ..." line is a finding; none may be dropped for failing to parse its category.
 LINT_LINE = re.compile(r"^(?P<where>.+?:\d+): (?P<rest>.+)$")
 
@@ -61,6 +66,61 @@ def skin(plugin: Path, figure: Path, hexes: set, triples: set) -> tuple[list[str
     return findings, accepted
 
 
+def blend(base: tuple[float, float, float], fill: str) -> tuple[float, float, float] | None:
+    """The color of `fill` painted over `base`; None when the fill is not a color."""
+    value = normalize(fill)
+    if value is None:
+        return None
+    triple = rgb(value)
+    alpha = 1.0
+    if value.startswith("rgba("):
+        alpha = float(value[:-1].split(",")[3])
+    return tuple(b + (c - b) * alpha for b, c in zip(base, triple))
+
+
+def mask_findings(text: str, paper: str) -> list[str]:
+    """Label masks drawn over tinted rects must end up the color under them, or they show as patches.
+
+    A mask may be layered: a paper rect plus rects of the same size with the tints under it, the way the
+    plugin draws nodes. The layers are blended in paint order, so every color stays in the palette.
+    """
+    rects = []
+    for match in RECT.finditer(text):
+        attributes = {key: double or single for key, double, single in ATTRIBUTE.findall(match.group(1))}
+        try:
+            box = tuple(float(attributes[key]) for key in ("x", "y", "width", "height"))
+        except (KeyError, ValueError):
+            continue  # full-bleed paper rects use percentages and cover everything
+        rects.append((box, attributes.get("fill", ""), text.count("\n", 0, match.start()) + 1))
+    paper_rgb = rgb(normalize(paper))
+    findings = []
+    for index, (box, fill, line) in enumerate(rects):
+        x, y, w, h = box
+        opaque = normalize(fill) is not None and not normalize(fill).startswith("rgba(")
+        is_mask = MASK_MIN_W <= w <= MASK_MAX_W and MASK_MIN_H <= h <= PRESENTATION_MASK_MAX_H
+        if not (is_mask and opaque) or any(other == box for other, _, _ in rects[:index]):
+            continue
+        under, tints = paper_rgb, []
+        for (ox, oy, ow, oh), ofill, _ in rects[:index]:
+            if ox <= x and oy <= y and x + w <= ox + ow and y + h <= oy + oh:
+                blended = blend(under, ofill)
+                if blended is not None:
+                    under = blended
+                    if normalize(ofill).startswith("rgba("):
+                        tints.append(ofill)
+                    else:
+                        tints = []
+        shown = paper_rgb
+        for other, ofill, _ in rects[index:]:
+            if other == box:
+                shown = blend(shown, ofill) or shown
+        if any(abs(round(s) - round(u)) > ROUNDING for s, u in zip(shown, under)):
+            layers = " then ".join(f'fill="{tint}"' for tint in tints) or f'fill="{"#%02x%02x%02x" % tuple(round(c) for c in under)}"'
+            findings.append(f"line {line}: label mask differs from the tinted area under it and shows as a patch; "
+                            f"paint same-size rects over the mask with {layers}, or remove the mask if no line crosses the label")
+    return findings
+
+
 def check(plugin: Path, figure: Path, explicit_profile: str | None) -> list[str]:
     findings: list[str] = []
     name = profile_name(figure, explicit_profile)
@@ -83,6 +143,7 @@ def check(plugin: Path, figure: Path, explicit_profile: str | None) -> list[str]
     previous = applied_profile(text)
     if previous and previous != name:
         findings.append(f"palette: the file was recolored for profile {previous}, not {name}")
+    findings.extend(f"mask: {line}" for line in mask_findings(text, profile_roles(name)["paper"]))
     _, leftover = recolor(text, maps, skip=maps[3])
     if leftover:
         findings.append(f"palette: shipped colors still present ({', '.join(sorted(leftover))}); run apply-profile.py")

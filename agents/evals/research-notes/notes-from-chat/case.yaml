@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: notes-from-chat
+context:
+  scaffold_script: setup-workspace.sh

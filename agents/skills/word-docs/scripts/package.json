@@ -5,6 +5,7 @@
   "description": "Markdown to .docx builder using Word's current default styles",
   "dependencies": {
     "docx": "^9.5.1",
+    "jszip": "^3.10.1",
     "marked": "^18.0.0",
     "yaml": "^2.8.0"
   }

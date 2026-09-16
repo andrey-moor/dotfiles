@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: scope-named-source
+context:
+  scaffold_script: setup-workspace.sh

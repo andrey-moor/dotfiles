@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<!-- apply-profile: word-office -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How an export request moves through the platform</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Geist', system-ui, sans-serif; background: #ffffff; color: #0e2841; padding: 2rem; }
+    .frame { max-width: 1200px; width: 100%; margin: 0 auto; }
+    .eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.66rem; letter-spacing: 0.18em; text-transform: uppercase; color: #44546a; margin-bottom: 0.5rem; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: 2rem; font-weight: 400; margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 900px; display: block; }
+  </style>
+</head>
+<body>
+  <!--
+    doc-inline starter for Word documents. Copy it, rename every "doc-inline-" ID to the file's slug,
+    and replace the content. Sizes already match the doc-inline ramp:
+      canvas 960 wide, 40px margins, 4px grid, height = content + 40, a multiple of 4
+      node boxes 64 tall; node names 16px; sublabels, arrow labels, zone labels, legend 12px
+      label masks 16 tall, 6-10px from their connector; zone label mask at least 16px above the first node
+      a label mask inside a tinted zone is two same-size rects: paper, then the zone's tint
+  -->
+  <div class="frame">
+    <p class="eyebrow">Architecture</p>
+    <h1>How an export request moves through the platform</h1>
+    <svg viewBox="0 0 960 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="doc-inline-title doc-inline-desc">
+      <title id="doc-inline-title">How an export request moves through the platform</title>
+      <desc id="doc-inline-desc">A client app calls the API gateway, which hands a job to the export service. The export service queues the job, and the queue puts the file in object storage.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#44546a"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#e97132"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#156082"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#ffffff"/>
+
+      <!-- Zone: drawn first. A label mask inside the tinted zone is a paper rect plus a rect with the zone's tint. -->
+      <rect x="240" y="40" width="480" height="288" rx="8" fill="rgba(14,40,65,0.02)" stroke="rgba(14,40,65,0.10)" stroke-width="0.8"/>
+      <rect x="256" y="48" width="96" height="16" rx="2" fill="#ffffff"/>
+      <rect x="256" y="48" width="96" height="16" rx="2" fill="rgba(14,40,65,0.02)"/>
+      <text x="304" y="60" fill="#7f8a9c" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PLATFORM</text>
+
+      <!-- Arrows: drawn before nodes -->
+      <line x1="160" y1="128" x2="280" y2="128" stroke="#44546a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="440" y1="128" x2="520" y2="128" stroke="#44546a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="600" y1="160" x2="600" y2="224" stroke="#44546a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="680" y1="256" x2="760" y2="256" stroke="#44546a" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- Arrow labels: masks 16 tall, 6px above a horizontal arrow or 8px beside a vertical one -->
+      <rect x="176" y="106" width="48" height="16" rx="2" fill="#ffffff"/>
+      <text x="200" y="118" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">HTTPS</text>
+      <rect x="464" y="106" width="32" height="16" rx="2" fill="#ffffff"/>
+      <rect x="464" y="106" width="32" height="16" rx="2" fill="rgba(14,40,65,0.02)"/>
+      <text x="480" y="118" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">JOB</text>
+      <rect x="608" y="184" width="64" height="16" rx="2" fill="#ffffff"/>
+      <rect x="608" y="184" width="64" height="16" rx="2" fill="rgba(14,40,65,0.02)"/>
+      <text x="640" y="196" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ENQUEUE</text>
+      <rect x="724" y="234" width="32" height="16" rx="2" fill="#ffffff"/>
+      <text x="740" y="246" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PUT</text>
+
+      <!-- Node: Client app (external) -->
+      <rect x="40" y="96" width="120" height="64" rx="6" fill="#ffffff" stroke="#7f8a9c" stroke-width="1"/>
+      <text x="100" y="125" fill="#0e2841" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Client app</text>
+      <text x="100" y="145" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">browser</text>
+
+      <!-- Node: API gateway -->
+      <rect x="280" y="96" width="160" height="64" rx="6" fill="#ffffff"/>
+      <rect x="280" y="96" width="160" height="64" rx="6" fill="rgba(14,40,65,0.03)" stroke="rgba(14,40,65,0.30)" stroke-width="1"/>
+      <text x="360" y="125" fill="#0e2841" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">API gateway</text>
+      <text x="360" y="145" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">auth, routing</text>
+
+      <!-- Node: Export service (focal, the one accent) -->
+      <rect x="520" y="96" width="160" height="64" rx="6" fill="#ffffff"/>
+      <rect x="520" y="96" width="160" height="64" rx="6" fill="rgba(233,113,50,0.08)" stroke="#e97132" stroke-width="1"/>
+      <text x="600" y="125" fill="#0e2841" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Export service</text>
+      <text x="600" y="145" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">builds the file</text>
+
+      <!-- Node: Job queue -->
+      <rect x="520" y="224" width="160" height="64" rx="6" fill="#ffffff"/>
+      <rect x="520" y="224" width="160" height="64" rx="6" fill="rgba(14,40,65,0.03)" stroke="rgba(14,40,65,0.30)" stroke-width="1"/>
+      <text x="600" y="253" fill="#0e2841" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Job queue</text>
+      <text x="600" y="273" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">retries 3 times</text>
+
+      <!-- Node: Object storage (external) -->
+      <rect x="760" y="224" width="160" height="64" rx="6" fill="#ffffff" stroke="#7f8a9c" stroke-width="1"/>
+      <text x="840" y="253" fill="#0e2841" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Object storage</text>
+      <text x="840" y="273" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">export files</text>
+
+      <!-- Legend strip: at most five items per row; start a second row 24px lower for more -->
+      <line x1="40" y1="368" x2="920" y2="368" stroke="rgba(14,40,65,0.10)" stroke-width="0.8"/>
+      <text x="40" y="392" fill="#44546a" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <rect x="40" y="408" width="16" height="12" rx="2" fill="rgba(233,113,50,0.08)" stroke="#e97132" stroke-width="1"/>
+      <text x="64" y="418" fill="#44546a" font-size="12" font-family="'Geist', sans-serif">Focal service</text>
+      <rect x="184" y="408" width="16" height="12" rx="2" fill="rgba(14,40,65,0.03)" stroke="rgba(14,40,65,0.30)" stroke-width="1"/>
+      <text x="208" y="418" fill="#44546a" font-size="12" font-family="'Geist', sans-serif">Service</text>
+      <rect x="296" y="408" width="16" height="12" rx="2" fill="#ffffff" stroke="#7f8a9c" stroke-width="1"/>
+      <text x="320" y="418" fill="#44546a" font-size="12" font-family="'Geist', sans-serif">External system</text>
+      <line x1="456" y1="414" x2="484" y2="414" stroke="#44546a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="492" y="418" fill="#44546a" font-size="12" font-family="'Geist', sans-serif">Request or data</text>
+    </svg>
+  </div>
+</body>
+</html>

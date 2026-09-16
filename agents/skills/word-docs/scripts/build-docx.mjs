@@ -18,7 +18,7 @@ import {
 import { splitFrontMatter, resolveMeta } from "./lib/front-matter.mjs";
 import { blockElements, baseDirOf } from "./lib/blocks.mjs";
 import { characterStyles, defaultStyles, paragraphStyles, COLOR } from "./lib/word-styles.mjs";
-import { footers, headers, sectionProperties, textWidthDxa } from "./lib/page.mjs";
+import { footers, headers, sectionProperties, textHeightDxa, textWidthDxa } from "./lib/page.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_IMAGE_SCALE = 3; // diagrams are rendered at 3x for print
@@ -99,6 +99,7 @@ async function main() {
   const ctx = {
     baseDir: baseDirOf(args.input),
     textWidthDxa: textWidthDxa(meta.page),
+    textHeightDxa: textHeightDxa(meta.page),
     imageScale: args.imageScale,
     counters: { figure: 0, list: 0 },
   };

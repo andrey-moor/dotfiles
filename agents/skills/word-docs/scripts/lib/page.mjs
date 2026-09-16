@@ -20,6 +20,10 @@ export function textWidthDxa(page) {
   return PAGE_SIZES[page].width - 2 * MARGIN;
 }
 
+export function textHeightDxa(page) {
+  return PAGE_SIZES[page].height - 2 * MARGIN;
+}
+
 export function sectionProperties(meta) {
   return {
     titlePage: true,

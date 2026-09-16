@@ -63,6 +63,8 @@ export const defaultStyles = {
   },
 };
 
+// Each custom style names its font. LibreOffice has its own Subtitle, Quote and Caption styles, and a
+// style that only inherits the font renders in LibreOffice's font instead of Aptos.
 export const paragraphStyles = [
   {
     id: "Subtitle",
@@ -70,7 +72,7 @@ export const paragraphStyles = [
     basedOn: "Normal",
     next: "Normal",
     quickFormat: true,
-    run: { size: 28, color: COLOR.muted, characterSpacing: 15 },
+    run: { font: FONT_BODY, size: 28, color: COLOR.muted, characterSpacing: 15 },
     paragraph: { spacing: { after: 160 } },
   },
   {
@@ -79,7 +81,7 @@ export const paragraphStyles = [
     basedOn: "Normal",
     next: "Normal",
     quickFormat: true,
-    run: { italics: true, color: COLOR.quote },
+    run: { font: FONT_BODY, italics: true, color: COLOR.quote },
     paragraph: { spacing: { before: 160 }, indent: { left: 720, right: 720 } },
   },
   {
@@ -87,7 +89,7 @@ export const paragraphStyles = [
     name: "Caption",
     basedOn: "Normal",
     next: "Normal",
-    run: { size: 18, italics: true, color: COLOR.text2 },
+    run: { font: FONT_BODY, size: 18, italics: true, color: COLOR.text2 },
     paragraph: { spacing: { after: 200 } },
   },
   {
@@ -95,6 +97,7 @@ export const paragraphStyles = [
     name: "TOC Heading",
     basedOn: "Heading1",
     next: "Normal",
+    run: { font: FONT_HEADING },
     paragraph: { outlineLevel: 9 },
   },
   {
@@ -113,14 +116,14 @@ export const paragraphStyles = [
     id: "TableSpacer",
     name: "Table Spacer",
     basedOn: "Normal",
-    run: { size: 8 },
+    run: { font: FONT_BODY, size: 8 },
     paragraph: { spacing: { before: 0, after: 80, line: 240, lineRule: LineRuleType.AUTO } },
   },
   {
     id: "HeaderText",
     name: "Header Text",
     basedOn: "Normal",
-    run: { size: 18, color: COLOR.muted },
+    run: { font: FONT_BODY, size: 18, color: COLOR.muted },
     paragraph: { spacing: { after: 0, line: 240, lineRule: LineRuleType.AUTO } },
   },
 ];
@@ -130,6 +133,6 @@ export const characterStyles = [
     id: "CodeChar",
     name: "Code Char",
     basedOn: "DefaultParagraphFont",
-    run: { font: FONT_MONO, size: 20, shading: { type: "clear", fill: COLOR.codeBackground } },
+    run: { font: FONT_MONO, size: 22, shading: { type: "clear", fill: COLOR.codeBackground } },
   },
 ];

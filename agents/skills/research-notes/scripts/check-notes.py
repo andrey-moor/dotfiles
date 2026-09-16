@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """Check research notes: every claim bullet is tagged and cited; every note lists open questions.
 
-Usage: check-notes.py <notes-dir-or-file>... [--sources DIR]...
+Usage: check-notes.py <notes-dir-or-file>... [--sources DIR]... [--deliverable FILE]... [--skip-section NAME]...
 
-With --sources, each file:line citation that resolves to a file under DIR is opened, and every
-multi-digit number in the claim must appear within two lines of the cited line. A missing number
-fails a [verified] or [doc] claim. For an [inferred] claim it is reported as a note, because an
-inference may compute a new number; check that the arithmetic is general, not a worked example's.
-The check proves a number is absent from the cited passage. It cannot prove that a number which is
-present belongs to the noun the claim attaches it to.
+With --sources, each file:line or file:start-end citation that resolves to a file under DIR is
+opened, and every multi-digit number in the claim, outside code spans, must appear in the cited
+lines or within two lines of them. A missing number fails a [verified], [doc] or [web] claim. For an
+[inferred] claim it is reported as a note, because an inference may compute a new number; check that
+the arithmetic is general, not a worked example's. The check proves a number is absent from the
+cited passage. It cannot prove that a number which is present belongs to the noun the claim
+attaches it to.
+
+A claim that cites a file under an evidence/ folder describes state observed at one time, so it must
+carry the date it was observed (YYYY-MM-DD).
+
+With --deliverable, the document written from the notes is checked too: every multi-digit number
+and every code span in it must appear somewhere in the notes. Front matter, fenced code, HTML
+comments, link targets and list markers are skipped, and so is each --skip-section heading's section,
+such as a lesson's "Worked example", whose values are illustrative.
 
 Terms entries (- **Term**: definition. (citation)) need a citation like any claim. An Open questions
 entry that starts with "Conflict:" must cite both sides, so it needs at least two citations.
@@ -24,13 +33,13 @@ from pathlib import Path
 
 TAGS = {"verified", "doc", "web", "inferred", "thin"}
 CLAIM_SECTIONS = {"in general", "in this system", "claims"}
-STRICT_NUMBER_TAGS = {"verified", "doc"}
+STRICT_NUMBER_TAGS = {"verified", "doc", "web"}
 BULLET = re.compile(r"^\s*(?:[-*]|\d+\.)\s+(.*)$")
 TAG = re.compile(r"^\[([a-z]+)\]\s+(.*)$")
 # The citation is the last parenthetical on the line; trailing punctuation is allowed.
 LAST_PAREN = re.compile(r"\(((?:[^()]|\([^()]*\))*)\)[.;,\s]*$")
 FILE_LINE = re.compile(r"[\w./-]+\.[A-Za-z0-9]{1,6}:\d+")
-CITED_FILE_LINE = re.compile(r"([\w./-]+\.[A-Za-z0-9]{1,6}):(\d+)")
+CITED_FILE_LINE = re.compile(r"([\w./-]+\.[A-Za-z0-9]{1,6}):(\d+)(?:-(\d+))?")
 URL = re.compile(r"https?://\S+")
 # A claim's number may carry a unit (80GB, 900ms, 2.3x, 128K) but not a letter prefix (p99, h100).
 # Commas are thousands separators only before exactly three digits, so (16,32,64) is three numbers.
@@ -39,6 +48,9 @@ NUMBER = re.compile(rf"(?<![\w.])({NUMBER_BODY})(?=[A-Za-z%]{{0,4}}(?!\w))")
 # Sources glue numbers to units and prefixes (x2.0, p99, h100, 50ms), so source text is scanned loosely.
 SOURCE_NUMBER = re.compile(NUMBER_BODY)
 FENCE = re.compile(r"^\s*(```|~~~)")
+CODE_SPAN = re.compile(r"(`+)(.+?)\1")
+EVIDENCE_PATH = re.compile(r"(^|/)evidence/")
+DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
 BINARY_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".zip", ".gz", ".docx", ".xlsx", ".pptx"}
 CONTEXT_LINES = 2
 TERM = re.compile(r"^\*\*[^*]+\*\*\s*:\s*\S")
@@ -98,27 +110,37 @@ class SourceIndex:
         return self.cache[path]
 
 
-def file_citations(text: str) -> list[tuple[str, str]]:
-    """file:line citations, ignoring host:port inside URLs."""
-    return CITED_FILE_LINE.findall(URL.sub(" ", text))
+def file_citations(text: str) -> list[tuple[str, int, int | None]]:
+    """file:line and file:start-end citations, ignoring host:port inside URLs."""
+    return [(name, int(start), int(end) if end else None) for name, start, end in CITED_FILE_LINE.findall(URL.sub(" ", text))]
+
+
+def without_code_spans(text: str) -> str:
+    """Model names and identifiers in backticks (gpt-5.6-luna, v2) carry digits that are not claims."""
+    return CODE_SPAN.sub(" ", text)
 
 
 def check_numbers(where: str, tag: str, body: str, citation: str, index: SourceIndex, stats: dict) -> tuple[list[str], list[str]]:
-    wanted = numbers_in(body)
+    wanted = numbers_in(without_code_spans(body))
     hard: list[str] = []
     window_numbers: set[str] = set()
     resolved = False
-    for cited, line in file_citations(citation):
+    for cited, first, last in file_citations(citation):
+        last = first if last is None else last
+        label = f"{cited}:{first}" if first == last else f"{cited}:{first}-{last}"
+        if last < first:
+            hard.append(f"{where}: cites {label}, a line range that ends before it starts")
+            continue
         lines = index.lines(cited)
         if lines is None:
             stats["unresolved"] += 1
             continue
-        if not 1 <= int(line) <= len(lines):
-            hard.append(f"{where}: cites {cited}:{line}, but that file has {len(lines)} lines")
+        if not (1 <= first and last <= len(lines)):
+            hard.append(f"{where}: cites {label}, but that file has {len(lines)} lines")
             continue
         resolved = True
-        start = max(0, int(line) - 1 - CONTEXT_LINES)
-        window_numbers |= numbers_in(" ".join(lines[start:int(line) + CONTEXT_LINES]), SOURCE_NUMBER)
+        start = max(0, first - 1 - CONTEXT_LINES)
+        window_numbers |= numbers_in(" ".join(lines[start:last + CONTEXT_LINES]), SOURCE_NUMBER)
     if not resolved or not wanted:
         return hard, []
     stats["checked"] += 1
@@ -191,6 +213,8 @@ def check_file(path: Path, index: SourceIndex | None, stats: dict) -> tuple[list
             findings.append(f"{where}: [{name}] citation must be a file:line or URL"
                             f"{' after from' if name == 'inferred' else ''}: ({paren.group(1)[:60]})")
             continue
+        if any(EVIDENCE_PATH.search(cited) for cited, _, _ in file_citations(paren.group(1))) and not DATE.search(text):
+            findings.append(f"{where}: a claim that cites evidence/ needs the date the state was observed (YYYY-MM-DD): {text[:70]}")
         if index is not None and name in STRICT_NUMBER_TAGS | {"inferred", "thin"}:
             body = tag.group(2)[: paren.start()]
             hard, soft = check_numbers(where, name, body, paren.group(1), index, stats)
@@ -201,11 +225,91 @@ def check_file(path: Path, index: SourceIndex | None, stats: dict) -> tuple[list
     return findings, notes
 
 
+FRONT_MATTER = re.compile(r"\A---\r?\n.*?\r?\n---\r?\n", re.S)
+LIST_MARKER = re.compile(r"^\s*(?:\d+[.)]|[-*+])\s+")
+LINK_TARGET = re.compile(r"\]\([^)]*\)")
+HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+
+
+def notes_corpus(files: list[Path]) -> tuple[str, set[str]]:
+    """All note text with each bullet's closing citation removed, and the numbers in it."""
+    kept = []
+    for path in files:
+        for line in path.read_text(encoding="utf-8").split("\n"):
+            paren = LAST_PAREN.search(line) if BULLET.match(line) else None
+            kept.append(line[: paren.start()] if paren else line)
+    text = "\n".join(kept)
+    # Digits inside code spans (llama-13b) are names, not numbers, so they cannot vouch for a number.
+    return text, numbers_in(without_code_spans(text), SOURCE_NUMBER)
+
+
+def outside_comments(line: str, in_comment: bool) -> tuple[str, bool]:
+    """The part of a line outside HTML comments, and whether a comment is still open at its end."""
+    kept, position = [], 0
+    while position <= len(line):
+        if in_comment:
+            end = line.find("-->", position)
+            if end == -1:
+                return " ".join(kept), True
+            position, in_comment = end + 3, False
+        else:
+            start = line.find("<!--", position)
+            if start == -1:
+                kept.append(line[position:])
+                break
+            kept.append(line[position:start])
+            position, in_comment = start + 4, True
+    return " ".join(kept), in_comment
+
+
+def deliverable_lines(text: str, skip_sections: set[str]):
+    """(line number, text) for the prose a reader sees, minus skipped parts."""
+    offset = 0
+    front = FRONT_MATTER.match(text)
+    if front:
+        offset = front.group(0).count("\n")
+        text = text[front.end():]
+    in_fence = in_comment = False
+    skip_level = 0
+    for number, line in enumerate(text.split("\n"), start=1 + offset):
+        if FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        line, in_comment = outside_comments(line, in_comment)
+        heading = HEADING.match(line)
+        if heading:
+            level = len(heading.group(1))
+            if skip_level and level <= skip_level:
+                skip_level = 0
+            if heading.group(2).strip().lower() in skip_sections:
+                skip_level = level
+        if skip_level:
+            continue
+        yield number, LINK_TARGET.sub("]", URL.sub(" ", LIST_MARKER.sub("", line)))
+
+
+def check_deliverable(path: Path, corpus: str, corpus_numbers: set[str], skip_sections: set[str]) -> list[str]:
+    findings = []
+    for number, line in deliverable_lines(path.read_text(encoding="utf-8"), skip_sections):
+        for _, name in CODE_SPAN.findall(line):
+            if name.strip() and not re.search(rf"(?<![\w-]){re.escape(name.strip())}(?![\w-])", corpus):
+                findings.append(f"{path}:{number}: code span `{name.strip()}` appears in no note")
+        for value in sorted(numbers_in(without_code_spans(line)) - corpus_numbers):
+            findings.append(f"{path}:{number}: number {value} appears in no note")
+    return findings
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("paths", nargs="+", help="note files or folders of notes")
     parser.add_argument("--sources", action="append", default=[], metavar="DIR",
                         help="folder holding the cited files; repeatable")
+    parser.add_argument("--deliverable", action="append", default=[], metavar="FILE",
+                        help="document written from the notes; its numbers and code spans must appear in them")
+    parser.add_argument("--skip-section", action="append", default=[], metavar="NAME",
+                        help="heading whose section --deliverable leaves out, such as 'Worked example'")
     args = parser.parse_args()
 
     files: list[Path] = []
@@ -235,6 +339,16 @@ def main() -> int:
         hard, soft = check_file(path, index, stats)
         findings.extend(hard)
         notes.extend(soft)
+    deliverables = [Path(d) for d in args.deliverable]
+    for deliverable in deliverables:
+        if not deliverable.is_file():
+            print(f"check-notes: --deliverable not found: {deliverable}", file=sys.stderr)
+            return 2
+    if deliverables:
+        corpus, corpus_numbers = notes_corpus(files)
+        skip = {name.strip().lower() for name in args.skip_section}
+        for deliverable in deliverables:
+            findings.extend(check_deliverable(deliverable, corpus, corpus_numbers, skip))
     for finding in findings:
         print(finding)
     for note in notes:
