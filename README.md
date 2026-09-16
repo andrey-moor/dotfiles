@@ -135,7 +135,7 @@ Neovim/nushell/alacritty configs are symlinked from `config/` by the home-manage
 ├── hosts/
 │   ├── behemoth/          # macOS host (nix-darwin)
 │   ├── rocinante/         # x86_64 Linux host (standalone home-manager)
-│   └── stargazer/         # aarch64 NixOS VM on Parallels (+ install runbook)
+│   └── stargazer/         # aarch64 NixOS VM on VMware Fusion (+ install runbook)
 ├── home/                  # home-manager modules
 │   ├── default.nix        # HM base, loaded on every host
 │   ├── core.nix           # Bundle: profile + shell tools every host gets
@@ -263,6 +263,6 @@ ignores `spikes/`.
 
 ## Disko (Disk Formatting)
 
-Used by stargazer only: `hosts/stargazer/disko.nix` (LUKS2 + btrfs on `/dev/sda`), applied
+Used by stargazer only: `hosts/stargazer/disko.nix` (LUKS2 + btrfs on `/dev/nvme0n1`), applied
 from the installer ISO — see `hosts/stargazer/README.md`. rocinante gets its own layout in
 P7. There is no `just disko-format` recipe.

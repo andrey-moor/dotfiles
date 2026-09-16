@@ -68,8 +68,9 @@ in
   };
 
   config = {
-    # Root device is SATA (Parallels offers ide/scsi/sata/nvme, no virtio disk);
-    # networking and the GPU are virtio.
+    # The root disk is NVMe, which NixOS's default initrd modules already
+    # cover. These add the SATA CD-ROM an install boots from, USB input for the
+    # LUKS prompt, and virtio for a hypervisor that offers virtio devices.
     boot.initrd.availableKernelModules = [
       "ahci"
       "sd_mod"

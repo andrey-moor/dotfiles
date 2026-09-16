@@ -1,5 +1,9 @@
 # Parallels workarounds — lineage for the stargazer VM
 
+> **Retired 2026-09.** stargazer moved to VMware Fusion (`docs/vmware-fusion-workarounds.md`).
+> The Parallels code this record points at was removed in the P9c migration. Find it with
+> `git log --diff-filter=D --oneline -- modules/nixos/parallels-guest.nix`.
+
 Every place where stargazer's NixOS configuration, scripts or runbook bends to
 Parallels Desktop (27.0.0 on Apple silicon, aa64 EDK II firmware), with the
 evidence that forced it and what happens to it on another hypervisor. Kept so a

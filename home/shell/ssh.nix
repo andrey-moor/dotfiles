@@ -120,7 +120,7 @@ with lib;
           ForwardAgent = "yes";
         };
 
-        # Stargazer - Linux VM (Parallels)
+        # Stargazer - Linux VM (VMware Fusion)
         "stargazer" = {
           User = "andreym";
           ForwardAgent = "yes";
