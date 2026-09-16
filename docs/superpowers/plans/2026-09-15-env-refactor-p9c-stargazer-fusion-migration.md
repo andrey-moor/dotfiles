@@ -16,16 +16,16 @@
 |---|---|---|
 | D1 | stargazer runs on VMware Fusion. The trial passed Entra join, Intune compliance, Secure Boot, Firefox SSO, YubiKey WebAuthn, clipboard, resize with Retina, shared folders and audio. | Owner, 2026-09-14: migrate if the spike succeeds. Hand tests passed 2026-09-15. |
 | D2 | The machine is named `stargazer`, with no suffix, in the flake, the tailnet and Entra. | Owner, 2026-09-15. |
-| D3 | The Parallels VM `stargazer-nixos` is deleted. | Owner, 2026-09-15. |
+| D3 | Both Parallels stargazer VMs are deleted: `stargazer-nixos` and the old Omarchy `Stargazer`. The old one is checked for anything still needed first. The goal is one clean stargazer VM. | Owner, 2026-09-15 and 2026-09-16. |
 | D4 | Nostromo stays on Parallels, so Parallels Desktop stays installed. | Standing rule. |
 | D5 | Every stargazer signs its boot files with the one db key in `secrets/stargazer-sbctl.yaml`. On Fusion, plain lanzaboote signs, and the VM definition appends the db certificate to the firmware's default db. | Owner, 2026-09-03, for the shared key. Trial, 2026-09-14, for the mode. |
 | D6 | The new VM is built only from the rewritten runbook. That build is the fire drill. | Owner, 2026-09-03: stargazer machines must be reproducible. |
-| D7 | **Proposed, confirm at review:** Parallels-only code leaves the repo. That is `modules/nixos/parallels-guest.nix`, the shim mode of `modules/nixos/secureboot.nix`, `packages/shim-signed-debian/` and the Parallels VM script. Git history and `docs/parallels-workarounds.md` keep the lineage. If declined, skip Task 3 and keep `shim.enable = false` wherever Task 2 writes Secure Boot settings. | Controller proposal. |
-| D8 | **Out of scope:** the old Omarchy VM `Stargazer`, and the P9b desktop spec revision. | Owner to confirm about `Stargazer`. |
+| D7 | **Approved 2026-09-16.** Parallels-only code leaves the repo. That is `modules/nixos/parallels-guest.nix`, the shim mode of `modules/nixos/secureboot.nix`, `packages/shim-signed-debian/` and the Parallels VM script. Git history and `docs/parallels-workarounds.md` keep the lineage. | Controller proposal, owner approved. |
+| D8 | **Out of scope:** the P9b desktop spec revision for Fusion. It follows this migration. | Controller. |
 
 ## Global Constraints
 
-- NEVER touch the Parallels VMs `Nostromo`, `spike-himmelblau-arm`, `Orrery-Win11-ARM64` or `Stargazer`. The only Parallels mutation in this plan deletes `stargazer-nixos`, UUID `{cd98232e-21b7-4426-90c2-1a0ddcc809e5}`, in Task 6.
+- NEVER touch the Parallels VMs `Nostromo` or `spike-himmelblau-arm`, and leave `Orrery-Win11-ARM64` alone. Task 6 deletes exactly two VMs by name and UUID: `stargazer-nixos` `{cd98232e-21b7-4426-90c2-1a0ddcc809e5}` and `Stargazer` `{a285f15a-b0fb-44cd-8178-fc806acef6c0}`.
 - Fusion mutations target only the bundles `stargazer.vmwarevm` (new), `stargazer-drill.vmwarevm` (only if a drill is ever run) and `stargazer-fusion.vmwarevm` (the trial, deleted in Task 11).
 - The repo is public. Never commit a tenant id, tenant domain, UPN, Entra or Intune device id, or an AADSTS payload. Tenant facts go to `spikes/intune/notes/`, which is gitignored.
 - The owner types the LUKS passphrase and the Hello PIN at the VM console. Neither ever passes through SSH, a script or an agent.
@@ -350,8 +350,6 @@ Message: `refactor(stargazer): make stargazer the VMware Fusion host`. The body 
 ---
 
 ### Task 3: Remove the Parallels-only code (D7)
-
-Skip this task if the owner declines D7.
 
 **Files:**
 - Delete: `modules/nixos/parallels-guest.nix`
@@ -926,7 +924,7 @@ Keep autoUpgrade and rollback, with the snapshot commands switched to `./scripts
 - After a Hyprland package change, restart greetd while no session is running: `vm# sudo systemctl restart greetd`.
 - Every `nixos-rebuild switch` and `hyprctl reload` briefly returns the display to its login-time size. The follower restores it within 2 seconds.
 
-Replace "Retiring the old VM" with one sentence: the old Omarchy `Stargazer` VM stays on Parallels until the owner decides.
+Delete the "Retiring the old VM" subsection. Task 6 removes both Parallels VMs, so nothing is left to retire.
 
 - [ ] **Step 10: §10 Troubleshooting**
 
@@ -1008,7 +1006,7 @@ Message: `docs(stargazer): Fusion install runbook and workaround lineage`.
 
 ---
 
-### Task 6: Retire the Parallels VM `stargazer-nixos`
+### Task 6: Retire both Parallels stargazer VMs
 
 Controller with the owner. It depends on Task 1.
 
@@ -1035,10 +1033,37 @@ behemoth$ prlctl delete stargazer-nixos
 
 Run the last two commands only after `TARGET-OK`.
 
-- [ ] **Step 5: Verify**
+- [ ] **Step 5: Check what the old Omarchy VM still holds**
+
+`Stargazer` is the hand-installed Arch VM that stargazer replaced. It has been dormant since P1 and was never checked. Resume it, rather than booting it, so its disk passphrase is not needed.
+
+```bash
+behemoth$ prlctl start Stargazer && sleep 20
+behemoth$ prlctl exec Stargazer 'ls -la /home/andreym; df -h /home'
+behemoth$ prlctl exec Stargazer 'find /home/andreym -maxdepth 4 -type d -name .git 2>/dev/null | head -20'
+behemoth$ prlctl exec Stargazer 'for r in $(find /home/andreym -maxdepth 4 -type d -name .git 2>/dev/null); do d=${r%/.git}; echo "== $d"; git -C "$d" status --short | head -5; git -C "$d" log --branches --not --remotes --oneline | head -5; done'
+behemoth$ prlctl exec Stargazer 'find /home/andreym -maxdepth 3 -type f -newermt 2026-01-01 -not -path "*/.cache/*" -not -path "*/.local/share/*" -not -path "*/.mozilla/*" 2>/dev/null | head -40'
+behemoth$ prlctl exec Stargazer 'ls -la /home/andreym/.ssh 2>/dev/null; ls -la /home/andreym/dev 2>/dev/null'
+```
+
+Report the findings to the owner: uncommitted or unpushed work, files changed this year, keys, and anything under `dev`. The owner decides what to keep. Copy anything wanted out with a Parallels shared folder or `prlctl exec ... 'tar -cz ...'` piped to a file on behemoth.
+
+- [ ] **Step 6 (controller, after the owner says go): Delete the old VM**
+
+```bash
+behemoth$ prlctl list -a | grep -F '{a285f15a-b0fb-44cd-8178-fc806acef6c0}' | grep -q Stargazer && echo TARGET-OK
+behemoth$ prlctl stop Stargazer --kill 2>/dev/null || true
+behemoth$ prlctl delete Stargazer
+behemoth$ ls -d "$HOME/Parallels/Stargazer.pvm" 2>/dev/null && rm -rf "$HOME/Parallels/Stargazer.pvm"
+behemoth$ ls -la "$HOME/Parallels/ArchBase-Template.pvm.tar.zst" 2>/dev/null   # offer to the owner, it is large
+```
+
+Run the delete only after `TARGET-OK`.
+
+- [ ] **Step 7: Verify**
 
 Run: `prlctl list -a`
-Expected: the other four VMs have the same UUIDs and states as in Step 1, and `stargazer-nixos` is gone.
+Expected: only `Nostromo`, `Orrery-Win11-ARM64` and `spike-himmelblau-arm` remain, with the same UUIDs and states as in Step 1. Also check the tailnet has no node named `stargazer` and no node for the old VM.
 
 ---
 
@@ -1207,4 +1232,4 @@ Hyprland patch, a clipboard bridge and a manual Broadcom download
 
 - [ ] **Step 2: Update the runbook's "Last updated" note** with the Task 8 date and duration, and add any lessons from Tasks 8 to 11 to the lineage record.
 - [ ] **Step 3: Commit** as `docs: stargazer migration to VMware Fusion completed`, then push after the owner says go.
-- [ ] **Step 4: Update project memory.** In `project_env_refactor.md` and `MEMORY.md`, record that P9c is done and list what remains: the P9b spec revision for Fusion, the owner's call on the old `Stargazer` VM, the rocinante skill cleanup before its next switch, the Little Snitch filter, sudo hardening, and Intune script policies.
+- [ ] **Step 4: Update project memory.** In `project_env_refactor.md` and `MEMORY.md`, record that P9c is done, that behemoth now runs one stargazer VM on Fusion and keeps Parallels only for Nostromo, and list what remains: the P9b spec revision for Fusion, the rocinante skill cleanup before its next switch, the Little Snitch filter, sudo hardening, and Intune script policies.
