@@ -194,16 +194,22 @@ recipient is an invisible no-op, and the first boot comes up domain-less.
 
 **4.1 get a shell.** The installer autologs `nixos` at the console with an
 **empty password**, and sshd rejects empty passwords, so SSH is closed until the
-guest has a key. There are no guest tools on the ISO, so this line is typed at
-the console by hand:
+guest has a key. There are no guest tools on the ISO, so this line goes in at
+the console:
 
 ```
 iso# sudo sh -c 'echo nameserver 1.1.1.1 > /etc/resolv.conf'; mkdir -p ~/.ssh && curl -fsSL https://github.com/andrey-moor.keys > ~/.ssh/authorized_keys && echo KEYS-OK
 ```
 
-By hand, not through `./scripts/stargazer-vm type`. The line contains single
-quotes, behemoth's shell re-parses the argument before the script ever sees it,
-and the guest gets nothing usable. Keep `type` for lines with no quotes in them.
+Type it by hand, or send it from behemoth. The single quotes survive if the
+whole line is one double-quoted argument, and nothing in it needs escaping:
+
+```bash
+behemoth$ ./scripts/stargazer-vm type "sudo sh -c 'echo nameserver 1.1.1.1 > /etc/resolv.conf'; mkdir -p ~/.ssh && curl -fsSL https://github.com/andrey-moor.keys > ~/.ssh/authorized_keys && echo KEYS-OK"
+```
+
+Either way, look at the console before moving on. The line ends in
+`echo KEYS-OK` so that one glance settles whether it arrived intact.
 
 The resolv.conf half comes first because **Fusion's NAT DNS proxy does not
 resolve on behemoth**. The lease hands the guest the gateway as its only
@@ -274,11 +280,17 @@ behemoth$ op item get "sops age key (dotfiles admin)" --vault Private --fields n
 behemoth$ SOPS_AGE_KEY_FILE="$agekey" nix run nixpkgs#sops -- -d --extract '["db.key"]' secrets/stargazer-sbctl.yaml \
             | ssh $S nixos@"$ip" 'sudo sh -c "umask 077; mkdir -p /mnt/var/lib/sbctl/keys/db && cat > /mnt/var/lib/sbctl/keys/db/db.key"'
 behemoth$ rm -f "$agekey"
+behemoth$ ssh $S nixos@"$ip" 'sudo wc -c /mnt/var/lib/sbctl/keys/db/db.key'   # must not be 0
 behemoth$ scp $S hosts/stargazer/secureboot/db.pem hosts/stargazer/secureboot/GUID nixos@"$ip":/tmp/
 behemoth$ ssh $S nixos@"$ip" '
   sudo install -Dm400 /tmp/db.pem /mnt/var/lib/sbctl/keys/db/db.pem
   sudo install -Dm644 /tmp/GUID   /mnt/var/lib/sbctl/GUID'
 ```
+
+Check that byte count. The key is written through a pipe with nothing watching
+it, so a failed 1Password lookup or a `grep` that matched nothing leaves a zero
+byte file. Nothing notices until lanzaboote refuses it at the very end of 4.4,
+after the whole build.
 
 **4.4 install.** Run it **detached**, so an SSH drop cannot kill the build:
 

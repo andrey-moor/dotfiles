@@ -32,6 +32,10 @@
 
   services.openssh = {
     enable = true;
+    # The module opens port 22 on every interface by default, which would make
+    # the firewall below, and each host's own NAT rule, decoration. Who can
+    # reach sshd is decided there, not here.
+    openFirewall = false;
     settings = {
       PasswordAuthentication = false;
       PermitRootLogin = "no";
@@ -65,8 +69,9 @@
 
   services.tailscale.enable = true;
 
-  # Default-deny at the edge; everything we run (sshd, wayvnc) is reachable
-  # only over the tailnet. No port is opened on the Parallels NAT interface.
+  # Default deny at the edge. sshd and wayvnc are reachable over the tailnet.
+  # A host opens port 22 on its hypervisor NAT link only by declaring that
+  # itself, as hosts/stargazer/default.nix does for enp2s0.
   networking.firewall = {
     enable = true;
     trustedInterfaces = [ "tailscale0" ];
