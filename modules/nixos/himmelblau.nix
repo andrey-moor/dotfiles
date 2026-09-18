@@ -1,6 +1,6 @@
 # modules/nixos/himmelblau.nix -- Entra ID join + Intune enrollment
 #
-# Wraps upstream's `services.himmelblau` (flake input pinned at 4.0.0) with the
+# Wraps upstream's `services.himmelblau` (flake input pinned at 4.0.4) with the
 # five fixes the P2 spike had to apply by hand, so the enrollment ceremony is
 # hand-fix-free.
 #

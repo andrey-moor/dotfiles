@@ -23,7 +23,7 @@
 
     # NixOS host layer (stargazer; P7 second)
     himmelblau = {
-      url = "github:himmelblau-idm/himmelblau/4.0.0";
+      url = "github:himmelblau-idm/himmelblau/4.0.4";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Only reached through modules/nixos/secureboot.nix, which is off by
