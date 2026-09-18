@@ -111,6 +111,26 @@
     };
   };
 
+  # Fusion's emulated HD Audio card has an imprecise DMA pointer, so PipeWire's
+  # default timer-based scheduling keeps mispredicting when to write and the
+  # stream breaks up every few seconds. Measured 2026-09-18 on a 30 s tone:
+  # about 1.5 xruns per second on the sink, while WAIT and BUSY stayed near
+  # 20 us against a 42 ms quantum, so the graph had all the headroom it needed
+  # and the clock was the problem. Waking on the card's own period interrupt
+  # instead takes that to zero xruns over the same tone. Headroom is already
+  # 8192 by then, because PipeWire detects this card as a batch device.
+  services.pipewire.wireplumber.extraConfig."50-vmware-alsa" = {
+    "monitor.alsa.rules" = [
+      {
+        matches = [
+          { "node.name" = "~alsa_output.*"; }
+          { "node.name" = "~alsa_input.*"; }
+        ];
+        actions.update-props."api.alsa.disable-tsched" = true;
+      }
+    ];
+  };
+
   # vmwgfx in the initrd so the LUKS prompt renders on the SVGA device without
   # a mode switch after the root is mounted.
   boot.initrd.kernelModules = [ "vmwgfx" ];
