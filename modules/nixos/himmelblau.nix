@@ -130,6 +130,25 @@ in
       account.himmelblau.enable = mkForce false;
       session.himmelblau.enable = mkForce false;
     };
+
+    # Console logins accept himmelblau only. `andreym` has no local password
+    # (hosts/stargazer/README.md section 6), so pam_unix in the login stack can
+    # never succeed. All it adds is a `Password:` prompt with nothing valid to
+    # type into it, shown whenever himmelblau's first conversation fails, which
+    # happened on 3 of 6 boots on 2026-09-18. greetd's auth stack is a substack
+    # of login, so this covers the greeter and the TTYs. Account and session
+    # handling keep pam_unix, and SSH is unaffected because it takes keys only.
+    security.pam.services.login.unixAuth = false;
+
+    # tuigreet opens a PAM conversation for the remembered user the moment it
+    # launches. On two cold boots on 2026-09-18 greetd came up 2.3 s and 2.7 s
+    # before himmelblaud was ready, so that first conversation never reached
+    # the daemon and fell through to pam_unix. himmelblaud is Type=notify, so
+    # this waits for its readiness signal. A daemon that fails to start still
+    # lets greetd start, because `after` orders and does not require.
+    systemd.services.greetd = mkIf config.services.greetd.enable {
+      after = [ "himmelblaud.service" ];
+    };
     sops.secrets =
       genAttrs
         [
