@@ -317,14 +317,8 @@ If it fails on evaluation, the fix belongs in the repo: push, and re-run the
 same command. Nothing is lost, and `--refresh` is not needed because each
 `nixos-install` re-resolves the ref.
 
-**4.5 set the login password** for `andreym`. root has none, and greetd needs
-something to log in with before Entra is joined:
-
-```
-iso# sudo nixos-enter --root /mnt -c 'passwd andreym'
-```
-
-**4.6 eject the ISO and boot from disk.**
+**4.5 eject the ISO and boot from disk.** No local password is set for
+`andreym`, and §6 explains why.
 
 ```bash
 iso# sudo poweroff
@@ -493,13 +487,20 @@ vm# journalctl -u himmelblaud -f          # `debug = true`, so evaluation is vis
 vm# journalctl -u himmelblaud-tasks -f
 ```
 
-**After the ceremony, log in with the Hello PIN, never the §4.5 password.**
-`pam_unix` sits behind himmelblau with `try_first_pass`, so the local password
-still opens a session, and himmelblau never verifies anything. The journal then
-shows `unix_user_online_auth_init` with no `unix_user_online_auth_step` (seen
-three times on 2026-09-18). Nothing is unsealed in a session opened that way, so
-anything that needs a token fails with "ensure the session is unsealed". Log out
-and use the PIN.
+**`andreym` has no local password, on purpose.** The repo declares none, so
+NixOS creates the account locked. Nothing needs one. `sudo` is passwordless, SSH
+takes keys only, and every console login is the Hello PIN. The PIN also works
+with the network down. On 2026-09-18, with the link down, himmelblau logged
+`Provider online failed`, then `unix_user_offline_auth_step`, and the PIN opened
+the session.
+
+Do not set one with `passwd`. `pam_unix` sits behind himmelblau with
+`try_first_pass`, so a local password opens a session that himmelblau never
+verified. The journal then shows `unix_user_online_auth_init` with no
+`unix_user_online_auth_step`. Nothing is unsealed in such a session, so anything
+that needs a token fails with "ensure the session is unsealed". That happened
+three times on 2026-09-18, when this runbook still set a password during the
+install. §10 lists what to do if the console locks you out.
 
 ### Checks after the ceremony
 
@@ -630,7 +631,7 @@ behemoth$ ./scripts/stargazer-vm --drill up
 The ISO is shared between the two VMs, so §2's download serves the drill too.
 Every `./scripts/stargazer-vm` command below takes `--drill` as well.
 
-Then run **§4** (4.1 through 4.6, including 4.3b) against `stargazer-drill`,
+Then run **§4** (4.1 through 4.5, including 4.3b) against `stargazer-drill`,
 with these deltas:
 
 - **Reuse the host key from §3.** It is already a sops recipient, so no repo
@@ -791,6 +792,20 @@ landed, it is a PAM problem, not a compositor one: read
 `journalctl -u himmelblaud -b` and try logging in on a TTY (`Ctrl-Alt-F2`) to
 separate the two. `pam_allow_groups` is deliberately unset (null = allow all),
 because an empty list would lock everyone out.
+
+**Locked out at the console.** There is no local password to fall back on. Try
+these in order:
+
+1. SSH with the key, over the NAT address or the tailnet. A public key login
+   does not go through himmelblau's authentication.
+2. An older generation from the systemd-boot menu, if a rebuild broke the login.
+3. The installer ISO and `nixos-enter`, with the LUKS passphrase. Turn Secure
+   Boot off first (`./scripts/stargazer-vm secure-boot off`), because the ISO is
+   unsigned, and reconnect it with `cdrom on`. Booting the ISO ahead of an
+   installed disk has not been tried on Fusion yet.
+
+`aad-tool offline-breakglass` does not apply here. It caches Entra passwords,
+and this tenant has none.
 
 **`/etc/himmelblau/himmelblau.conf.d/` has no `10-tenant.conf`, or it is
 empty.** The host cannot decrypt `secrets/stargazer-tenant.yaml`. Either its age
