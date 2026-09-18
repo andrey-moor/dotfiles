@@ -503,6 +503,18 @@ that needs a token fails with "ensure the session is unsealed". That happened
 three times on 2026-09-18, when this runbook still set a password during the
 install. §10 lists what to do if the console locks you out.
 
+**After a cold boot the greeter may ask for `Password:` first.** Nothing valid
+can be typed there, because the account has no password. Press Enter. The
+greeter restarts the login, and the PIN prompt follows. The journal shows the
+cause. himmelblau's first PIN prompt receives an empty answer within a fraction
+of a second, so it logs `empty pin` and gives up. PAM then falls through to
+`pam_unix`.
+On 2026-09-18 this happened on 3 of 3 boots where the YubiKey was not connected
+when the greeter started, and on 0 of 3 boots where it was. The PIN handler does
+not use the key, so that pattern is unexplained, and what sends the empty answer
+is unknown too. A cold boot with the key already connected would separate the
+two. Fusion cannot do that without a `usb.autoConnect` entry in the `.vmx`.
+
 ### Checks after the ceremony
 
 ```bash
@@ -804,6 +816,9 @@ landed, it is a PAM problem, not a compositor one: read
 `journalctl -u himmelblaud -b` and try logging in on a TTY (`Ctrl-Alt-F2`) to
 separate the two. `pam_allow_groups` is deliberately unset (null = allow all),
 because an empty list would lock everyone out.
+
+**The greeter asks for `Password:` instead of the PIN.** Press Enter, and the PIN
+prompt follows. §6 has the cause as far as it is known.
 
 **Locked out at the console.** There is no local password to fall back on. Try
 these in order:
