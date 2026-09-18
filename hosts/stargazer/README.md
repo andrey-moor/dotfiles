@@ -5,7 +5,8 @@
 > its lineage. `docs/vmware-fusion-workarounds.md` records what Fusion costs us
 > and what to re-test on another hypervisor. The real VM was built from this text
 > on 2026-09-17 and 2026-09-18, and that run corrected §4 to §7 and §10. §8 has
-> the details. The fire drill itself has not been run on Fusion yet.
+> the details. The fire drill ran on Fusion on 2026-09-18 and passed on its
+> second attempt (§8).
 
 Everything below is executed **by the owner, at the Mac**, top to bottom. Steps
 marked **(owner/interactive)** need a human at a console, a passphrase, a
@@ -199,18 +200,23 @@ guest has a key. There are no guest tools on the ISO, so this line goes in at
 the console:
 
 ```
-iso# sudo sh -c 'echo nameserver 1.1.1.1 > /etc/resolv.conf'; mkdir -p ~/.ssh && curl -fsSL https://github.com/andrey-moor.keys > ~/.ssh/authorized_keys && echo KEYS-OK
+iso# sudo sh -c 'echo nameserver 1.1.1.1 > /etc/resolv.conf'; mkdir -p ~/.ssh; curl -fsSL https://github.com/andrey-moor.keys > ~/.ssh/authorized_keys; if test -s ~/.ssh/authorized_keys; then echo KEYS-OK; fi
 ```
 
 Type it by hand, or send it from behemoth. The single quotes survive if the
 whole line is one double-quoted argument, and nothing in it needs escaping:
 
 ```bash
-behemoth$ ./scripts/stargazer-vm type "sudo sh -c 'echo nameserver 1.1.1.1 > /etc/resolv.conf'; mkdir -p ~/.ssh && curl -fsSL https://github.com/andrey-moor.keys > ~/.ssh/authorized_keys && echo KEYS-OK"
+behemoth$ ./scripts/stargazer-vm type "sudo sh -c 'echo nameserver 1.1.1.1 > /etc/resolv.conf'; mkdir -p ~/.ssh; curl -fsSL https://github.com/andrey-moor.keys > ~/.ssh/authorized_keys; if test -s ~/.ssh/authorized_keys; then echo KEYS-OK; fi"
 ```
 
-Either way, look at the console before moving on. The line ends in
-`echo KEYS-OK` so that one glance settles whether it arrived intact.
+Either way, look at the console before moving on. `KEYS-OK` appears only if the
+key file exists and is not empty. The line avoids `&&` on purpose. On 2026-09-18
+the `type` helper dropped one `&` of a pair. That turned the chain into a
+background job, and `KEYS-OK` printed although no key had been written. With `;`
+and `if`, a lost character is a syntax error or a failed test, never a changed
+meaning. The helper has sent 4 characters per call since then, which stopped the
+drops in 50 of 50 test lines. The `ssh` below is still the real proof.
 
 The resolv.conf half comes first because **Fusion's NAT DNS proxy does not
 resolve on behemoth**. The lease hands the guest the gateway as its only
@@ -293,26 +299,43 @@ it, so a failed 1Password lookup or a `grep` that matched nothing leaves a zero
 byte file. Nothing notices until lanzaboote refuses it at the very end of 4.4,
 after the whole build.
 
-**4.4 install.** Run it **detached**, so an SSH drop cannot kill the build:
+**4.4 install.** First give the installer swap, on the target disk. Without it
+the install runs out of memory every time:
+
+```
+iso# sudo btrfs filesystem mkswapfile --size 32g /mnt/swapfile
+iso# sudo swapon /mnt/swapfile
+```
+
+Then run the install **detached**, so an SSH drop cannot kill the build:
 
 ```
 iso# nohup sudo nixos-install --flake github:andrey-moor/dotfiles#stargazer --no-root-passwd --max-jobs 2 --cores 4 > /tmp/nixos-install.log 2>&1 &
 iso# tail -f /tmp/nixos-install.log        # done at "installation finished!"
 ```
 
-Expect a long build. Anything outside the binary cache is compiled here, which
-includes the patched Hyprland and himmelblau's Rust crates.
+Expect about 33 minutes. Anything outside the binary cache is compiled here,
+which includes the patched Hyprland and himmelblau's Rust crates.
 
-**`--max-jobs 2 --cores 4` is what makes that build fit in 16 GB.** The
-installer has no swap, and nix's default `max-jobs = auto` starts one job per
-vCPU, which is eight here. On 2026-09-17 the evaluator alone held 5.5 GB while
-eight compilers each took 1 to 2 GB, and the kernel killed `nix` about 22
-minutes into the install. The log ended in `Killed` with no other explanation. Two jobs of
-four cores hold the peak near 10 GB while still using every core. Build
-directories are not part of the problem: Nix 2.34 keeps them under
+**Why the swap.** `nixos-install` does everything in one `nix` process: it
+evaluates the system, builds what the cache lacks and copies 12 GB into `/mnt`.
+That process alone holds 5 to 9 GB, and the compilers come on top, so demand
+peaks near 22 GB on a VM with 16 GB. The installer has no swap of its own. The
+kernel killed `nix` 22 minutes into the first install on 2026-09-17, and 21
+minutes into the fire drill on 2026-09-18. Each time the log ended in `Killed`
+with no other explanation. With the swapfile, the same clean install finished in
+32 min 53 s. Swap use peaked at 6.2 GB, and available memory never fell below
+2.0 GB.
+
+**Why the two limits are not enough on their own.** `--max-jobs 2 --cores 4`
+went in after the first failure, on the theory that eight parallel compilers
+were the cause. The drill disproved that: a clean install with the limits still
+died, with `nix` itself at 9.3 GB. The 2026-09-17 retry had only passed because
+the failed attempt before it had already built 12 GB, which left the retry
+little to do. The limits stay, because they are part of the configuration that
+passed, and `hosts/stargazer/common.nix` sets the same two for the installed
+system. Build directories are not part of the problem: Nix 2.34 keeps them under
 `/mnt/nix/var/nix/builds`, on the target disk, whatever `TMPDIR` says.
-`hosts/stargazer/common.nix` sets the same two limits for the installed system,
-because `system.autoUpgrade` rebuilds the same Hyprland on the same 16 GB.
 
 If it fails on evaluation, the fix belongs in the repo: push, and re-run the
 same command. Nothing is lost, and `--refresh` is not needed because each
@@ -322,14 +345,18 @@ same command. Nothing is lost, and `--refresh` is not needed because each
 `andreym`, and §6 explains why.
 
 ```bash
+iso# sudo swapoff /mnt/swapfile
+iso# sudo rm /mnt/swapfile
 iso# sudo poweroff
 behemoth$ ./scripts/stargazer-vm cdrom off
 behemoth$ ./scripts/stargazer-vm up
 behemoth$ rm -rf "$SCRATCH"
 ```
 
-`$SCRATCH` holds the private host key, so it goes as soon as the install is
-done. A fire drill (§8) fetches the same key from 1Password again.
+The swapfile goes first. It was only for the install, and the installed system
+does not reference it. `$SCRATCH` holds the private host key, so it goes as soon
+as the install is done. A fire drill (§8) fetches the same key from 1Password
+again.
 
 ---
 
@@ -639,15 +666,24 @@ so the disk is always openable regardless of firmware state.
 ## 8. Fire drill
 
 The point is to prove this document, from scratch, without touching the real VM.
-Last run: **not yet on Fusion.** The real machine was built from this runbook on
-2026-09-17 and 2026-09-18 (P9c Task 8), which is the only end to end run so far.
-Its timings: the ISO download took 8 minutes and the capped `nixos-install` took
-19 minutes. A first attempt had already built for about 22 minutes before it ran
-out of memory (§4.4). A clean install is therefore at least 40 minutes of
-machine time. It was not measured in one piece. That run found and fixed the
-defects now recorded in §4.4, §5, §6, §7 and §10.
+Last run: **2026-09-18 on Fusion, passed on the second attempt.** A clean pass
+takes about 45 minutes with someone at the keyboard, and the install in §4.4 is
+33 of them. The first attempt ran out of memory 21 minutes into the install,
+which is how the swapfile in §4.4 was found. The drill found three more
+defects. The `type` helper dropped characters. The `KEYS-OK` check in §4.1 could
+be fooled. `destroy` could not delete a VM that Fusion still had open. All four
+are fixed in this text and in `scripts/stargazer-vm`. The real machine was
+built from this runbook on 2026-09-17 and 2026-09-18, and that run fixed §4.4 to
+§7 and §10.
+
+**Suspend the real VM first.** The drill sends a disk-wiping command to a
+console, the real VM has passwordless `sudo`, and the script picks its target
+from one flag. While the real VM is suspended, a command that forgets `--drill`
+cannot reach it. Until the drill VM is destroyed, do not run `up` or `resume`
+without `--drill`, because either would wake the real VM.
 
 ```bash
+behemoth$ ./scripts/stargazer-vm suspend
 behemoth$ ./scripts/stargazer-vm --drill create
 behemoth$ ./scripts/stargazer-vm --drill up
 ```
@@ -665,9 +701,14 @@ with these deltas:
 - **`sudo tailscale up --hostname stargazer-drill`**, otherwise it fights the
   real host for the `stargazer` node name. Run `tailscale logout` before
   destroying the drill VM.
-- **Do not log in at the greeter, and do not enroll.** A second Entra join would
-  create a duplicate device object. Check everything over SSH on the NAT
-  address instead.
+- **Do not log in at the greeter, and do not enroll.** The drill VM boots the
+  same configuration under the same hostname, so its greeter looks exactly like
+  the real one. A login there with the YubiKey joins it to the tenant as a second
+  device named `stargazer`. That happened on 2026-09-18. Check everything over
+  SSH on the NAT address instead. If it happens anyway, read `device_id` and
+  `intune_device_id` from `/var/cache/himmelblaud/himmelblau.conf` on the drill
+  VM before destroying it. Then delete those two records in Entra and Intune by
+  id, never by name, because the real machine has the same name.
 - **Secure Boot too.** Run `./scripts/stargazer-vm --drill secure-boot on` after
   a clean power-off, power on, and check `bootctl status` over SSH.
 
@@ -691,7 +732,12 @@ module, push, and re-run the drill until it passes clean.
 
 ```bash
 behemoth$ ./scripts/stargazer-vm --drill destroy      # double confirmation
+behemoth$ ./scripts/stargazer-vm resume               # the real VM, as it was
 ```
+
+`destroy` quits the Fusion app when Fusion still has the drill VM open, because
+the app's lock blocks the delete. It only does so while no VM is running, which
+is the case here, since the real VM is suspended.
 
 ---
 

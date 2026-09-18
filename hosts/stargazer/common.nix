@@ -71,10 +71,11 @@
   # downloading them: Hyprland, because modules/nixos/vmware-guest.nix patches
   # it for vmwgfx, and himmelblau's Rust crates. The VM has 16 GB and no swap,
   # and nix's default `max-jobs = auto` starts one job per vCPU, which is eight
-  # here. On 2026-09-17 that combination OOM-killed nix itself, 5.5 GB
-  # resident, during the first install. Two jobs of four cores keep the peak
-  # near 10 GB and still use every core. README section 4.4 passes the same two
-  # limits to `nixos-install`, which runs before this file is ever read.
+  # here. Two jobs of four cores bound the compilers and still use every core.
+  # Under this cap the himmelblau 4.0.4 rebuild on 2026-09-18 peaked at 8.5 GB.
+  # The cap is not what lets the installer finish. That needs swap, because
+  # `nixos-install` holds 5 to 9 GB in one process on top of the compilers
+  # (README section 4.4, which passes the same two limits).
   nix.settings = {
     max-jobs = 2;
     cores = 4;
