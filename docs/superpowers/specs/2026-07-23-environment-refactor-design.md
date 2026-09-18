@@ -27,7 +27,7 @@ citations live in the two review docs. This is the spec the implementation plan 
 | **rocinante** | Framework Desktop (Strix Halo, 128 GB) | **NixOS** (unstable), LUKS+btrfs via disko, on 2nd NVMe (`…801777`) | Devbox · VM host · fleet builder · LLM server |
 | **work-vm** | VM on rocinante | Winner of spikes: NixOS+himmelblau / NixOS+intuneme / Ubuntu 24.04 | The *only* corporate-enrolled Linux; full dev env (compliant-device requirement) |
 | **ubuntu-baseline** | VM on rocinante | Ubuntu 24.04 LTS, NixVirt-declared shape + autoinstall | Guaranteed corporate access regardless of spike outcomes; standalone HM for dotfiles |
-| **stargazer** (successor) | Parallels VM on behemoth | NixOS aarch64, declared in flake | Fallback devbox when rocinante unreachable; himmelblau if proven; keep-alive automated |
+| **stargazer** (successor) | VMware Fusion VM on behemoth | NixOS aarch64, declared in flake | Fallback devbox when rocinante unreachable; himmelblau if proven; keep-alive automated |
 | **Nostromo** | Parallels on behemoth (286G, 10 vCPU/64G RAM) | Windows 11 ARM (existing, **domain-joined**) | Mac-side corporate access **today** — chosen because Windows joins the company tenant easily; sanctioned, in daily use, **kept regardless**. Not the preferred UX: it is the safety net that lets the Linux path be experimented with freely. Not nixed; backed up. (`Orrery-Win11-ARM64`, 29G, is a second stopped Win11 VM.) |
 | *(legacy)* rocinante/Omarchy disk | 1st NVMe | frozen — no further updates ever | Fallback of record until 30 days post-cutover, then reclaimed |
 | *(legacy)* old stargazer | Parallels | frozen | Deleted after successor passes fire drill |
@@ -217,3 +217,30 @@ commit as-is (transparency posture — history already contains the spoof), or h
 env-review docs in a gitignored/private location. Default recommendation: commit the
 *design* (it documents the honest end-state), keep the *Pass-B review* (which details the
 current spoof mechanics) local-only until step 8 retires the spoof.
+
+## Amendment 2026-09-18: stargazer on VMware Fusion
+
+stargazer moved from Parallels to VMware Fusion after a trial passed every compliance and
+desktop test (plan `docs/superpowers/plans/2026-09-15-env-refactor-p9c-stargazer-fusion-migration.md`).
+The new VM was built from the runbook on 2026-09-17 and 2026-09-18, and Intune reports it
+Compliant. Nostromo stays on Parallels, so behemoth keeps both hypervisors. The "Parallels
+dependency for both Mac VMs" risk now applies to Nostromo only. Fusion's own costs are a
+vendored Hyprland patch, a clipboard bridge, an audio scheduling override and a manual
+Broadcom download (`docs/vmware-fusion-workarounds.md`).
+
+Three things differ from what this spec planned:
+
+- Both Parallels stargazer VMs were deleted on 2026-09-16 by owner decision, before a fire
+  drill on Fusion. That drill is still to be run (`hosts/stargazer/README.md` §8).
+- Compliance survives a reboot only on himmelblau 4.0.1 or later. 4.0.0 lost its token at
+  every reboot (upstream issue 1678), which would have broken refresh-on-start. The flake
+  pins 4.0.4. A reboot followed by a Hello PIN login now passes the compliance check with
+  no manual step.
+- `andreym` has no local password. Console logins use the Hello PIN, which also works
+  offline. The runbook's §6 and §10 explain why, and how to recover.
+
+Still unknown: the tenant's compliance validity period and grace window. Only the Intune
+admin portal shows them, and the owner may not have the rights to read that page.
+Microsoft's default validity period is 30 days, and the tenant's value may differ. It
+decides whether a VM that stays powered off for weeks needs a scheduled keep-alive on top
+of refresh-on-start. Until it is known, boot the VM at least every few weeks.

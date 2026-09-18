@@ -153,7 +153,8 @@ sudo nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer --refres
 **NixOS VM guest layer:** `modules/nixos/vm-guest.nix` holds the graphics stack and the
 `virtio-gpu-resize` follower (options `modules.nixos.vmGuest.{connector,followResize,resizePollInterval,resizeStablePolls,resizeHysteresis}`).
 `modules/nixos/vmware-guest.nix` imports it and adds the Fusion pieces: the vmwgfx Hyprland
-patch, open-vm-tools, the copy/paste agent and its clipboard bridge, and fast resize timing.
+patch, open-vm-tools, the copy/paste agent and its clipboard bridge, fast resize timing,
+and the ALSA rule that stops audio breaking up.
 Another hypervisor means a new guest module that imports `vm-guest.nix`.
 
 **Notes:**

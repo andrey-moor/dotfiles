@@ -1,10 +1,11 @@
 # Stargazer install runbook
 
-> **Last updated:** 2026-09-16 (P9c Task 5). Rewritten for VMware Fusion. The
+> **Last updated:** 2026-09-18 (P9c Task 12). Rewritten for VMware Fusion. The
 > Parallels version is in git history, and `docs/parallels-workarounds.md` keeps
 > its lineage. `docs/vmware-fusion-workarounds.md` records what Fusion costs us
-> and what to re-test on another hypervisor. This text has not been run end to
-> end yet. P9c Task 8 is the first run and records its date and duration in §8.
+> and what to re-test on another hypervisor. The real VM was built from this text
+> on 2026-09-17 and 2026-09-18, and that run corrected §4 to §7 and §10. §8 has
+> the details. The fire drill itself has not been run on Fusion yet.
 
 Everything below is executed **by the owner, at the Mac**, top to bottom. Steps
 marked **(owner/interactive)** need a human at a console, a passphrase, a
@@ -305,8 +306,8 @@ includes the patched Hyprland and himmelblau's Rust crates.
 **`--max-jobs 2 --cores 4` is what makes that build fit in 16 GB.** The
 installer has no swap, and nix's default `max-jobs = auto` starts one job per
 vCPU, which is eight here. On 2026-09-17 the evaluator alone held 5.5 GB while
-eight compilers each took 1 to 2 GB, and the kernel killed `nix` about 45
-minutes in. The log ended in `Killed` with no other explanation. Two jobs of
+eight compilers each took 1 to 2 GB, and the kernel killed `nix` about 22
+minutes into the install. The log ended in `Killed` with no other explanation. Two jobs of
 four cores hold the peak near 10 GB while still using every core. Build
 directories are not part of the problem: Nix 2.34 keeps them under
 `/mnt/nix/var/nix/builds`, on the target disk, whatever `TMPDIR` says.
@@ -595,7 +596,12 @@ The systemd-boot menu and its countdown keep working under Secure Boot on
 Fusion, so an older generation stays one keypress away at boot.
 
 Then force a check-in (log out and back in) and confirm **Compliant** in the
-portal.
+portal. Once it is, snapshot the stopped VM as the known-good state:
+
+```bash
+vm# sudo poweroff
+behemoth$ ./scripts/stargazer-vm snapshot compliant
+```
 
 **Optional, prove enforcement.** Put an unsigned EFI binary on the ESP and boot
 it. The firmware refuses it, and `vmware.log` in
@@ -620,8 +626,13 @@ so the disk is always openable regardless of firmware state.
 ## 8. Fire drill
 
 The point is to prove this document, from scratch, without touching the real VM.
-Last run: **not yet on Fusion.** P9c Task 8 builds the real machine from this
-runbook and records its date and duration here.
+Last run: **not yet on Fusion.** The real machine was built from this runbook on
+2026-09-17 and 2026-09-18 (P9c Task 8), which is the only end to end run so far.
+Its timings: the ISO download took 8 minutes and the capped `nixos-install` took
+19 minutes. A first attempt had already built for about 22 minutes before it ran
+out of memory (§4.4). A clean install is therefore at least 40 minutes of
+machine time. It was not measured in one piece. That run found and fixed the
+defects now recorded in §4.4, §5, §6, §7 and §10.
 
 ```bash
 behemoth$ ./scripts/stargazer-vm --drill create
@@ -701,7 +712,8 @@ vm# nix-env --list-generations --profile /nix/var/nix/profiles/system
 behemoth$ ./scripts/stargazer-vm restore installed     # stops the VM first
 ```
 
-Snapshots this runbook creates, in order: `installed`, `enrolled`, `pre-sb`.
+Snapshots this runbook creates, in order: `installed`, `enrolled`, `pre-sb`,
+`compliant`.
 
 **Suspend and resume.** `./scripts/stargazer-vm suspend` and
 `./scripts/stargazer-vm resume`. A resumed VM keeps LUKS unlocked and its
