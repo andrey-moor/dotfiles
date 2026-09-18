@@ -503,17 +503,18 @@ that needs a token fails with "ensure the session is unsealed". That happened
 three times on 2026-09-18, when this runbook still set a password during the
 install. §10 lists what to do if the console locks you out.
 
-**After a cold boot the greeter may ask for `Password:` first.** Nothing valid
-can be typed there, because the account has no password. Press Enter. The
-greeter restarts the login, and the PIN prompt follows. The journal shows the
-cause. himmelblau's first PIN prompt receives an empty answer within a fraction
-of a second, so it logs `empty pin` and gives up. PAM then falls through to
-`pam_unix`.
-On 2026-09-18 this happened on 3 of 3 boots where the YubiKey was not connected
-when the greeter started, and on 0 of 3 boots where it was. The PIN handler does
-not use the key, so that pattern is unexplained, and what sends the empty answer
-is unknown too. A cold boot with the key already connected would separate the
-two. Fusion cannot do that without a `usb.autoConnect` entry in the `.vmx`.
+**The greeter asks for the PIN, never for a password.** Two settings in
+`modules/nixos/himmelblau.nix` make sure of it: `pam_unix` is out of the login
+auth stack, and greetd starts only after himmelblaud is ready. Both date from
+2026-09-18, when the greeter asked for `Password:` on three cold boots, a prompt
+nothing could satisfy. tuigreet opens a login conversation 0.25 s after it
+launches. On all three boots greetd had started before himmelblaud was ready, so
+that conversation failed and PAM fell through to `pam_unix`. On two of them the
+conversation never reached the daemon. On the third an empty PIN came back 0.2 s
+after the prompt, and what sent it is still unknown. After the change, a cold
+boot without the YubiKey asked for the PIN at once, with greetd 0.74 s behind
+himmelblaud. If a first login attempt ever fails again,
+`journalctl -b | grep 'empty pin'` tells which of the two cases it was.
 
 ### Checks after the ceremony
 
@@ -817,8 +818,9 @@ landed, it is a PAM problem, not a compositor one: read
 separate the two. `pam_allow_groups` is deliberately unset (null = allow all),
 because an empty list would lock everyone out.
 
-**The greeter asks for `Password:` instead of the PIN.** Press Enter, and the PIN
-prompt follows. §6 has the cause as far as it is known.
+**The greeter asks for `Password:` instead of the PIN.** It should not, since
+2026-09-18 (§6). Check that `/etc/pam.d/login` has no `pam_unix` auth line, and
+that `systemctl show greetd -p After` lists `himmelblaud.service`.
 
 **Locked out at the console.** There is no local password to fall back on. Try
 these in order:
