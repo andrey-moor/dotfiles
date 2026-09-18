@@ -674,7 +674,8 @@ defects. The `type` helper dropped characters. The `KEYS-OK` check in §4.1 coul
 be fooled. `destroy` could not delete a VM that Fusion still had open. All four
 are fixed in this text and in `scripts/stargazer-vm`. The real machine was
 built from this runbook on 2026-09-17 and 2026-09-18, and that run fixed §4.4 to
-§7 and §10.
+§7 and §10. The `stargazer-drill` configuration was written after that drill. It
+evaluates and builds, and the next drill is its first full run.
 
 **Suspend the real VM first.** The drill sends a disk-wiping command to a
 console, the real VM has passwordless `sudo`, and the script picks its target
@@ -694,21 +695,28 @@ Every `./scripts/stargazer-vm` command below takes `--drill` as well.
 Then run **§4** (4.1 through 4.5, including 4.3b) against `stargazer-drill`,
 with these deltas:
 
+- **Install `#stargazer-drill`, not `#stargazer`**, in the disko line of §4.2 and
+  in the install line of §4.4. `hosts/stargazer/drill.nix` is the same machine
+  with three differences: its own hostname, no console login, and a banner on
+  the greeter. `flake.nix` builds both from one module list, so the drill cannot
+  drift from what it has to prove.
 - **Reuse the host key from §3.** It is already a sops recipient, so no repo
   change is needed and the drill VM decrypts on its first boot exactly like the
   real one. Two live machines sharing a host key is fine for a VM that lives for
   an hour and is then destroyed.
-- **`sudo tailscale up --hostname stargazer-drill`**, otherwise it fights the
-  real host for the `stargazer` node name. Run `tailscale logout` before
-  destroying the drill VM.
-- **Do not log in at the greeter, and do not enroll.** The drill VM boots the
-  same configuration under the same hostname, so its greeter looks exactly like
-  the real one. A login there with the YubiKey joins it to the tenant as a second
-  device named `stargazer`. That happened on 2026-09-18. Check everything over
-  SSH on the NAT address instead. If it happens anyway, read `device_id` and
-  `intune_device_id` from `/var/cache/himmelblaud/himmelblau.conf` on the drill
-  VM before destroying it. Then delete those two records in Entra and Intune by
-  id, never by name, because the real machine has the same name.
+- **The tailnet is optional.** No criterion below needs it. The drill's
+  hostname is `stargazer-drill`, so a `tailscale up` cannot fight the real host
+  for its node name. Run `tailscale logout` before destroying the drill VM.
+- **The drill VM cannot join the tenant.** `drill.nix` turns off himmelblau
+  authentication for console logins. `andreym` has no local password, and
+  `pam_unix` is already out of that stack, so the greeter and the TTYs accept
+  nothing. The greeter says so. Check everything over SSH on the NAT address.
+  The reason is 2026-09-18. The drill then booted `#stargazer` itself, someone
+  logged in at its greeter with the YubiKey, and it joined the tenant as a
+  second device named `stargazer`. A drill installed as `#stargazer` by mistake
+  can still do that. If it does, read `device_id` and `intune_device_id` from
+  `/var/cache/himmelblaud/himmelblau.conf` before destroying it, and delete
+  those two records in Entra and Intune by id, never by name.
 - **Secure Boot too.** Run `./scripts/stargazer-vm --drill secure-boot on` after
   a clean power-off, power on, and check `bootctl status` over SSH.
 
@@ -720,6 +728,8 @@ before it is trusted:
       the first boot (the §3 payoff)
 - [ ] `cryptsetup status cryptroot` is active, LUKS2
 - [ ] `systemctl list-timers nixos-upgrade.timer` lists it
+- [ ] `hostname` says `stargazer-drill`, and `sudo grep -E '^auth' /etc/pam.d/login`
+      shows no himmelblau line and no `pam_unix` line
 - [ ] with Secure Boot on: `bootctl status` says enabled, and `sbverify --list`
       says `CN=Database Key` on the UKI
 

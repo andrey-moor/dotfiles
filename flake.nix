@@ -175,32 +175,42 @@
         };
 
       # aarch64 NixOS VM on VMware Fusion, hosted by behemoth, with integrated home-manager
-      nixosConfigurations.stargazer =
+      nixosConfigurations =
         let
           system = "aarch64-linux";
           pkgs = mkPkgs system;
           dotfilesDir = "/home/andreym/dotfiles";
+
+          # stargazer and its fire drill twin share every module except the
+          # host file, so the drill cannot drift from what it has to prove.
+          mkStargazer =
+            hostModule:
+            nixpkgs.lib.nixosSystem {
+              inherit system;
+
+              specialArgs = { inherit inputs dotfilesDir; };
+
+              modules = [
+                { nixpkgs.pkgs = lib.mkDefault pkgs; }
+                home-manager.nixosModules.home-manager
+                {
+                  home-manager.useGlobalPkgs = true;
+                  home-manager.useUserPackages = true;
+                  home-manager.backupFileExtension = "backup";
+                  home-manager.extraSpecialArgs = { inherit inputs dotfilesDir; };
+                  home-manager.sharedModules = homeBase;
+                }
+                sops-nix.nixosModules.sops
+                inputs.disko.nixosModules.disko
+                inputs.himmelblau.nixosModules.himmelblau
+                hostModule
+              ];
+            };
         in
-        nixpkgs.lib.nixosSystem {
-          inherit system;
-
-          specialArgs = { inherit inputs dotfilesDir; };
-
-          modules = [
-            { nixpkgs.pkgs = lib.mkDefault pkgs; }
-            home-manager.nixosModules.home-manager
-            {
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              home-manager.backupFileExtension = "backup";
-              home-manager.extraSpecialArgs = { inherit inputs dotfilesDir; };
-              home-manager.sharedModules = homeBase;
-            }
-            sops-nix.nixosModules.sops
-            inputs.disko.nixosModules.disko
-            inputs.himmelblau.nixosModules.himmelblau
-            ./hosts/stargazer
-          ];
+        {
+          stargazer = mkStargazer ./hosts/stargazer;
+          # README section 8. Same machine, own hostname, no console login.
+          stargazer-drill = mkStargazer ./hosts/stargazer/drill.nix;
         };
 
       formatter = forAllSystems (system: (mkPkgs system).nixfmt);

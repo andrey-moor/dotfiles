@@ -30,6 +30,7 @@ For a different host: `just --set host <hostname> switch`
 - `darwinConfigurations.behemoth` → `darwin.lib.darwinSystem` (nix-darwin + home-manager as a darwin module)
 - `homeConfigurations.rocinante` → `home-manager.lib.homeManagerConfiguration` (standalone HM on foreign Linux; P7 will move it to NixOS)
 - `nixosConfigurations.stargazer` → `nixpkgs.lib.nixosSystem` (NixOS + integrated home-manager, disko, sops-nix, himmelblau)
+- `nixosConfigurations.stargazer-drill` → the same system from `hosts/stargazer/drill.nix`: own hostname, no console login, a greeter banner. Both come from one local `mkStargazer` function, so the fire drill cannot drift from production
 
 Shared pieces, all inline in `flake.nix`:
 - **`mkPkgs system`** — `import nixpkgs` with `config.allowUnfree = true` and overlays, in order: `./overlays`, a `pkgs.main` overlay (nixpkgs master, also allowUnfree, for packages that land there first), `nur.overlays.default`.
@@ -143,7 +144,7 @@ Hyprland on vmwgfx with a vendored patch, Entra join + Intune enrollment via him
 Secure Boot and the fire drill. It is the only install doc.
 
 **VM lifecycle:** `scripts/stargazer-vm <iso|create|up|down|kill|suspend|resume|status|ip|screenshot|type|key|set|cdrom|secure-boot|snapshot|restore|destroy>`
-(VMware Fusion; hard-coded to `stargazer`, `--drill` targets `stargazer-drill`).
+(VMware Fusion; hard-coded to `stargazer`, `--drill` targets `stargazer-drill`, which installs `#stargazer-drill`).
 
 **Build/switch (from within stargazer):**
 ```bash

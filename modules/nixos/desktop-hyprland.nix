@@ -136,6 +136,12 @@ in
       default = [ ];
       description = "Extra commands run once at compositor start. Lets guest/hardware modules add session autostarts without this module knowing about them.";
     };
+
+    greeting = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Text tuigreet shows above the login box. The fire drill host uses it to say that its console accepts no login.";
+    };
   };
 
   config = {
@@ -164,7 +170,9 @@ in
     services.greetd = {
       enable = true;
       settings.default_session = {
-        command = "${lib.getExe pkgs.tuigreet} --time --remember --cmd ${config.programs.hyprland.package}/bin/start-hyprland";
+        command = "${lib.getExe pkgs.tuigreet} --time --remember${
+          optionalString (cfg.greeting != null) " --greeting ${escapeShellArg cfg.greeting}"
+        } --cmd ${config.programs.hyprland.package}/bin/start-hyprland";
         user = "greeter";
       };
     };
