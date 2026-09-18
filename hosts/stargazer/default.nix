@@ -34,4 +34,7 @@
   # before it joins the tailnet. Key-only as everywhere. The name follows the
   # vmxnet3 PCI slot Fusion assigns, which the .vmx keeps.
   networking.firewall.interfaces.enp2s0.allowedTCPPorts = [ 22 ];
+
+  # Tailnet address, pinned once the node joined (README §5).
+  home-manager.users.andreym.modules.linux.wayvnc.address = "100.93.205.36";
 }
