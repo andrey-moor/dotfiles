@@ -89,9 +89,11 @@ require_stopped() {
 }
 
 # `MKS sendKeySequence` types printable text exactly, verified with every US
-# punctuation character. Non-printing keys go through `MKS sendKeyEvent`, which
-# takes vSphere's USB HID encoding `(usage << 16) | 7` and a HID modifier
-# bitmask (1 = Ctrl). Bare HID usage IDs are silently ignored.
+# punctuation character, but a long sequence drops keys when the host is busy,
+# so the `type` verb sends it 4 characters at a time. Non-printing keys go
+# through `MKS sendKeyEvent`, which takes vSphere's USB HID encoding
+# `(usage << 16) | 7` and a HID modifier bitmask (1 = Ctrl). Bare HID usage IDs
+# are silently ignored.
 hid_key() {
   "$VMCLI" "$VMX" MKS sendKeyEvent "$((($1 << 16) | 7))" "$2" >/dev/null
 }
@@ -270,7 +272,14 @@ EOF
 
   type)
     require_vm
-    "$VMCLI" "$VMX" MKS sendKeySequence "${1:?usage: stargazer-vm type \"<text>\"}" >/dev/null
+    text="${1:?usage: stargazer-vm type \"<text>\"}"
+    # One sendKeySequence call for a whole line drops keys when the host is
+    # busy. Measured 2026-09-18 on an 89 character line: 5 of 20 lines arrived
+    # damaged, each missing a shifted character such as ~ & or |. Sent 4
+    # characters per call, 30 of 30 arrived intact, for about 0.4 s more a line.
+    for ((i = 0; i < ${#text}; i += 4)); do
+      "$VMCLI" "$VMX" MKS sendKeySequence "${text:i:4}" >/dev/null
+    done
     named_key enter
     ;;
 
@@ -388,7 +397,26 @@ EOF
       exit 1
     }
     is_running && "$VMRUN" -T fusion stop "$VMX" hard
-    "$VMRUN" -T fusion deleteVM "$VMX"
+    # The Fusion app locks every VM it has open in a window, and `up` opens
+    # one. deleteVM then fails with "Insufficient permissions", seen 2026-09-18
+    # at the end of the fire drill. Quitting the app releases the lock. It is
+    # only quit while no VM is running, so no other VM can go down with it.
+    if ! "$VMRUN" -T fusion deleteVM "$VMX" >/dev/null 2>&1; then
+      if [ -n "$("$VMRUN" -T fusion list | tail -n +2)" ]; then
+        echo "Fusion has $VMNAME open and another VM is running." >&2
+        echo "Close the $VMNAME window in Fusion, then run destroy again." >&2
+        exit 1
+      fi
+      osascript -e 'quit app "VMware Fusion"'
+      for _ in $(seq 1 30); do
+        [ -e "$VMX.lck" ] || break
+        sleep 1
+      done
+      "$VMRUN" -T fusion deleteVM "$VMX"
+    fi
+    # deleteVM leaves what this script wrote itself: the db certificate and the
+    # NVRAM backup from `secure-boot on`.
+    rm -rf "$VMDIR"
     ;;
 
   *)
