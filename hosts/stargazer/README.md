@@ -340,13 +340,24 @@ done. A fire drill (§8) fetches the same key from 1Password again.
 
 ## 5. First boot and verification (owner/interactive)
 
-At the Fusion console: type the **LUKS passphrase** at the initrd prompt, then
-log in as `andreym` at the `tuigreet` screen with the §4.5 password. The session
-it starts is Hyprland. The console runs at 1280x800 until the VMware tools start
-inside the session, which is expected.
+At the Fusion console: type the **LUKS passphrase** at the initrd prompt, and
+**stop at the `tuigreet` screen. Do not log in yet.** `pam_himmelblau` is first
+in the PAM stack and maps `andreym` to the tenant account, so the first
+successful login at the greeter *is* the enrollment ceremony of §6. It joins the
+device, enrolls it in Intune and sets the Hello PIN. On 2026-09-18 that happened
+during what this section then called a verification login, and the snapshot
+taken afterwards as `pre-enroll` was not before anything.
 
-Bring up the tailnet. SSH is firewalled to `tailscale0` and `enp2s0` only, so
-this is the last thing that needs the console:
+This section runs over SSH instead. `hosts/stargazer/default.nix` opens port 22
+on the NAT link. A public key login skips PAM's authentication stack, which is
+where himmelblau joins the device, so it cannot enroll anything:
+
+```bash
+behemoth$ ip="$(./scripts/stargazer-vm ip)"
+behemoth$ ssh -o IdentitiesOnly=yes -i ~/.ssh/1p_personal.pub andreym@"$ip"
+```
+
+Bring up the tailnet from that shell. It prints a login link to open on the Mac:
 
 ```bash
 vm# sudo tailscale up
@@ -369,13 +380,13 @@ vm# sudo cryptsetup status cryptroot                          # active, LUKS2
 vm# cat /etc/os-release                                       # ID=ubuntu VERSION_ID="24.04"
 vm# nixos-version                                             # still honest NixOS
 
-# GPU + desktop
+# GPU + desktop. These three need a logged-in session, so run them after §6.
 vm$ glxinfo -B | grep -i 'renderer'                                    # SVGA3D, not llvmpipe
 vm$ systemctl --user is-active virtio-gpu-resize vmware-clipboard-bridge   # active, active
 vm$ pgrep -fa 'vmtoolsd -n vmusr'                                        # the copy/paste agent
 vm# tailscale status --self | head -1                                    # node name is exactly stargazer
 
-# Services
+# Services. wayvnc starts with the Hyprland session, so check it after §6 too.
 vm$ systemctl --user status wayvnc
 vm# systemctl list-timers nixos-upgrade.timer    # present, persistent, daily
 
@@ -434,12 +445,11 @@ behemoth$ ./scripts/stargazer-vm snapshot installed
 
 ## 6. Enrollment ceremony (owner, local console + YubiKey)
 
-Start from a snapshot, taken with the VM stopped. A failed Entra join is much
-cheaper to retry from one than to unpick by hand:
+Start from §5's `installed` snapshot. Nobody has logged in at that point, so it
+is the last state before the join. A failed Entra join is much cheaper to retry
+from it than to unpick by hand:
 
 ```bash
-vm# sudo poweroff                                    # if it is still running
-behemoth$ ./scripts/stargazer-vm snapshot pre-enroll
 behemoth$ ./scripts/stargazer-vm up
 ```
 
@@ -450,11 +460,15 @@ a dead end. `enable_passwordless_security_key` needs a local console.
 The security key reaches the guest through Fusion's **USB passthrough**, not
 smart-card sharing. Plug the YubiKey into the **Mac**, then connect it from the
 **Virtual Machine** menu, under **USB & Bluetooth**, before logging in at
-`tuigreet`. Confirm it arrived:
+`tuigreet`. Confirm over SSH that it arrived:
 
 ```bash
 vm# grep -l 'Yubico' /sys/class/hidraw/*/device/uevent
 ```
+
+The connection lasts for one power-on. A guest reboot keeps it and a power-off
+drops it (both seen 2026-09-18), so repeat this check after every cold boot
+before anything that needs the key.
 
 **Ordering: join first, Intune second.** himmelblau runs with
 `join_type = "join"`. The very first successful Entra authentication performs
@@ -466,13 +480,26 @@ authentication. Do not try to enroll before a successful login.
    tenant UPN before authenticating, so you never type the UPN.
 2. Expect, in order: an Entra authentication prompt, a security-key prompt
    (touch the YubiKey, enter its PIN if configured), the device join, then the
-   session start. Subsequent logins reuse the cached PRT and are much faster.
-3. Watch it happen from a second console or over the tailnet:
+   session start. The security-key exchange has about 25 seconds from the
+   `Fido PIN:` prompt to the touch, and it reports running out of time as
+   `CancelledByUser`.
+3. himmelblau then asks you to choose a **Linux Hello PIN**, six characters or
+   more (`hello_pin_min_length`). Store it in 1Password. Every later login uses
+   this PIN, at the prompt *"Use the Linux Hello PIN for this device."*
+4. Watch it happen from a second console or over the tailnet:
 
 ```bash
 vm# journalctl -u himmelblaud -f          # `debug = true`, so evaluation is visible here
 vm# journalctl -u himmelblaud-tasks -f
 ```
+
+**After the ceremony, log in with the Hello PIN, never the §4.5 password.**
+`pam_unix` sits behind himmelblau with `try_first_pass`, so the local password
+still opens a session, and himmelblau never verifies anything. The journal then
+shows `unix_user_online_auth_init` with no `unix_user_online_auth_step` (seen
+three times on 2026-09-18). Nothing is unsealed in a session opened that way, so
+anything that needs a token fails with "ensure the session is unsealed". Log out
+and use the PIN.
 
 ### Checks after the ceremony
 
@@ -483,6 +510,10 @@ vm# sudo nix run nixpkgs#sqlite -- /var/cache/nss-himmelblau/policies.cache.db \
       'select * from policies;'          # the applied password policy
 vm# id andreym                            # uid 1000, local groups + Entra groups merged
 ```
+
+`id` prints the Entra group names, which are tenant data. Do not paste that
+output anywhere. Then run the checks §5 deferred, from a terminal in the new
+session: the GPU + desktop block and `systemctl --user status wayvnc`.
 
 Compliance state itself is **not** persisted client-side. It is evaluated in the
 daemon journal and decided server-side. Grep the journal for the rule names
@@ -546,12 +577,16 @@ behemoth$ ./scripts/stargazer-vm up                # LUKS passphrase at the cons
 vm# bootctl status | grep -i 'secure boot'         # enabled (deployed)
 vm# mokutil --sb-state                             # SecureBoot enabled
 vm# mokutil --db --short                           # includes Microsoft UEFI CA 2023 and Database Key
-vm# for f in /boot/EFI/Linux/*.efi; do sbverify --list "$f" | grep -q 'CN=Database Key' && echo "ok $f" || echo "UNSIGNED $f"; done
+vm# sudo sh -c 'for f in /boot/EFI/Linux/*.efi /boot/EFI/systemd/*.efi /boot/EFI/BOOT/*.EFI; do sbverify --list "$f" | grep -q "CN=Database Key" && echo "ok $f" || echo "UNSIGNED $f"; done'
 vm$ aad-tool compliance-check                      # from the graphical session
 ```
 
 `sbverify --list <file>` is the signature check in general: `EFI/systemd/*.efi`
-and every `EFI/Linux/*.efi` must show `CN=Database Key`. Do not use
+and every `EFI/Linux/*.efi` must show `CN=Database Key`. The loop needs root,
+because `/boot` is mounted `0700`. Without it the globs match nothing and the
+loop prints nothing, which looks like a pass and is not one (seen 2026-09-18).
+Expect one `ok` line for every UKI, plus `systemd-bootaa64.efi` and
+`BOOTAA64.EFI`. Do not use
 `sbctl verify` on this host. It wants `keys/KEK/KEK.key`, which the sops layout
 deliberately omits, and its Landlock sandbox cannot follow the key symlinks.
 
@@ -665,8 +700,7 @@ vm# nix-env --list-generations --profile /nix/var/nix/profiles/system
 behemoth$ ./scripts/stargazer-vm restore installed     # stops the VM first
 ```
 
-Snapshots this runbook creates, in order: `installed`, `pre-enroll`,
-`enrolled`, `pre-sb`.
+Snapshots this runbook creates, in order: `installed`, `enrolled`, `pre-sb`.
 
 **Suspend and resume.** `./scripts/stargazer-vm suspend` and
 `./scripts/stargazer-vm resume`. A resumed VM keeps LUKS unlocked and its
@@ -682,6 +716,18 @@ vm# sudo systemctl restart greetd
 **Display size after a reload.** Every `nixos-rebuild switch` and every
 `hyprctl reload` briefly returns the display to its login-time size. The resize
 follower puts the current size back within 2 seconds.
+
+**Running something inside the graphical session from SSH.** Some checks only
+work there, `aad-tool compliance-check` among them. Hyprland 0.56 with the Lua
+config rejects `hyprctl dispatch exec`, so use the Lua form, with the session's
+environment loaded first:
+
+```bash
+vm$ eval "$(systemctl --user show-environment | grep -E '^(HYPRLAND_INSTANCE_SIGNATURE|XDG_RUNTIME_DIR)=' | sed 's/^/export /')"
+vm$ hyprctl eval 'hl.dispatch(hl.dsp.exec_cmd("/path/to/script"))'
+```
+
+The script has no terminal, so it must write its output to a file.
 
 ---
 
@@ -734,7 +780,9 @@ vm$ [ "$("$XC" -o -selection clipboard -t UTF8_STRING)" = wl-probe ] && echo WAY
 Machine** menu, under **USB & Bluetooth**. The `.vmx` must contain both
 `usb.generic.allowHID` and `usb.generic.allowLastHID`, or Fusion keeps every HID
 device on the Mac. VirtualHere may also be holding the key for rocinante, in
-which case disconnect it there first.
+which case disconnect it there first. The connection lasts for one power-on: a
+guest reboot keeps it and a power-off drops it, so check again after every cold
+boot.
 
 **greetd loops back to the login prompt.** Almost always the session command
 failing instantly. Read `journalctl -u greetd -b` and
@@ -781,16 +829,36 @@ the server's previous state, so run it twice.
 
 **Login works but `aad-tool compliance-check` fails with "could not acquire
 tokens", and the journal shows `AADSTS70000: Provided grant is invalid` on every
-refresh.** The cached refresh token is one Entra has since rotated. This is what
-restoring a *live* snapshot does: it rolls `/var/cache/himmelblaud` back to an
-older token. Hello-PIN logins keep succeeding, because they unseal the cached
-PRT locally, so it looks healthy until something needs Graph or Intune. Fix from
-inside the graphical session, then re-run the check:
+refresh.** The cached refresh token is one Entra no longer accepts. Hello PIN
+logins keep succeeding, because they unseal the cached PRT locally, so it looks
+healthy until something needs Graph or Intune. Two causes have been seen:
+
+- **himmelblau 4.0.0.** Its PRT renewal was broken (upstream issue 1678), so the
+  token died at every reboot, three boots out of three on 2026-09-18.
+  `flake.nix` pins 4.0.4, which fixed it: after a reboot and a PIN login the
+  check passes with no `AADSTS` line in the journal. Check `aad-tool version`
+  first.
+- **A restored snapshot.** It rolls `/var/cache/himmelblaud` back to an older
+  token. A live snapshot does this at once, because the running daemon had
+  already moved past what was on disk. A stopped one only does it if the token
+  has rotated since.
+
+Mint a fresh PRT from a terminal inside the graphical session:
 
 ```bash
-vm$ aad-tool auth-test --name andreym --force-reauth   # password + MFA, mints a fresh PRT
+vm$ upn="$(sudo awk -F: '/^andreym:/{print $2}' /run/secrets/rendered/himmelblau-user-map)"
+vm$ aad-tool auth-test --name "$upn" --force-reauth
 vm$ aad-tool compliance-check
 ```
+
+`aad-tool` needs the tenant account. Only PAM reads `user_map_file`, so
+`--name andreym` fails with `PAM_ABORT: NotFound: domain in account_id`. The
+tenant is passwordless, so the prompt is `Fido PIN:` and then a touch of the
+YubiKey. The whole exchange has about 25 seconds, and running out of time is
+reported as `CancelledByUser`, which reads like a mistake and is not one. Have
+the key connected and a finger on it before you start. Do not add `-d`: the
+debug output buries the PIN prompt. On 4.0.0 this repaired the running daemon
+only, and the next reboot undid it. On 4.0.4 the new token survives a reboot.
 
 Prefer snapshots of a *stopped* VM for anything you expect to restore.
 
