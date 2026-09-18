@@ -67,6 +67,19 @@
   # whatever logind happens to grant.
   services.udev.packages = [ pkgs.libfido2 ];
 
+  # Build memory ceiling. This host compiles two large things rather than
+  # downloading them: Hyprland, because modules/nixos/vmware-guest.nix patches
+  # it for vmwgfx, and himmelblau's Rust crates. The VM has 16 GB and no swap,
+  # and nix's default `max-jobs = auto` starts one job per vCPU, which is eight
+  # here. On 2026-09-17 that combination OOM-killed nix itself, 5.5 GB
+  # resident, during the first install. Two jobs of four cores keep the peak
+  # near 10 GB and still use every core. README section 4.4 passes the same two
+  # limits to `nixos-install`, which runs before this file is ever read.
+  nix.settings = {
+    max-jobs = 2;
+    cores = 4;
+  };
+
   home-manager.users.andreym = {
     # linux/{firefox,wayvnc}.nix rather than the home/linux.nix bundle: the
     # bundle also carries linux/intune.nix, whose x86_64 .deb/Rosetta stack has

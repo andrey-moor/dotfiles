@@ -295,15 +295,29 @@ after the whole build.
 **4.4 install.** Run it **detached**, so an SSH drop cannot kill the build:
 
 ```
-iso# nohup sudo nixos-install --flake github:andrey-moor/dotfiles#stargazer --no-root-passwd > /tmp/nixos-install.log 2>&1 &
+iso# sudo mkdir -p /mnt/tmp
+iso# nohup sudo sh -c 'TMPDIR=/mnt/tmp exec nixos-install --flake github:andrey-moor/dotfiles#stargazer --no-root-passwd --max-jobs 2 --cores 4' > /tmp/nixos-install.log 2>&1 &
 iso# tail -f /tmp/nixos-install.log        # done at "installation finished!"
 ```
 
 Expect a long build. Anything outside the binary cache is compiled here, which
-includes the patched Hyprland and himmelblau's Rust crates. If it fails on
-evaluation, the fix belongs in the repo: push, and re-run the same command.
-Nothing is lost, and `--refresh` is not needed because each `nixos-install`
-re-resolves the ref.
+includes the patched Hyprland and himmelblau's Rust crates.
+
+**The `TMPDIR` and the two limits are what make that build fit in 16 GB.** The
+installer has no swap, and its `/` and `/tmp` are tmpfs, so every build
+directory is RAM. nix's default `max-jobs = auto` then starts one job per vCPU,
+which is eight here. On 2026-09-17 that combination OOM-killed nix itself, 5.5
+GB resident, about 45 minutes in, and the log ended in `Killed` with no other
+explanation. `TMPDIR=/mnt/tmp` moves build scratch onto the target disk, and
+two jobs of four cores hold the peak near 10 GB while still using every core.
+nix deletes each build directory as its build succeeds, so `/mnt/tmp` is empty
+by the end, which is what the installed `/tmp` should be.
+`hosts/stargazer/common.nix` sets the same two limits for the installed system,
+because `system.autoUpgrade` rebuilds the same Hyprland on the same 16 GB.
+
+If it fails on evaluation, the fix belongs in the repo: push, and re-run the
+same command. Nothing is lost, and `--refresh` is not needed because each
+`nixos-install` re-resolves the ref.
 
 **4.5 set the login password** for `andreym`. root has none, and greetd needs
 something to log in with before Entra is joined:
