@@ -126,6 +126,16 @@ let
 
   glibcLibs = [ "${pkgSource.stdenv.cc.cc.lib}/lib" ];
 
+  # The .deb binaries are run through nixpkgs' own dynamic loader, with
+  # nixpkgs' glibc on the library path. LD_LIBRARY_PATH alone leaves the loader
+  # and libc to the host, so every library above must agree with Arch's glibc.
+  # On 2026-10-06 nixpkgs moved to glibc 2.44 while Arch had 2.43, and the
+  # agent died with "/usr/lib/libm.so.6: version GLIBC_2.44 not found" on
+  # every timer run. With the loader from the same nixpkgs nothing on the host
+  # is involved, which is what this module always claimed.
+  nixLoader = "${pkgSource.glibc}/lib/ld-linux-x86-64.so.2";
+  viaLoader = bin: ''${nixLoader} --library-path "$LD_LIBRARY_PATH:${pkgSource.glibc}/lib" ${bin}'';
+
   systemLibs = map (p: "${p}/lib") [
     pkgSource.dbus.lib
     pkgSource.glib.out
@@ -306,8 +316,8 @@ let
     export OPENSSL_CONF="${opensslConf}"
     export OPENSSL_ENGINES="${pkgSource.libp11}/lib/engines-3"
     ${debugEnvVars}
-    ${optionalString cfg.debug ''exec ${intunePkg}/bin/intune-portal "$@" 2>&1 | tee -a /tmp/intune-portal.log''}
-    ${optionalString (!cfg.debug) ''exec ${intunePkg}/bin/intune-portal "$@"''}
+    ${optionalString cfg.debug ''exec ${viaLoader "${intunePkg}/bin/intune-portal"} "$@" 2>&1 | tee -a /tmp/intune-portal.log''}
+    ${optionalString (!cfg.debug) ''exec ${viaLoader "${intunePkg}/bin/intune-portal"} "$@"''}
   '';
 
   intuneAgentWrapper = pkgs.writeShellScriptBin "intune-agent${wrapperSuffix}" ''
@@ -319,7 +329,7 @@ let
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
     export GNOME_KEYRING_CONTROL="''${GNOME_KEYRING_CONTROL:-$XDG_RUNTIME_DIR/keyring}"
     ${optionalString cfg.debug ''echo "[DEBUG] intune-agent starting at $(date)" >&2''}
-    exec ${intunePkg}/bin/intune-agent "$@"
+    exec ${viaLoader "${intunePkg}/bin/intune-agent"} "$@"
   '';
 
   userBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-broker${wrapperSuffix}" ''
@@ -336,7 +346,7 @@ let
     export OPENSSL_ENGINES="${pkgSource.libp11}/lib/engines-3"
     ${debugEnvVars}
     ${optionalString cfg.debug ''echo "[DEBUG] Launching user broker (${brokerPkg.version})..." >&2''}
-    exec "${brokerPkg}/bin/microsoft-identity-broker" "$@"
+    exec ${viaLoader "${brokerPkg}/bin/microsoft-identity-broker"} "$@"
   '';
 
   deviceBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-device-broker${wrapperSuffix}" ''
@@ -349,7 +359,7 @@ let
     #   ExecStart=<nix-store-path>/bin/microsoft-identity-device-broker${wrapperSuffix}
     export LD_LIBRARY_PATH="${fullLibraryPath}:''${LD_LIBRARY_PATH:-}"
     ${debugEnvVars}
-    exec "${brokerPkg}/bin/microsoft-identity-device-broker" "$@"
+    exec ${viaLoader "${brokerPkg}/bin/microsoft-identity-device-broker"} "$@"
   '';
 
   # D-Bus service file for user broker
