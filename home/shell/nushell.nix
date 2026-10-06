@@ -18,12 +18,16 @@ let
   # Out-of-store symlink into the live repo working copy.
   mkNushellLink = name: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/config/nushell/${name}";
 
-  # Fetch nu_scripts from GitHub
+  # nu_scripts from GitHub, pinned to a commit. A branch name here with a fixed
+  # hash is a frozen snapshot that only looks like it tracks main. Bump both
+  # lines together: `nix flake prefetch github:nushell/nu_scripts/<sha>`.
+  # 2026-10-06: the old snapshot's kubernetes module used `str downcase`,
+  # removed in nushell 0.114, and warned on every shell start.
   nu_scripts = pkgs.fetchFromGitHub {
     owner = "nushell";
     repo = "nu_scripts";
-    rev = "main";
-    sha256 = "sha256-oxnXzxQkNccCs36j+aMzg4QGHDcX7niJruqxCkeg0LM=";
+    rev = "4033ddf35966612e8dc1f28980170f5f54709f74";
+    sha256 = "sha256-P9qxCykVBOmHAB4D16ArNBmDJpEcJa3/sIEv2y6V7ow=";
   };
 in
 {
