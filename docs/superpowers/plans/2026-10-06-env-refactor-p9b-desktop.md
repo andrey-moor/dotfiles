@@ -6,7 +6,7 @@
 
 **Architecture:** The NixOS module `modules/nixos/desktop-hyprland.nix` keeps the compositor, greeter, PipeWire, portals, fonts and the session target, and renders `/etc/xdg/hypr/hyprland.lua` from checked-in Lua files plus a generated `theme.lua`. Every other desktop role is a plain home-manager module under `home/linux/desktop/`, bundled by `home/linux/desktop.nix`. `lib/theme.nix` turns a theme name into colours, mode and wallpapers from `themes/<name>/colors.toml`, Omarchy's palette format. The hypervisor layer `modules/nixos/vmware-guest.nix` is not touched.
 
-**Tech Stack:** NixOS 26.11 (nixpkgs locked 2026-09-10), home-manager (locked 2026-10-05), catppuccin/nix (locked 2026-09-16), Hyprland 0.56.2 with the Lua config manager, waybar 0.15, vicinae 0.29, mako 1.11, hyprlock 0.9.6, hypridle 0.1.8, swayosd 0.3.2, awww 0.12.1, grim, slurp, satty 0.22, hyprpicker, wf-recorder, hyprpolkitagent 0.1.3, adw-gtk3, kvantum, catppuccin-cursors, Papirus.
+**Tech Stack:** NixOS 26.11 (nixpkgs locked 2026-09-10), home-manager (locked 2026-10-05), catppuccin/nix (locked 2026-09-16), Hyprland 0.56.2 with the Lua config manager, waybar 0.15, vicinae 0.29, mako 1.11, hyprlock 0.9.6, hypridle 0.1.8, swayosd 0.3.2, awww 0.12.1, grim, slurp, satty 0.22, hyprpicker, wf-recorder, hyprpolkitagent 0.1.3, adw-gtk3, adwaita-qt, catppuccin-cursors, Papirus.
 
 **Spec:** `docs/superpowers/specs/2026-09-04-p9b-desktop-design.md` (revised 2026-10-06). Research inputs: `docs/superpowers/plans/2026-09-03-p9b-{survey-omarchy-gap,research-omarchy-quattro,vetting-composed-stack}.md`. Hypervisor facts: `docs/vmware-fusion-workarounds.md`.
 
@@ -18,7 +18,7 @@
 - Role modules are plain modules: no options, no `mkIf`, imports are the enabling. The only options this phase adds are `modules.desktop.theme.*` (home-manager) and `modules.nixos.desktop.theme.*` (NixOS). The spec's §3.1 rules apply verbatim.
 - `modules/nixos/vmware-guest.nix` is not modified. The DMA-BUF patch, the clipboard bridge, the ALSA rule and the resize timing stay as they are.
 - These P9c facts survive every task: greetd starts after himmelblaud, the `greeting` option exists and the drill banner works, sshd takes keys only with `KbdInteractiveAuthentication = false`, `andreym` has no local password, `login` has `unixAuth = false`, himmelblau debug is off.
-- Every task ends with these checks passing: `just lint`, `nix eval --raw .#nixosConfigurations.stargazer.config.system.build.toplevel.drvPath`, the same for `stargazer-drill`, `nix eval --raw .#homeConfigurations.rocinante.activationPackage.drvPath`, and `nix eval --raw .#darwinConfigurations.behemoth.system.drvPath` unchanged from `/nix/store/pqqjhjky972si9yzxvhwm4wi8dchx60d-darwin-system-26.11.4cff07d.drv`.
+- Every task ends with these checks passing: `just lint`, `nix eval --raw .#nixosConfigurations.stargazer.config.system.build.toplevel.drvPath`, the same for `stargazer-drill`, `nix eval --raw .#homeConfigurations.rocinante.activationPackage.drvPath`, and `nix eval --raw .#darwinConfigurations.behemoth.system.drvPath` unchanged from `/nix/store/1ryfgilhs80s02brn3rjyvsfic6jw8h4-darwin-system-26.11.4cff07d.drv` (the value at d62de9f, the plan's base commit).
 - Hyprland stays at 0.56.2 for the whole phase. The version guard in `vmware-guest.nix` turns a bump into an evaluation error, which is the intended signal.
 - SSH to stargazer always carries `-o BatchMode=yes -o PreferredAuthentications=publickey`, with `SSH_AUTH_SOCK` pointing at the 1Password agent socket and `ssh-add -l` checked first. A fallthrough to keyboard-interactive once produced 38 failed Entra credential checks.
 - Never run `id`, `id -nG` or `groups` for `andreym` on the VM. They print Entra group names.
@@ -33,7 +33,7 @@
 
 **home-manager options present in the pinned input:** `programs.waybar.{enable,package,settings,style,systemd.{enable,enableDebug,enableInspect,targets}}`, `services.mako.{enable,package,settings,extraConfig}`, `programs.hyprlock.{enable,package,settings,extraConfig,sourceFirst,importantPrefixes}`, `services.hypridle.{enable,package,settings,importantPrefixes,systemdTarget}`, `services.swayosd.{enable,package,topMargin,stylePath}`, `services.awww.{enable,package,extraArgs}`, `programs.satty.{enable,package,settings}`, `services.hyprpolkitagent.{enable,package}`, `services.cliphist.{enable,package,clipboardPackage,allowImages,extraOptions,systemdTargets}`, `services.wl-clip-persist.{enable,package,clipboardType,extraOptions,systemdTargets}`, `programs.vicinae.{enable,package,systemd.{enable,autoStart,target},useLayerShell,enableFirefoxIntegration,extensions,themes,settings}` (module path `programs/vicinae/default.nix`), `gtk.{enable,theme,iconTheme,cursorTheme,font,colorScheme,gtk3,gtk4}`, `qt.{enable,platformTheme.name,style.name}` (platform theme names `adwaita`, `qgnomeplatform`, style `kvantum`), `qt.kde.settings`, `xdg.mimeApps.{enable,defaultApplications,associations.added,associations.removed}`, `xdg.userDirs.{enable,createDirectories,pictures,...}`, `xdg.desktopEntries.<name>.{name,exec,icon,comment,categories,terminal,type,settings}`, `xdg.terminal-exec.{enable,package,settings}`, `xdg.portal.{enable,extraPortals,config,configPackages,xdgOpenUsePortal}`.
 
-**catppuccin/nix**: `catppuccin.enable`, `catppuccin.flavor` (latte, frappe, macchiato, mocha), `catppuccin.accent`, and per-module `catppuccin.<module>.enable`. HM modules present: alacritty, bat, cursors, firefox, foot, fuzzel, ghostty, gtk (icons only), hyprland (needs `wayland.windowManager.hyprland.enable`, which this repo does not use, so it is NOT used here), hyprlock, imv, kvantum, mako, mpv, nushell, starship, swaylock, tmux, vicinae, vscode, waybar (`catppuccin.waybar.mode` = `prependImport` or `createLink`). No neovim module. Neovim is themed by AstroNvim's `astrocommunity.colorscheme.catppuccin` in `config/nvim` and is left alone.
+**catppuccin/nix is NOT used in this phase** (ruling 2026-10-06, Task 1). Every catppuccin/nix port reads its palette through import-from-derivation against a derivation built for the target platform. With `catppuccin.enable = true` the stargazer toplevel cannot evaluate on behemoth (aarch64-darwin) or in the x86_64 `flake-check` CI job, and catppuccin publishes no binary cache. `catppuccin.enable` stays at its default `false` everywhere, no module sets any `catppuccin.*` option, and every app is styled from `modules.desktop.theme.data.colors`. The existing `catppuccin.firefox.enable = true` in `home/linux/firefox.nix` has never had an effect for the same reason and is removed in Task 9. Neovim is themed by AstroNvim's `astrocommunity.colorscheme.catppuccin` in `config/nvim` and is left alone.
 
 **NixOS facts:** `programs.hyprlock.enable` force-enables the system-level `services.hypridle` and sets `security.pam.services.hyprlock = { }`. This plan does NOT use `programs.hyprlock`. It sets the PAM service itself and uses home-manager's `services.hypridle`, so idle has one owner. `virtualisation.docker.rootless.{enable,setSocketVariable,daemon.settings,package,extraPackages}` exist. `xdg.portal.{extraPortals,config,configPackages,xdgOpenUsePortal}` exist. `fonts.fontconfig.defaultFonts.{monospace,sansSerif,serif,emoji}` exist. `programs.hyprland.{enable,xwayland.enable,withUWSM}` exist and `withUWSM` stays off (spec D9).
 
@@ -53,7 +53,7 @@
 **Interfaces:**
 - Produces: `lib/theme.nix` = `{ pkgs }: name: { inherit name; colors = <attrset of the 25 colour keys>; mode = "dark" | "light"; backgrounds = [ <store paths> ]; fragments = { vscode = <path or null>; neovim = ...; obsidian = ...; firefox = ...; icons = ...; }; }`.
 - Produces: NixOS option `modules.nixos.desktop.theme.name` (string, default `"catppuccin"`) and `modules.nixos.desktop.theme.cursorSize` (int, default derived: 24 at scale 1, 32 at scale 2 from the monitor line). The NixOS module forwards both to every user's `modules.desktop.theme.*`.
-- Produces: HM options `modules.desktop.theme.{name,cursorSize,wallpaperDir}`, and a read-only `modules.desktop.theme.data` holding the `lib/theme.nix` result, which every role module reads. `catppuccin.enable`, `catppuccin.flavor` and `catppuccin.accent` are set from the name: `catppuccin` → mocha, `catppuccin-latte` → latte, anything else → `catppuccin.enable = false`.
+- Produces: HM options `modules.desktop.theme.{name,cursorSize,wallpaperDir}`, and a read-only `modules.desktop.theme.data` holding the `lib/theme.nix` result, which every role module reads. No `catppuccin.*` option is set (see the reference section).
 
 - [ ] **Step 1: Fetch the five palettes from Omarchy v4.0.4 and vendor them**
 
@@ -203,14 +203,15 @@ in
 ```nix
 # home/linux/theme.nix -- home-manager side of the theme
 #
-# Role modules read modules.desktop.theme.data. catppuccin/nix modules are
-# enabled only for the two catppuccin themes, with the flavor from the name.
+# Role modules read modules.desktop.theme.data. catppuccin/nix is not
+# enabled: its ports read their palette through import-from-derivation,
+# which needs an aarch64-linux build and so breaks evaluation on behemoth
+# and in the x86_64 flake check. The palette here is the single source.
 { lib, config, pkgs, ... }:
 with lib;
 let
   cfg = config.modules.desktop.theme;
   theme = import ../../lib/theme.nix { inherit pkgs; };
-  isCatppuccin = hasPrefix "catppuccin" cfg.name;
 in
 {
   options.modules.desktop.theme = {
@@ -229,10 +230,8 @@ in
     };
   };
   config = {
-    catppuccin.enable = isCatppuccin;
-    catppuccin.flavor = if cfg.name == "catppuccin-latte" then "latte" else "mocha";
-    catppuccin.accent = "blue";
     home.pointerCursor = {
+      enable = true;
       gtk.enable = true;
       size = cfg.cursorSize;
       package = pkgs.catppuccin-cursors.mochaDark;
@@ -259,7 +258,6 @@ In `hosts/stargazer/common.nix`, add `../../modules/nixos/desktop-theme.nix` to 
 just fmt && just lint && just test-theme
 nix eval --json .#nixosConfigurations.stargazer.config.home-manager.users.andreym.modules.desktop.theme.data.colors.accent   # "#89b4fa"
 nix eval --json .#nixosConfigurations.stargazer.config.home-manager.users.andreym.modules.desktop.theme.cursorSize           # 32
-nix eval --json .#nixosConfigurations.stargazer.config.home-manager.users.andreym.catppuccin.flavor                          # "mocha"
 nix eval --raw .#nixosConfigurations.stargazer-drill.config.system.build.toplevel.drvPath
 nix eval --raw .#homeConfigurations.rocinante.activationPackage.drvPath
 nix eval --raw .#darwinConfigurations.behemoth.system.drvPath   # unchanged
@@ -391,8 +389,7 @@ Later tasks append to this list.
 #
 # Workspaces, window title, clock, tray, pulseaudio, network, cpu, memory. No
 # battery or backlight on a VM. Colours come from the theme as CSS variables,
-# so a theme switch needs no CSS edit. For the catppuccin themes catppuccin/nix
-# prepends its palette import as well, which defines the same names.
+# so a theme switch needs no CSS edit.
 { config, lib, pkgs, ... }:
 let
   t = config.modules.desktop.theme.data;
@@ -425,12 +422,11 @@ in
       #clock, #pulseaudio, #network, #cpu, #memory, #tray, #window { padding: 0 10px; }
     '';
   };
-  catppuccin.waybar.mode = "createLink";
   home.packages = [ pkgs.pwvucontrol ];
 }
 ```
 
-`catppuccin.waybar.mode = "createLink"` keeps catppuccin's CSS out of the way: our `@define-color` lines define every name the bar uses, and the link is simply unused. Check `pkgs.pwvucontrol` exists for aarch64 with `nix eval --raw .#nixosConfigurations.stargazer.pkgs.pwvucontrol.version`. If not, use `pavucontrol`.
+Check `pkgs.pwvucontrol` exists for aarch64 with `nix eval --raw .#nixosConfigurations.stargazer.pkgs.pwvucontrol.version`. If not, use `pavucontrol`.
 
 - [ ] **Step 3: `notifications.nix`**
 
@@ -456,7 +452,7 @@ let t = config.modules.desktop.theme.data; in
 }
 ```
 
-With `catppuccin.mako.enable` defaulting on for catppuccin themes, catppuccin/nix sets the same keys. Set `catppuccin.mako.enable = false;` in this module so the theme pipeline is the single source, and say so in a comment.
+The theme pipeline is the single source for mako's colours. No `catppuccin.*` option is set.
 
 - [ ] **Step 4: `launcher.nix`**
 
@@ -477,7 +473,7 @@ let t = config.modules.desktop.theme.data; in
     useLayerShell = true;
     settings = {
       font.size = 11;
-      theme.name = if config.catppuccin.enable then "catppuccin-${config.catppuccin.flavor}" else "vicinae-dark";
+      theme.name = "dotfiles";
       window.rounding = 0;
     };
   };
@@ -485,7 +481,7 @@ let t = config.modules.desktop.theme.data; in
 }
 ```
 
-Check the vicinae `settings` schema against `programs/vicinae/default.nix` in the pinned home-manager and the `themes` option: if catppuccin/nix's `catppuccin.vicinae` module provides the theme, prefer it and drop `theme.name`. Record which path was taken.
+Define the `dotfiles` theme through `programs.vicinae.themes` from `t.colors` (background, foreground, accent, the eight colours), so the launcher follows the palette. Check the `themes` and `settings` schema against `programs/vicinae/default.nix` in the pinned home-manager and vicinae 0.29's theme file format. Record the mapping you chose.
 
 - [ ] **Step 5: Remove the NixOS-side duplicates**
 
@@ -565,7 +561,6 @@ let t = config.modules.desktop.theme.data; in
       } ];
     };
   };
-  catppuccin.hyprlock.enable = false;
   home.packages = [ pkgs.swaylock ];
 }
 ```
@@ -845,12 +840,11 @@ let dark = config.modules.desktop.theme.data.mode == "dark"; in
     iconTheme = { name = if dark then "Papirus-Dark" else "Papirus"; package = pkgs.papirus-icon-theme; };
     colorScheme = if dark then "dark" else "light";
   };
-  qt = { enable = true; platformTheme.name = "adwaita"; style.name = "kvantum"; };
-  catppuccin.kvantum.enable = config.catppuccin.enable;
+  qt = { enable = true; platformTheme.name = "adwaita"; style.name = if dark then "adwaita-dark" else "adwaita"; };
 }
 ```
 
-Check `gtk.colorScheme` exists in the pinned home-manager (the options list shows it) and that `qt.style.name = "kvantum"` with `catppuccin.kvantum` evaluates without an assertion.
+Qt uses the Adwaita style, not kvantum: without catppuccin/nix there is no kvantum theme to install, and adwaita-qt follows the GTK colour scheme. Check `gtk.colorScheme` exists in the pinned home-manager and that `qt.style.name = "adwaita-dark"` evaluates without an assertion.
 
 - [ ] **Step 4: Fonts and portals in the NixOS module**
 
@@ -958,7 +952,7 @@ Commit: `feat(desktop): omarchy 4 key map in lua, where the component exists`.
 
 - [ ] **Step 1: Apply, with one ruling**
 
-`home/shell/ghostty.nix` is imported by `home/core.nix` for every host and already selects the right package per platform. The spec wants it host-specific. Ruling to take: keep it in `core.nix`, because behemoth uses it with the Homebrew cask and the aarch64 branch is now correct for Fusion, and delete only the dead `ghostty` line in `andreym.nix`. Record the ruling in the ledger and the commit body. `home/linux/containers.nix` is imported by nothing: delete it. `xclip` → `wl-clipboard` in `neovim.nix`, Linux only, with a comment that macOS uses `pbcopy`.
+`home/shell/ghostty.nix` is imported by `home/core.nix` for every host and already selects the right package per platform. The spec wants it host-specific. Ruling to take: keep it in `core.nix`, because behemoth uses it with the Homebrew cask and the aarch64 branch is now correct for Fusion, and delete only the dead `ghostty` line in `andreym.nix`. Record the ruling in the ledger and the commit body. `home/linux/containers.nix` is imported by nothing: delete it. `xclip` → `wl-clipboard` in `neovim.nix`, Linux only, with a comment that macOS uses `pbcopy`. Remove `catppuccin.firefox.enable = true` from `home/linux/firefox.nix`: catppuccin/nix is gated on `catppuccin.enable`, which has never been set, so the line has never had an effect (Task 1 finding).
 
 - [ ] **Step 2: Verify**
 
@@ -1011,7 +1005,7 @@ Commit: `docs: stargazer desktop layer complete`. Push with the owner's go.
 
 ## Self-review notes
 
-Spec coverage: §2 decisions D1 to D10 map to Tasks 2, 3 (D7 trial), 4 (D9 session), 6 (D4 browser, D6 apps), 7 (D5 Docker), 8 (D8 key map). §3.1 layout is Tasks 1 to 6. §3.2 cleanups are Task 9. §4 theme pipeline is Tasks 1 and 2, with the catppuccin modules gated in `home/linux/theme.nix`. §5 is Task 4. §6 is Task 6. §7 acceptance and rollout order are Task 10 and the task order. §8 risks: vicinae on vmwgfx (Task 3 Step 4 comment and the fuzzel fallback), ghostty (Task 3 Step 6), the ALSA rule (Task 5 Step 5 check), the DMA-BUF guard (Global Constraints), hyprlock PAM (Task 4 Step 5), waybar IPC (Task 3 Step 7), compose under rootless (Task 7 Step 2).
+Spec coverage: §2 decisions D1 to D10 map to Tasks 2, 3 (D7 trial), 4 (D9 session), 6 (D4 browser, D6 apps), 7 (D5 Docker), 8 (D8 key map). §3.1 layout is Tasks 1 to 6. §3.2 cleanups are Task 9. §4 theme pipeline is Tasks 1 and 2, with catppuccin/nix ruled out in Task 1. §5 is Task 4. §6 is Task 6. §7 acceptance and rollout order are Task 10 and the task order. §8 risks: vicinae on vmwgfx (Task 3 Step 4 comment and the fuzzel fallback), ghostty (Task 3 Step 6), the ALSA rule (Task 5 Step 5 check), the DMA-BUF guard (Global Constraints), hyprlock PAM (Task 4 Step 5), waybar IPC (Task 3 Step 7), compose under rootless (Task 7 Step 2).
 
 Type consistency: `modules.desktop.theme.data.colors.<key>` is a string in every consumer. `theme.terminal` and `theme.launcher` in Lua come from `cfg.terminal` and `cfg.launcher`. `modules.desktop.terminalDesktopEntry` is introduced in Task 6 and must be added to `home/linux/theme.nix` there, not assumed earlier.
 
