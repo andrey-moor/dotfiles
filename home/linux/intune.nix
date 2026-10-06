@@ -666,15 +666,12 @@ in
     };
 
     # PKCS#11 module config for p11-kit (YubiKey support)
-    # Native x86_64: use system OpenSC (tracks pacman updates)
-    # Rosetta: use Nix-bundled x86_64 OpenSC (needs matching libopensc.so)
+    # Always use the Nix-bundled OpenSC: the broker wrapper pins OpenSSL 3.3.2 via
+    # LD_LIBRARY_PATH, and the pacman OpenSC is built against OpenSSL >= 3.4, so
+    # p11-kit fails to load /usr/lib/pkcs11/opensc-pkcs11.so inside the broker
+    # ("version `OPENSSL_3.4.0' not found") and the certificate picker is empty.
     xdg.configFile."pkcs11/modules/opensc.module".text = ''
-      module: ${
-        if mode == "native-x86_64" then
-          "/usr/lib/pkcs11/opensc-pkcs11.so"
-        else
-          "${openscArch}/lib/pkcs11/opensc-pkcs11.so"
-      }
+      module: ${openscArch}/lib/pkcs11/opensc-pkcs11.so
       critical: no
       trust-policy: no
     '';
@@ -691,7 +688,11 @@ in
       Service = {
         Type = "oneshot";
         ExecStart = "${intuneAgentWrapper}/bin/intune-agent${wrapperSuffix}";
-        StateDirectory = "intune";
+        # No StateDirectory: it exports STATE_DIRECTORY=~/.local/state/intune and the
+        # agent then looks for its registration/account there instead of the
+        # ~/.config/intune + ~/.local/share/Microsoft/OneAuth paths intune-portal
+        # writes to, so every timer run skipped with "Cannot checkin before a user
+        # logs in". Without it the agent shares the portal's paths and checks in.
         Slice = "background.slice";
         Environment = [
           "DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus"
