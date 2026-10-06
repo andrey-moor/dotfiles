@@ -187,11 +187,13 @@ in
 
     services.himmelblau = {
       enable = true;
-      # Compliance evaluation is only visible in the daemon journal, and the
-      # enrollment ceremony (Task 5) is read from there.
-      debugFlag = true;
+      # Debug logging stays off. It writes HTTP frames and account identifiers
+      # into the journal on every login. Turn both flags on for troubleshooting,
+      # where compliance evaluation and the enrollment flow become visible, as
+      # they were through the first install (README section 10).
+      debugFlag = false;
       settings = {
-        debug = true;
+        debug = false;
         apply_policy = true;
         join_type = "join";
         # Passwordless FIDO (YubiKey) is the first factor at the local console.
