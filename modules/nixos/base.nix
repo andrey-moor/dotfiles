@@ -32,6 +32,16 @@
 
   services.openssh = {
     enable = true;
+    # Keys only, and that has to be said twice. PasswordAuthentication = false
+    # alone leaves keyboard-interactive on, which hands the login to PAM, where
+    # pam_himmelblau asks for the Entra password. On 2026-10-06 an ssh client
+    # without its agent fell through to that prompt and, with no terminal,
+    # answered it with empty input 38 times in two connections. Each one was a
+    # failed credential check against the owner's account (AADSTS50126), which
+    # is exactly what smart lockout counts. With this off, sshd never consults
+    # PAM for authentication, so no network peer can trigger an Entra password
+    # attempt through this host.
+    settings.KbdInteractiveAuthentication = false;
     # The module opens port 22 on every interface by default, which would make
     # the firewall below, and each host's own NAT rule, decoration. Who can
     # reach sshd is decided there, not here.

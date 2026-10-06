@@ -130,6 +130,11 @@ in
       account.himmelblau.enable = mkForce false;
       session.himmelblau.enable = mkForce false;
     };
+    # sshd takes keys only (base.nix), so its PAM auth stack is never consulted.
+    # Remove himmelblau from it anyway, so a future sshd setting change cannot
+    # reopen the Entra password prompt by accident. Account and session stay,
+    # which is what a key login of the mapped user needs.
+    security.pam.services.sshd.rules.auth.himmelblau.enable = mkForce false;
 
     # Console logins accept himmelblau only. `andreym` has no local password
     # (hosts/stargazer/README.md section 6), so pam_unix in the login stack can
