@@ -45,12 +45,22 @@ in
   };
 
   config = {
+    # Themes carry no cursor set, so the cursor stays catppuccin for every
+    # palette. The mode picks the variant, so a light theme gets a light cursor.
     home.pointerCursor = {
       enable = true;
       gtk.enable = true;
       size = cfg.cursorSize;
-      package = pkgs.catppuccin-cursors.mochaDark;
-      name = "catppuccin-mocha-dark-cursors";
+      package =
+        if cfg.data.mode == "light" then
+          pkgs.catppuccin-cursors.latteLight
+        else
+          pkgs.catppuccin-cursors.mochaDark;
+      name =
+        if cfg.data.mode == "light" then
+          "catppuccin-latte-light-cursors"
+        else
+          "catppuccin-mocha-dark-cursors";
     };
   };
 }

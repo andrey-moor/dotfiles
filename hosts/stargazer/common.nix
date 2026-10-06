@@ -20,7 +20,6 @@
     ./disko.nix
     ../../modules/nixos/base.nix
     ../../modules/nixos/desktop-hyprland.nix
-    ../../modules/nixos/desktop-theme.nix
     ../../modules/nixos/himmelblau.nix
     ../../modules/nixos/intune-identity.nix
     ../../modules/nixos/secureboot.nix

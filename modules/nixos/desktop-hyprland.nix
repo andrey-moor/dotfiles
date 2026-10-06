@@ -109,6 +109,8 @@ let
   '';
 in
 {
+  imports = [ ./desktop-theme.nix ];
+
   options.modules.nixos.desktop = {
     configFormat = mkOption {
       type = types.enum [
@@ -164,6 +166,12 @@ in
         After = [ "graphical-session-pre.target" ];
       };
     };
+
+    # Retina through Fusion hands the guest 2x pixels, so the cursor follows the
+    # monitor scale. Any other scale keeps the theme module's 24.
+    modules.nixos.desktop.theme.cursorSize = mkDefault (
+      if elemAt monitorFields 3 == "2" then 32 else 24
+    );
 
     programs.hyprland.enable = true;
 
