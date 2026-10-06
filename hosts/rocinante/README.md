@@ -33,8 +33,19 @@ chmod 600 ~/.config/sops/age/keys.txt
 
 ```bash
 # Install home-manager and switch (also symlinks nvim/nushell/alacritty configs from config/)
+ulimit -n 65536
 nix run home-manager -- switch --flake .#rocinante -b backup
 ```
+
+The `ulimit` line matters. The default soft limit on this host is 1024 open
+files, and nix hits it while it writes the flake's inputs into its tarball
+cache. The switch then dies with `Too many open files` inside an unrelated
+looking evaluation error (seen 2026-10-06). The hard limit is 524288, so a
+user can raise it without root.
+
+`~/.claude/skills/<name>` entries become symlinks into `agents/skills/`. A real
+folder of the same name blocks the switch, so remove any hand-installed copy
+first. The repo is the source of truth for skills: edit them there.
 
 ## Intune Enrollment
 
