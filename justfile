@@ -76,6 +76,10 @@ lint:
     nix run nixpkgs#statix -- check .
     nix run nixpkgs#deadnix -- --fail --exclude spikes
 
+# Pure theme-library checks (no build)
+test-theme:
+    nix eval --raw --impure --expr 'import ./tests/theme.nix { pkgs = (builtins.getFlake (toString ./.)).nixosConfigurations.stargazer.pkgs; }'
+
 # Check flake
 check:
     nix flake check

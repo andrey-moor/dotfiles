@@ -1,0 +1,32 @@
+[
+  {
+    "name": "1-the-backwater.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/gruvbox/backgrounds/1-the-backwater.jpg",
+    "sha256": "sha256-E8/GrjcK+YTAioIP+BtWoP67D7/pcSptsSi5TRTsqsY="
+  },
+  {
+    "name": "2-flower-basket.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/gruvbox/backgrounds/2-flower-basket.jpg",
+    "sha256": "sha256-5hiPxQmzM28fIuCXMowpveYE52yWUJLeaaWGH6NYdZg="
+  },
+  {
+    "name": "3-village-square.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/gruvbox/backgrounds/3-village-square.jpg",
+    "sha256": "sha256-msTVLb7waHaoOOnPn5eBPdhumdK5d9nRHF84m+ZFHNw="
+  },
+  {
+    "name": "4-idyllic-procession.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/gruvbox/backgrounds/4-idyllic-procession.jpg",
+    "sha256": "sha256-vgrnMmOl62lBb7E1R4JqYIBoWaoxuwMQU6/HPeYKVcU="
+  },
+  {
+    "name": "5-leaves.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/gruvbox/backgrounds/5-leaves.jpg",
+    "sha256": "sha256-zb0817NKLI5+dIGK9RAahTF4aHiwo6/Lj2mFsnOU9m0="
+  },
+  {
+    "name": "omarchy.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/gruvbox/backgrounds/omarchy.png",
+    "sha256": "sha256-Lsl/JefFPQd0n1GlXRQqaaTsdw+5Vw17et44xKfbPPA="
+  }
+]

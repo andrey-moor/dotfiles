@@ -1,0 +1,22 @@
+[
+  {
+    "name": "1-totoro.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/catppuccin/backgrounds/1-totoro.png",
+    "sha256": "sha256-O8+rFOjnsEEwfLd9cAxpWRYP5/bV3mMbFb0C3gz42f8="
+  },
+  {
+    "name": "2-waves.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/catppuccin/backgrounds/2-waves.png",
+    "sha256": "sha256-VjGQ35WJvrLVEX1A2wLGSSMqtrw8Py622Xqfs1haDP0="
+  },
+  {
+    "name": "3-blue-eye.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/catppuccin/backgrounds/3-blue-eye.png",
+    "sha256": "sha256-qVBE3eTe5GtQgW8TA4dTDc8js71CXqqSndMhzmP18Hw="
+  },
+  {
+    "name": "omarchy.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/catppuccin/backgrounds/omarchy.png",
+    "sha256": "sha256-JL2neQYmZuyWKTfT4lYQODmhTH4dZvEq8E9ovsSmva8="
+  }
+]

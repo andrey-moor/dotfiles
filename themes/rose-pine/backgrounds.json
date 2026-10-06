@@ -1,0 +1,22 @@
+[
+  {
+    "name": "1-funky-shapes.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/rose-pine/backgrounds/1-funky-shapes.jpg",
+    "sha256": "sha256-b1qeo9wiP76RBGfMc5Z7pt2ffoCn2Aa8FemFVj0V/gM="
+  },
+  {
+    "name": "2-dot-map.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/rose-pine/backgrounds/2-dot-map.png",
+    "sha256": "sha256-VnfNYeNHInC72shi31V05H6BCaDkfk14wNyzhhZb1/Y="
+  },
+  {
+    "name": "3-omarchy-plants.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/rose-pine/backgrounds/3-omarchy-plants.png",
+    "sha256": "sha256-PRmv94dWCdjCiBGxUKxZr6WGO13ug7S6yFMP/lnJScs="
+  },
+  {
+    "name": "omarchy.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/rose-pine/backgrounds/omarchy.png",
+    "sha256": "sha256-T5r1ob8x3s3bNvPBbqxmsoGpIhM/E+NeDLWR5lJHOHQ="
+  }
+]

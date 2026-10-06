@@ -1,0 +1,42 @@
+[
+  {
+    "name": "0-winding-road.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/tokyo-night/backgrounds/0-winding-road.jpg",
+    "sha256": "sha256-N3RkBK6aQ1dELlIMNOoQV4AjKsPQip8onwAVbknzfE4="
+  },
+  {
+    "name": "1-quattro.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/tokyo-night/backgrounds/1-quattro.jpg",
+    "sha256": "sha256-/9ZVlLbV5wlPxwbZt7keWpRxM0XSZKfWIwK2RYm+PI8="
+  },
+  {
+    "name": "2-swirl-buck.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/tokyo-night/backgrounds/2-swirl-buck.jpg",
+    "sha256": "sha256-Skzlumwih3HIlDlxC/qBAFeR08T3amJIHk0Ak5twLjw="
+  },
+  {
+    "name": "3-sunset-lake.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/tokyo-night/backgrounds/3-sunset-lake.png",
+    "sha256": "sha256-Bt+5/OAp7DWttA6jk5KWd3wrFA0SMrWhaXsVBS1XU2I="
+  },
+  {
+    "name": "4-omakub.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/tokyo-night/backgrounds/4-omakub.jpg",
+    "sha256": "sha256-wEph35ko8cGweAUAeGSL2dcXMm5cwZ/J3mIomJrwHyQ="
+  },
+  {
+    "name": "5-oma-cityscape.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/tokyo-night/backgrounds/5-oma-cityscape.jpg",
+    "sha256": "sha256-IuHWOXIrM/pvDTrCczRQtLrpYbSB9WZcsWOXvF9xTlw="
+  },
+  {
+    "name": "6-oma.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/tokyo-night/backgrounds/6-oma.jpg",
+    "sha256": "sha256-Qbi2oXW7ST4W4RwIKfk2ZJESlSCSLFwF4RLgKVEyvBQ="
+  },
+  {
+    "name": "omarchy.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/tokyo-night/backgrounds/omarchy.png",
+    "sha256": "sha256-DaU7gvlwClfnWaubaJ8pSj73NC/8VqfTq/5V1ObID5Y="
+  }
+]

@@ -23,6 +23,9 @@
   # scale for every mode it applies.
   modules.nixos.desktop.monitor = "Virtual-1,preferred,auto,2";
 
+  # One word picks the palette for the compositor and every role module.
+  modules.nixos.desktop.theme.name = "catppuccin";
+
   # Plain lanzaboote. The firmware trusts our db certificate once the VM
   # definition appends it to VMware's default db (`scripts/stargazer-vm
   # secure-boot on`, README §7). ./common.nix wires the signing key.

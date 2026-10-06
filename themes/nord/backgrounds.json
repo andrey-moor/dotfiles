@@ -1,0 +1,22 @@
+[
+  {
+    "name": "0-black-moon.jpg",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/nord/backgrounds/0-black-moon.jpg",
+    "sha256": "sha256-aHP799TLuaOWBAlN2NgE620jHmPs9W5cKXqukDWO/4E="
+  },
+  {
+    "name": "1-city-view.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/nord/backgrounds/1-city-view.png",
+    "sha256": "sha256-sRhvp+5OnZAIe4aTTE3jGoZ9qkojxAGIUYGwe6Ev/3U="
+  },
+  {
+    "name": "2-night-hawks.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/nord/backgrounds/2-night-hawks.png",
+    "sha256": "sha256-YaS8ScE3ERId6H9ffyQH/4I1BRzRf5ze1+IOFbGdVpI="
+  },
+  {
+    "name": "omarchy.png",
+    "url": "https://raw.githubusercontent.com/basecamp/omarchy/v4.0.4/themes/nord/backgrounds/omarchy.png",
+    "sha256": "sha256-mjz+lY2+aUKTzL4OXVlKsjUi5BPx9F/XwJI1y9s1VLw="
+  }
+]
