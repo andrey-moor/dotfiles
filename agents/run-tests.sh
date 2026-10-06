@@ -3,7 +3,7 @@
 # Each skill keeps its tests in skills/<name>/tests/run.sh. Tests that need LibreOffice, poppler or the
 # diagram-design plugin skip themselves when the tool is missing, so read the skip counts.
 set -uo pipefail
-cd "$(dirname "$0")/skills"
+cd "$(dirname "$0")/skills" || exit 1
 failed=()
 [ $# -gt 0 ] || set -- */tests/run.sh
 for arg in "$@"; do

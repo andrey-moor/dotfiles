@@ -10,7 +10,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: DeterminateSystems/nix-installer-action@main
       # Mirrors `just lint`. Directory args to `nix fmt` are deprecated, so the
       # file list comes from git. spikes/ holds standalone throwaway flakes:
@@ -25,27 +25,27 @@ jobs:
   flake-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix flake check --no-build --all-systems
 
   build-behemoth:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix build .#darwinConfigurations.behemoth.system --no-link --fallback
 
   build-rocinante:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix build .#homeConfigurations.rocinante.activationPackage --no-link --fallback
 
   build-stargazer:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix build .#nixosConfigurations.stargazer.config.system.build.toplevel --no-link --fallback

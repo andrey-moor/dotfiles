@@ -19,7 +19,7 @@ if [ "$SUITE" != "$ROOT/evals" ]; then
   (cd "$SUITE" && find . -mindepth 1 -maxdepth 1 ! -name results -exec rm -rf "$ROOT/evals/{}" \; -exec cp -R {} "$ROOT/evals/" \;)
 fi
 
-PLUGIN=$(ls -d "$HOME"/.claude/plugins/cache/diagram-design/diagram-design/*/ 2>/dev/null | sort -V | tail -1 || true)
+PLUGIN=$(find "$HOME"/.claude/plugins/cache/diagram-design/diagram-design -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1 || true)
 [ -n "$PLUGIN" ] || PLUGIN="$HOME/.copilot/installed-plugins/_direct/cathrynlavery--diagram-design/"
 [ -f "$PLUGIN/.claude-plugin/plugin.json" ] || { echo "run-evals: diagram-design plugin not found; doc-diagrams cases need it" >&2; exit 1; }
 rm -rf "$ROOT/.eval-deps/diagram-design" && mkdir -p "$ROOT/.eval-deps" && cp -R "$PLUGIN" "$ROOT/.eval-deps/diagram-design"
