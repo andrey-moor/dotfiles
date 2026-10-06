@@ -1,9 +1,22 @@
 # P9b — stargazer as the daily-driver desktop (design)
 
-Date: 2026-09-04. Status: approved in brainstorm, awaiting owner review of this
-document. Predecessors: P9 (stargazer NixOS VM, installed + Entra/Intune
-enrolled + Secure Boot on + compliant, fire drill passed 2026-09-03). Successor:
-P7 (the same configuration on rocinante's physical hardware).
+Date: 2026-09-04, revised 2026-10-06 for VMware Fusion. Status: approved in
+brainstorm, awaiting owner review of this document. Predecessor P9 delivered
+the stargazer NixOS VM, installed, Entra joined, Intune enrolled, Secure Boot
+on and compliant. Predecessor P9c moved that machine from Parallels to VMware
+Fusion, rebuilt it from the runbook on 2026-09-17 and 18, and passed the fire
+drill on 2026-09-18. Successor: P7, the same configuration on rocinante's
+physical hardware.
+
+The revision changes what the hypervisor changed and nothing else. The
+hardware facts are now these. Graphics are vmwgfx (SVGA3D) with OpenGL 4.3 and
+a vendored Hyprland DMA-BUF patch, at Retina pixels with Hyprland scale 2, and
+with no video encoder. A bridge carries the clipboard between X11 and Wayland.
+An ALSA rule wakes on the card interrupt. USB passthrough for the YubiKey lasts
+one power-on. Console logins take the Hello PIN only, there is no local
+password, and sshd takes keys only. A `stargazer-drill` configuration exists
+that cannot join the tenant. `docs/vmware-fusion-workarounds.md` is the
+reference. §10 lists every change against the 2026-09-04 text.
 
 Inputs, all in `docs/superpowers/plans/`:
 `2026-09-03-p9b-survey-omarchy-gap.md` (repo vs rocinante's Omarchy 3.4),
@@ -34,29 +47,38 @@ role; keep the repo lean — add apps when they are missed, not in advance.
 | D4 | **Firefox is the default browser everywhere**; Chromium only as the web-app engine; Edge only as an explicit x86_64 host import | Validated on stargazer 2026-09-03: Entra device SSO via the linux-entra-sso extension + himmelblau's broker (`acquireTokenSilently success`), WebAuthn with the YubiKey once attached as a USB device. |
 | D5 | **Rootless Docker** by default, per-host switch to rootful + `docker` group | `docker` group is root-equivalent; rootless keeps container escapes at user level. Must be proven on the owner's compose stacks. |
 | D6 | **GUI set**: Firefox, VS Code, Alacritty, 1Password GUI, Obsidian, papers, imv, mpv, qalculate. Web-app launcher mechanism, list empty. | What the repo already has plus what the owner's config already implies. Omarchy's default catalogue is not adopted. |
-| D7 | **Terminal**: alacritty on the VM, ghostty on the x86_64 desktop; foot not introduced | Alacritty is configured, themed, works on virgl; ghostty needs GL 4.3 (Parallels caps at 4.0). |
+| D7 | **Terminal**: alacritty stays the VM default; ghostty becomes possible there and is the x86_64 desktop's terminal; foot not introduced | Alacritty is configured, themed and proven on vmwgfx. ghostty needs GL 4.3, which Parallels capped at 4.0 and Fusion's SVGA3D provides, so ghostty on the VM is now an owner choice rather than a hardware limit. It is unverified on vmwgfx with the DMA-BUF patch, so it is tried once in step 2 and adopted only if it renders cleanly. |
 | D8 | **Key map**: Omarchy 4's, verbatim where the component exists; shell-panel binds dropped | One reference (the Omarchy manual) for muscle memory; kept in Lua files, not Nix strings. |
-| D9 | **Session**: keep greetd + tuigreet and the hand-rolled `hyprland-session.target`; uwsm deferred to P7 | Entra PAM needs an interactive login; uwsm would replace the greeter command, the session glue and D-Bus implementation, unverified with the Lua config. |
-| D10 | **rocinante stays frozen** (OS and home-manager) until P7 | Its clone is 70 commits behind; re-switching would change the daily driver's nvim/shell weeks before the OS is replaced anyway. |
+| D9 | **Session**: keep greetd + tuigreet and the hand-rolled `hyprland-session.target`; uwsm deferred to P7 | Entra PAM needs an interactive login; uwsm would replace the greeter command, the session glue and D-Bus implementation, unverified with the Lua config. Two P9c facts must survive this phase. greetd starts after himmelblaud, because a race between them put a dead `Password:` prompt on the greeter. tuigreet's `--greeting` carries the drill banner. |
+| D10 | **No desktop work on rocinante until P7** | rocinante was switched on 2026-10-06 for the Intune loader fix and the skills symlinks, so it is no longer frozen, but its desktop is still Omarchy's. The Fusion drift it showed (nixpkgs glibc ahead of Arch's) is the argument for P7, not for porting this layer onto Arch. |
 
 ### Components (from the vetting; every one present in the aarch64 cache of the pinned nixpkgs)
+
+Re-vetted 2026-10-06 against the current lock, nixpkgs 2026-09-10 and
+home-manager 2026-10-05. Every pick below resolves for `aarch64-linux`. Five
+versions moved since the first vetting: swayosd 0.3.2, awww 0.12.1, satty 0.22,
+vicinae 0.29 and hyprsunset 0.4. home-manager's vicinae module is the directory
+`programs/vicinae/`. catppuccin/nix has no neovim module. Neovim is already
+themed by AstroNvim's `astrocommunity.colorscheme.catppuccin` in `config/nvim`,
+so the theme pipeline leaves Neovim alone unless a theme ships a `neovim.lua`
+fragment.
 
 | Role | Pick | Fallback | Note |
 |------|------|----------|------|
 | bar | waybar 0.15 (HM `programs.waybar`, catppuccin module) | ironbar | Hyprland IPC compat with 0.56 verified in step 2 |
-| launcher | vicinae (HM `programs.vicinae`, catppuccin module; clipboard, emoji, calc built in; Hyprland ships `vicinae-hotkey-v1`) | walker+elephant, fuzzel | Qt6 on virgl: Quickshell (Qt6/QML) already rendered fine on this VM |
+| launcher | vicinae 0.29 (HM `programs.vicinae`, catppuccin module; clipboard, emoji, calc built in; Hyprland ships `vicinae-hotkey-v1`) | walker+elephant, fuzzel | Qt6 on vmwgfx is unverified. The Quickshell result was on virgl under Parallels. GL clients work on vmwgfx only through the vendored DMA-BUF patch, so vicinae is the first thing step 2 renders, with fuzzel kept until it does |
 | notifications | mako 1.11 (HM `services.mako`, catppuccin) | swaync | |
 | lock | hyprlock 0.9.6 (HM `programs.hyprlock`, catppuccin) | swaylock | PAM: see §5 |
-| idle | hypridle 0.1.8 (HM `services.hypridle`) | swayidle | DPMS best-effort on virtio-gpu |
+| idle | hypridle 0.1.8 (HM `services.hypridle`) | swayidle | DPMS best-effort on vmwgfx |
 | OSD | swayosd 0.3.1, client only (HM `services.swayosd`) | wob | libinput backend has no NixOS wiring; not needed in a VM |
 | wallpaper | awww 0.12 (HM `services.awww`; swww's maintained successor) | hyprpaper | runtime cycling via IPC |
 | screenshots | grim + slurp + satty (HM `programs.satty`), hyprpicker | hyprshot (FlareXes fork) | flameshot excluded: broken on the Hyprland portal |
-| recording | wf-recorder (CPU encode) on the VM; gpu-screen-recorder on the desktop | — | virtio-gpu has no video encoder |
-| clipboard | vicinae's history; cliphist + wl-clip-persist only if insufficient | clipse | history is plaintext on disk (§5) |
+| recording | wf-recorder (CPU encode) on the VM; gpu-screen-recorder on the desktop | — | vmwgfx exposes no video encoder either |
+| clipboard | vicinae's history; cliphist + wl-clip-persist only if insufficient | clipse | history is plaintext on disk (§5). The Fusion clipboard bridge (`vmware-clipboard-bridge`, wl-clipboard data-control) already watches the Wayland clipboard; a second watcher is fine, but any history tool must ignore `CLIPBOARD_STATE=sensitive` as the bridge does |
 | polkit agent | hyprpolkitagent 0.1.3 (HM `services.hyprpolkitagent`) | soteria | |
 | night light | none on the VM; hyprsunset on the desktop | wlsunset | |
 | files/viewers | papers, imv, mpv, qalculate; no file manager until missed | nautilus/thunar | |
-| GTK/Qt/cursor/icons | adw-gtk3 + `gtk.enable`, kvantum + `qt.enable`, catppuccin-cursors, Papirus | | catppuccin/nix's `gtk` module now sets icons only |
+| GTK/Qt/cursor/icons | adw-gtk3 + `gtk.enable`, kvantum + `qt.enable`, catppuccin-cursors, Papirus | | catppuccin/nix's `gtk` module now sets icons only. Cursor size follows Hyprland scale 2 on the VM (Retina pixels), so `cursorSize` defaults from the host's scale |
 | fonts | JetBrainsMono Nerd Font, Noto (+CJK, colour emoji), Font Awesome | | ~370 MB, cached |
 | portals | xdg-desktop-portal-hyprland + xdg-desktop-portal-gtk | | keep xdph and Hyprland from one nixpkgs generation |
 
@@ -87,8 +109,13 @@ Rules:
   never reads another role's config.
 - `desktop-hyprland.nix` keeps: `programs.hyprland`, greetd/tuigreet, PipeWire,
   `hyprland-session.target` and the exec-once handoff, the Lua renderer, xdg
-  portals, fonts, GTK/Qt platform packages, the `virtio-gpu-resize` follower
-  interaction. It loses waybar/mako/fuzzel and the ad-hoc four keybinds.
+  portals, fonts, GTK/Qt platform packages, the `greeting` option, and the
+  `virtio-gpu-resize` follower interaction. The follower lives in
+  `vm-guest.nix` and its Fusion timing in `vmware-guest.nix`. It must keep
+  reading the monitor line's scale. The module loses waybar/mako/fuzzel and the
+  ad-hoc four keybinds. `vmware-guest.nix` is untouched by this phase. The
+  DMA-BUF patch, the copy/paste agent and its bridge, the ALSA rule and the
+  resize timing are hypervisor facts, not desktop roles.
 - The Hyprland configuration is rendered to `/etc/xdg/hypr/hyprland.lua` as
   today, but composed from the checked-in Lua files plus a generated
   `theme.lua` (colours, cursor size, monitor) so keybinds and rules are edited
@@ -145,11 +172,15 @@ Rules:
 - Lock: hyprlock via `ext-session-lock` (compositor keeps the lock if the
   locker dies). PAM: `"hyprlock"` (and `"swaylock"`) added to
   `services.himmelblau.pamServices` so `pam_himmelblau` answers with the Hello
-  PIN through the locker's single field; no local password path exists and
-  none is added. Tested: lock/unlock, lock → suspend → resume → unlock,
-  idle-triggered lock. swaylock stays installed as the fallback locker.
+  PIN through the locker's single field. Since P9c `andreym` has no local
+  password at all, and `login` has `unixAuth = false`. The locker services get
+  the same setting, so a failed PIN re-prompts instead of falling to a
+  `Password:` field nothing can satisfy. Tested: lock/unlock, lock → suspend
+  → resume → unlock, idle-triggered lock, and a wrong PIN. swaylock stays
+  installed as the fallback locker. The YubiKey is not involved in unlocking
+  and is usually absent after a power-off (one-power-on passthrough).
 - Idle: hypridle; lock at 10 min, screen off at 20 min (best-effort on
-  virtio-gpu), `before_sleep_cmd = loginctl lock-session`. 1Password is not
+  vmwgfx), `before_sleep_cmd = loginctl lock-session`. 1Password is not
   locked on screen lock (the SSH-agent re-auth churn that the rocinante patch
   avoided).
 - Polkit: `security.polkit.enable`, hyprpolkitagent as the session agent.
@@ -199,9 +230,17 @@ Acceptance (all on stargazer, then re-proven by the drill):
    Obsidian; VS Code; terminal with the full CLI toolchain.
 4. Rootless Docker runs the owner's compose stacks.
 5. Theme switch = one line + rebuild, verified with two themes.
-6. `aad-tool compliance-check` still passes.
-7. Fire drill (README §8, with desktop criteria that need no login: services
-   active, theme rendered, PAM stacks present) passes from the pushed flake.
+6. `aad-tool compliance-check` still passes, run from the graphical session,
+   after a full power cycle and a PIN login with no manual reauth.
+7. Fire drill (README §8) passes from the pushed flake as `#stargazer-drill`.
+   Its console accepts no login, so the desktop criteria are the ones provable
+   over SSH. Those are: role services enabled for `graphical-session.target`,
+   theme files rendered into the store, locker PAM stacks present and
+   himmelblau-only, greetd ordered after himmelblaud, and the greeter banner
+   present.
+8. Audio still plays without breaking up (the ALSA rule survives the PipeWire
+   configuration this phase adds), and copy/paste still crosses to the Mac in
+   both directions.
 
 Rollout order (each step its own commit, switched on the VM, VM usable
 throughout): theme pipeline → bar + launcher + notifications → lock + idle +
@@ -217,11 +256,13 @@ evaluate for `aarch64-linux` and `x86_64-linux`.
 | Risk | Response |
 |------|----------|
 | hyprlock PAM: unlock impossible or lockout after resume (himmelblau #1206, #1509 history) | test in step 3 before relying on it; swaylock fallback; LUKS passphrase and SSH path never removed, so the VM is always recoverable |
-| vicinae misrenders on virgl | walker+elephant or fuzzel behind the same role |
+| vicinae (Qt6) misrenders on vmwgfx behind the DMA-BUF patch | walker+elephant or fuzzel behind the same role. fuzzel is already installed and bound |
+| ghostty misrenders on vmwgfx despite GL 4.3 | alacritty stays, as today |
+| a desktop role's PipeWire or WirePlumber config overrides the ALSA interrupt rule | the rule lives in `vmware-guest.nix` as a WirePlumber drop-in. Role modules add their own files and never replace `extraConfig` |
 | `hypr*` libraries drift if a nixpkgs bump moves Hyprland alone | check on every `just update`; all come from one nixpkgs generation |
 | waybar `hyprland/workspaces` vs Hyprland 0.56 IPC | verified in step 2; ironbar fallback |
 | a compose stack needs rootful Docker | host switch to rootful + group, documented |
-| Parallels vmnet wedge recurs | runbook §10; out of this phase |
+| a Hyprland bump invalidates the vendored DMA-BUF patch | the version guard in `vmware-guest.nix` turns it into an evaluation error. The plan pins Hyprland for the phase and bumps once at the end |
 | Omarchy Lua defaults referenced by the key map call `omarchy-*` helpers | the key map is ours; targets are our role modules' commands, no Omarchy scripts at runtime |
 
 ## 9. Out of scope (recorded, not forgotten)
@@ -235,3 +276,29 @@ P9).
 Follow-ups: F1 sudo prompt via PIN/password once himmelblau's sudo behaviour
 is configurable; F2 evaluate the Quattro shell per role once it has a release
 history; F3 web-app list once the owner misses one.
+
+## 10. Revision record, 2026-10-06
+
+Changes against the 2026-09-04 text, all consequences of the move to Fusion or
+of P9c's findings:
+
+- Header: predecessors include P9c, and the hardware facts paragraph is new.
+- D7: ghostty on the VM becomes an owner choice, since SVGA3D provides GL 4.3.
+- D9: the greetd-after-himmelblaud ordering and the `greeting` option are
+  named as load-bearing.
+- D10: rocinante is no longer frozen. The decision is "no desktop work there".
+- Components: re-vetted against the current lock, with versions updated. The
+  vicinae module path and the missing catppuccin neovim module are corrected.
+  virgl and virtio-gpu give way to vmwgfx where the fact changed, which is
+  DPMS, recording and Qt6 rendering. The clipboard bridge and cursor size are
+  noted.
+- §3.1: `vmware-guest.nix` declared out of scope and its contents listed.
+- §5: the locker gets `unixAuth = false` like `login`. The YubiKey's absence
+  after power-off is noted.
+- §7: acceptance 6 now follows the P9c power-cycle test. Acceptance 7 uses
+  `#stargazer-drill` and lists criteria provable without a login. Acceptance 8
+  adds audio and clipboard regressions.
+- §8: the Parallels vmnet row is gone. Three Fusion rows replace it.
+
+Not changed: the goal, the composed-stack decision, the role contract, the
+theme pipeline, the key map, the app set, Docker, the rollout order.
