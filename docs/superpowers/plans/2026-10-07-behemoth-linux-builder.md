@@ -4,7 +4,7 @@
 
 **Goal:** behemoth can build aarch64-linux derivations locally, so evaluating and inspecting the stargazer configuration no longer fails with a platform mismatch.
 
-**Architecture:** Determinate's own nix-darwin module (`determinateNix`) replaces the `nix.enable = false` workaround, manages `/etc/nix/nix.custom.conf` and `/etc/determinate/config.json` declaratively, and runs the nixpkgs Linux builder VM (`pkgs.darwin.linux-builder`) as a launchd daemon with a `builders` entry in `/etc/nix/machines`. The same module declares Determinate's native Linux builder as enabled, which takes over once Determinate grants the account access. Two phases: the first switch uses the nixpkgs VM defaults, because the VM image is itself an aarch64-linux build and only the cache can supply it. The second switch, built by the running builder, raises the VM's resources.
+**Architecture:** Determinate's own nix-darwin module (`determinateNix`) replaces the `nix.enable = false` workaround, manages `/etc/nix/nix.custom.conf` and `/etc/determinate/config.json` declaratively, and runs the nixpkgs Linux builder VM (`pkgs.darwin.linux-builder`) as a launchd daemon with a `builders` entry in `/etc/nix/machines`. The module forbids running its native Linux builder and the VM builder together, so the native one stays off. When Determinate grants the account access, the VM builder is turned off and the native one on, in the same option block. Two phases: the first switch uses the nixpkgs VM defaults, because the VM image is itself an aarch64-linux build and only the cache can supply it. The second switch, built by the running builder, raises the VM's resources.
 
 **Tech Stack:** Determinate Nix 3.23.1 on behemoth, Determinate flake `https://flakehub.com/f/DeterminateSystems/determinate/3` (darwin module), nixpkgs `darwin.linux-builder` (NixOS VM on QEMU with HVF, SSH on localhost port 31022, well-known insecure key pair bound to localhost by design), nix-darwin.
 
@@ -32,7 +32,7 @@
 - Test: `just build`, then after the owner's switch the probe in Step 5
 
 **Interfaces:**
-- Produces: `determinateNix.enable = true`, `determinateNix.nixosVmBasedLinuxBuilder.enable = true` with nixpkgs defaults (1 core, 3072 MiB, 20 GiB disk), `determinateNix.determinateNixd.builder.state = "enabled"`. A launchd daemon named after `determinateNix.nixosVmBasedLinuxBuilder.hostName` (default `nixos-vm-based-linux-builder`), an entry in `/etc/nix/machines`, an SSH config fragment under `/etc/ssh/ssh_config.d/`.
+- Produces: `determinateNix.enable = true`, `determinateNix.nixosVmBasedLinuxBuilder.enable = true` with nixpkgs defaults (1 core, 3072 MiB, 20 GiB disk). No `determinateNixd.builder.state` line: the module sets it to disabled while the VM builder runs. A launchd daemon named after `determinateNix.nixosVmBasedLinuxBuilder.hostName` (default `nixos-vm-based-linux-builder`), an entry in `/etc/nix/machines`, an SSH config fragment under `/etc/ssh/ssh_config.d/`.
 
 - [ ] **Step 1: Add the flake input and module**
 
@@ -60,9 +60,6 @@ In `hosts/behemoth/default.nix`, replace `nix.enable = false;` with:
     # image is an aarch64-linux build that only the binary cache can supply
     # before a builder exists. Resources are raised in the next generation.
     nixosVmBasedLinuxBuilder.enable = true;
-    # Determinate's native builder takes over once the account is granted
-    # access. Harmless while it is not.
-    determinateNixd.builder.state = "enabled";
   };
 ```
 
@@ -137,6 +134,6 @@ Only after Task 1's probe passed. behemoth has 16 cores and 128 GiB.
 
 ## Follow-ups outside this plan
 
-- When Determinate grants access: verify the native builder answers with the Task 1 probe and consider `nixosVmBasedLinuxBuilder.enable = false`.
+- When Determinate grants access: set `nixosVmBasedLinuxBuilder.enable = false` and `determinateNixd.builder.state = "enabled"` (the module allows only one of the two), switch, verify with the Task 1 probe.
 - P9b: the catppuccin/nix ruling can be revisited now that import-from-derivation evaluates on behemoth. Not automatic, a separate decision.
 - The P9b global check "behemoth drvPath unchanged" takes the new baseline after Task 1.
