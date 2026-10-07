@@ -63,17 +63,22 @@
 
   # The two clipboards do not share text on their own here, so this bridge
   # carries it both ways. Measured 2026-10-07 on Hyprland 0.56.2. An X11
-  # CLIPBOARD write, which is what the agent does on a host copy, is announced
-  # as a new Wayland selection even with no X11 window focused. Reading that
-  # mirrored selection often returns nothing, because Hyprland serves X11 data
-  # only to a focused X11 client. A Wayland copy is not mirrored to X11 at all,
-  # so the Wayland to X11 half is still needed. Both halves compare content
-  # before they write. Without that they answer each other, because every write
-  # shows up as a fresh selection on the far side, and the bridge spun at about
-  # 400 cycles per second. The Wayland to X11 half also skips empty data, so an
-  # unreadable mirrored selection never clears the X11 clipboard. The cost: on
-  # this host any X11 client can read text copied in a Wayland app. Copies a
-  # password manager marks sensitive stay put.
+  # CLIPBOARD write, which is what the agent does on a host copy, was announced
+  # as a Wayland selection while a Wayland window held focus. Hyprland gates
+  # that on XWM's remembered X11 focus, which can be stale. The gate is in
+  # src/xwayland/XWM.cpp in 0.56.2. Its refusals log as "denying access to write
+  # to clipboard because no X client is in focus" and "Ignoring clipboard
+  # access: xwayland not in focus". The data is not served without live X11
+  # focus, so wl-paste often reads nothing from such an announcement. The X11 to
+  # Wayland half is what makes a host copy pasteable, because wl-copy
+  # republishes the text under an owner that can serve it. A Wayland copy is not
+  # mirrored to X11 at all, so the Wayland to X11 half is needed too. Both
+  # halves compare content before they write. Without that they answer each
+  # other, because every write shows up as a fresh selection on the far side,
+  # and the bridge spun at about 400 cycles per second. The Wayland to X11 half
+  # also skips empty data, so an unreadable mirrored selection never clears the
+  # X11 clipboard. The cost: on this host any X11 client can read text copied in
+  # a Wayland app. Copies a password manager marks sensitive stay put.
   systemd.user.services.vmware-clipboard-bridge = {
     description = "Copy text between the VMware agent's X11 clipboard and the Wayland clipboard";
     partOf = [ "hyprland-session.target" ];
@@ -91,15 +96,17 @@
 
       # Wayland to X11: each text copy becomes the X11 CLIPBOARD, where the
       # agent reads it when the host asks. The handler writes only what X11 does
-      # not already hold, and never writes nothing. The shell path is absolute
+      # not already hold, and never writes nothing. Reading the offer is capped
+      # at 2 s, so an offer that never closes its pipe cannot wedge this service,
+      # at the price of a truncated copy in that case. The shell path is absolute
       # because a service's PATH has no sh. CLIPBOARD_STATE belongs to that
-      # inner shell.
+      # inner shell, and a selection marked sensitive is dropped before the read.
       # shellcheck disable=SC2016
       wl-paste --type text --watch ${pkgs.runtimeShell} -c '
+        [ "$CLIPBOARD_STATE" = data ] || exit 0
         d=$(mktemp -d -p "$XDG_RUNTIME_DIR")
         trap "rm -rf \"\$d\"" EXIT
-        cat > "$d/in"
-        [ "$CLIPBOARD_STATE" = data ] || exit 0
+        timeout 2 cat > "$d/in" || :
         [ -s "$d/in" ] || exit 0
         timeout 1 xclip -o -selection clipboard -t UTF8_STRING > "$d/x" 2>/dev/null || : > "$d/x"
         cmp -s "$d/in" "$d/x" && exit 0
