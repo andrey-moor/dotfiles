@@ -8,6 +8,9 @@ let
   t = config.modules.desktop.theme.data;
 in
 {
+  # The media keys in the key map drive MPRIS players through playerctl.
+  home.packages = [ pkgs.playerctl ];
+
   services.swayosd = {
     enable = true;
     topMargin = 0.9;

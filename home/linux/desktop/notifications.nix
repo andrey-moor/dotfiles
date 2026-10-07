@@ -28,6 +28,10 @@ in
         border-color = t.colors.red;
         default-timeout = 0;
       };
+      # The mode the key map toggles with `makoctl mode -t do-not-disturb`.
+      "mode=do-not-disturb" = {
+        invisible = 1;
+      };
     };
   };
 
