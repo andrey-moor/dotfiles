@@ -10,6 +10,7 @@
   # from programs._1password-gui in hosts/stargazer/common.nix, which also
   # installs the browser-support wrapper and the polkit policy.
   home.packages = with pkgs; [
+    lazydocker # the Docker TUI the key map binds
     obsidian
     papers
     qalculate-gtk

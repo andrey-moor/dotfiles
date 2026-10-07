@@ -19,6 +19,7 @@
     ./hardware.nix
     ./disko.nix
     ../../modules/nixos/base.nix
+    ../../modules/nixos/containers.nix
     ../../modules/nixos/desktop-hyprland.nix
     ../../modules/nixos/himmelblau.nix
     ../../modules/nixos/intune-identity.nix

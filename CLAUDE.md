@@ -69,7 +69,7 @@ Add an option only when two hosts need the *same* module with *different* values
 
 ### Parameterized Modules
 
-These 11 modules keep options (under their existing `modules.*` names); hosts set values, imports still do the enabling:
+These 12 modules keep options (under their existing `modules.*` names); hosts set values, imports still do the enabling:
 
 | Option path | What it configures |
 |-------------|--------------------|
@@ -78,6 +78,7 @@ These 11 modules keep options (under their existing `modules.*` names); hosts se
 | `modules.linux.containers` | `containers.*` — podman systemd user units |
 | `modules.linux.intune` | `debug` |
 | `modules.linux.wayvnc` | `passwordFile`, `port`, `address`, `monitor`, resolutions, `gpu`, `renderCursor` |
+| `modules.nixos.containers` | `rootful` (rootless Docker by default, rootful daemon and the docker group when true) |
 | `modules.shell.git` | `userName`, `userEmail`, `signingKey`, `signingFormat`, `signer` |
 | `modules.shell.lan-mouse` | `port`, `gpu`, `releaseBind`, `authorizedFingerprints`, `clients` |
 | `modules.shell.onepassword` | `signer` (op-ssh-sign path; read by the andreym profile) |
