@@ -207,8 +207,40 @@ in
       pulse.enable = true;
     };
 
-    # config/alacritty/alacritty.toml asks for this family by name.
-    fonts.packages = [ pkgs.nerd-fonts.jetbrains-mono ];
+    # config/alacritty/alacritty.toml asks for the nerd font family by name.
+    # Noto covers everything else, including CJK and emoji.
+    fonts.packages = with pkgs; [
+      nerd-fonts.jetbrains-mono
+      noto-fonts
+      noto-fonts-cjk-sans
+      noto-fonts-color-emoji
+      font-awesome
+    ];
+
+    fonts.fontconfig.defaultFonts = {
+      monospace = [ "JetBrainsMono Nerd Font" ];
+      sansSerif = [ "Noto Sans" ];
+      serif = [ "Noto Serif" ];
+      emoji = [ "Noto Color Emoji" ];
+    };
+
+    # programs.hyprland.enable already enables the portal and adds both
+    # xdg-desktop-portal-hyprland and xdg-desktop-portal-gtk (nixpkgs
+    # programs/wayland/wayland-session.nix), so listing either here would
+    # duplicate it. Only the preference order is ours.
+    xdg.portal.config.hyprland.default = [
+      "hyprland"
+      "gtk"
+    ];
+
+    # The terminal name is this module's option, so the desktop file id that
+    # home-manager's xdg-terminal-exec needs is derived here.
+    home-manager.sharedModules = [
+      {
+        modules.desktop.terminalDesktopEntry =
+          if cfg.terminal == "ghostty" then "com.mitchellh.ghostty.desktop" else "Alacritty.desktop";
+      }
+    ];
 
     environment.systemPackages = with pkgs; [
       # home/shell/alacritty.nix ships config only (the binary comes from the

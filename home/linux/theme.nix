@@ -44,6 +44,12 @@ in
     };
   };
 
+  options.modules.desktop.terminalDesktopEntry = mkOption {
+    type = types.str;
+    default = "Alacritty.desktop";
+    description = "Desktop file id of the terminal xdg-terminal-exec launches.";
+  };
+
   config = {
     # Themes carry no cursor set, so the cursor stays catppuccin for every
     # palette. The mode picks the variant, so a light theme gets a light cursor.

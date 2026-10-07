@@ -13,5 +13,8 @@
     ./desktop/capture.nix
     ./desktop/clipboard.nix
     ./desktop/osd.nix
+    ./desktop/apps.nix
+    ./desktop/webapps.nix
+    ./desktop/look.nix
   ];
 }

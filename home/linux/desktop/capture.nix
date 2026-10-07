@@ -51,11 +51,6 @@ in
     '')
   ];
 
-  xdg.userDirs = {
-    enable = true;
-    createDirectories = true;
-  };
-
   # satty writes output-filename with a plain write and never creates the
   # parent, and Screenshots is not an XDG user directory.
   home.file."Pictures/Screenshots/.keep".text = "";
