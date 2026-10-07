@@ -148,6 +148,8 @@ in
     # The lockers answer with the Hello PIN through pam_himmelblau, like login.
     # With no local password a pam_unix prompt there could never succeed, so
     # it goes too, and a wrong PIN re-prompts instead of showing a dead field.
+    # polkit-1 is here for the same reason: pkexec and every polkit admin
+    # prompt go through the agent, and that prompt answers with the PIN too.
     #
     # A definition replaces upstream's default list rather than extending it,
     # so passwd, login and systemd-user are repeated here to keep them.
@@ -158,9 +160,11 @@ in
       "systemd-user"
       "hyprlock"
       "swaylock"
+      "polkit-1"
     ];
     security.pam.services.hyprlock.unixAuth = false;
     security.pam.services.swaylock.unixAuth = false;
+    security.pam.services.polkit-1.unixAuth = false;
 
     # tuigreet opens a PAM conversation for the remembered user the moment it
     # launches. On two cold boots on 2026-09-18 greetd came up 2.3 s and 2.7 s
