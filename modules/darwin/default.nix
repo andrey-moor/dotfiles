@@ -8,8 +8,9 @@
 {
   config = {
     # Note: Nix configuration is handled by Determinate Nix
-    # Set nix.enable = false in host config when using Determinate Nix
-    # To add extra caches, use /etc/nix/nix.custom.conf
+    # Set determinateNix.enable = true in host config. Its module turns
+    # nix-darwin's own Nix management off and owns /etc/nix/nix.custom.conf
+    # To add extra caches, use determinateNix.customSettings.substituters
 
     # Note: nixpkgs.config.allowUnfree is set in flake.nix mkPkgs
 

@@ -38,6 +38,10 @@
       url = "github:LnL7/nix-darwin/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Determinate's nix-darwin module: manages nix.custom.conf and
+    # determinate-nixd's config, and runs the Linux builder VM. The flakehub
+    # URL is the vendor's documented form and resolves the 3.x range on update.
+    determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
     nix-homebrew.url = "github:zhaofengli-wip/nix-homebrew";
     homebrew-bundle = {
       url = "github:homebrew/homebrew-bundle";
@@ -147,6 +151,7 @@
               home-manager.extraSpecialArgs = { inherit inputs dotfilesDir; };
               home-manager.sharedModules = homeBase;
             }
+            inputs.determinate.darwinModules.default
             inputs.nix-homebrew.darwinModules.nix-homebrew
             # mac-app-util: trampolines so Nix apps appear in Spotlight/Raycast
             inputs.mac-app-util.darwinModules.default

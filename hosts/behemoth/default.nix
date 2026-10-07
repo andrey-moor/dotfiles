@@ -16,8 +16,19 @@
     ../../modules/darwin/homebrew.nix
   ];
 
-  # Disable nix-darwin's Nix management (Determinate Nix handles this)
-  nix.enable = false;
+  # Determinate Nix owns /etc/nix/nix.conf. This module turns nix-darwin's
+  # Nix management off for us and manages the custom settings file instead.
+  determinateNix = {
+    enable = true;
+    # Linux builder VM from nixpkgs. First switch with the defaults: the VM
+    # image is an aarch64-linux build that only the binary cache can supply
+    # before a builder exists. Resources are raised in the next generation.
+    nixosVmBasedLinuxBuilder.enable = true;
+    # No determinateNixd.builder.state here. The module sets it to "disabled"
+    # itself while the VM builder is on, and a second value is a conflict.
+    # Granting the account Determinate's native builder means turning
+    # nixosVmBasedLinuxBuilder off and setting the state to "enabled".
+  };
 
   networking.hostName = "behemoth";
   networking.computerName = "Behemoth";
