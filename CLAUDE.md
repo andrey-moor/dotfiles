@@ -119,12 +119,11 @@ Primary macOS workstation. Dotfiles at `/Users/andreym/Documents/dotfiles`.
 
 **Determinate Nix and the Linux builder:** Determinate Nix is configured through
 `determinateNix.*` in `hosts/behemoth/default.nix`, not through `nix.*`. The module
-owns `/etc/determinate/config.json`, `/etc/nix/nix.custom.conf` and `/etc/nix/machines`,
-and it sets `nix.enable = false` itself. `determinateNix.nixosVmBasedLinuxBuilder` runs
-the nixpkgs Linux builder VM as the launchd daemon
-`org.nixos.nixos-vm-based-linux-builder`, so `nix build` for aarch64-linux works once
-the host is switched. Determinate's own native builder stays off while that VM builder
-is enabled, because the module disables it.
+owns `/etc/determinate/config.json` and `/etc/nix/nix.custom.conf`, and it sets
+`nix.enable = false` itself. `determinateNix.determinateNixd.builder` declares
+Determinate's native Linux builder, so `nix build` for aarch64-linux derivations runs
+locally on this Mac. Access to that builder is granted per FlakeHub account, not by
+configuration. Run `determinate-nixd version` to see which features are enabled.
 
 ### Rocinante (Tailscale)
 

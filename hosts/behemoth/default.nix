@@ -17,17 +17,19 @@
   ];
 
   # Determinate Nix owns /etc/nix/nix.conf. This module turns nix-darwin's
-  # Nix management off for us and manages the custom settings file instead.
+  # Nix management off for us and manages the custom settings file and
+  # determinate-nixd's config.json instead.
   determinateNix = {
     enable = true;
-    # Linux builder VM from nixpkgs. First switch with the defaults: the VM
-    # image is an aarch64-linux build that only the binary cache can supply
-    # before a builder exists. Resources are raised in the next generation.
-    nixosVmBasedLinuxBuilder.enable = true;
-    # No determinateNixd.builder.state here. The module sets it to "disabled"
-    # itself while the VM builder is on, and a second value is a conflict.
-    # Granting the account Determinate's native builder means turning
-    # nixosVmBasedLinuxBuilder off and setting the state to "enabled".
+    # Determinate's native Linux builder (Virtualization framework). It builds
+    # aarch64-linux and x86_64-linux derivations on this Mac. Access is per
+    # FlakeHub account and was granted on 2026-10-07. Keep cpuCount at 1, the
+    # vendor measured more CPUs as slower. The nixpkgs VM builder is not used:
+    # the module allows only one of the two.
+    determinateNixd.builder = {
+      state = "enabled";
+      memoryBytes = 16 * 1024 * 1024 * 1024;
+    };
   };
 
   networking.hostName = "behemoth";
