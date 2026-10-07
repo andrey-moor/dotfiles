@@ -11,7 +11,7 @@
 let
   # `hyprctl dispatch X` evaluates `return hl.dispatch(X)` as Lua under
   # Hyprland 0.56's Lua config, so the old `dpms off` form is a syntax error.
-  # hl.dsp.dpms takes its action from a table field; a bare string argument
+  # hl.dsp.dpms takes its action from a table field. A bare string argument
   # falls through to toggle, so the table is the only form that forces a state.
   dpms = action: "hyprctl dispatch 'hl.dsp.dpms({ action = \"${action}\" })'";
 in
