@@ -60,8 +60,6 @@ let
     # graphical-session.target by itself, and user units WantedBy it (wayvnc)
     # otherwise stay dead. DISPLAY is for user units that talk to XWayland.
     "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE && systemctl --user start hyprland-session.target"
-    "waybar"
-    "mako"
   ]
   ++ cfg.extraExecOnce;
 
@@ -136,8 +134,8 @@ in
 
     launcher = mkOption {
       type = types.str;
-      default = "fuzzel";
-      description = "Command the launcher keybind runs. Reaches the Lua through the generated theme table, so bindings.lua names no program.";
+      default = "vicinae toggle";
+      description = "Command the launcher keybind runs. Reaches the Lua through the generated theme table, so bindings.lua names no program. vicinae comes from home/linux/desktop/launcher.nix, which also keeps fuzzel installed as the fallback.";
     };
 
     extraExecOnce = mkOption {
@@ -206,9 +204,6 @@ in
       # home/shell/alacritty.nix ships config only (the binary comes from the
       # distro on the other Linux hosts), so NixOS has to provide the binary.
       alacritty
-      waybar
-      mako
-      fuzzel
       wl-clipboard
       mesa-demos # glxinfo -B is the GPU acceptance check
     ];

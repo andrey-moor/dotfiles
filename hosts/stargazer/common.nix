@@ -91,6 +91,7 @@
       ../../home/dev/python.nix
       ../../home/linux/firefox.nix
       ../../home/linux/firefox-entra-sso.nix
+      ../../home/linux/desktop.nix
       ../../home/linux/theme.nix
       ../../home/linux/wayvnc.nix
     ];
