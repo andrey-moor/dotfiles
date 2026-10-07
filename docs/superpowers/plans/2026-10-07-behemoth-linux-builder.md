@@ -4,11 +4,11 @@
 
 **Goal:** behemoth can build aarch64-linux derivations locally, so evaluating and inspecting the stargazer configuration no longer fails with a platform mismatch.
 
-**Architecture:** Determinate's own nix-darwin module (`determinateNix`) replaces the `nix.enable = false` workaround, manages `/etc/nix/nix.custom.conf` and `/etc/determinate/config.json` declaratively, and runs the nixpkgs Linux builder VM (`pkgs.darwin.linux-builder`) as a launchd daemon with a `builders` entry in `/etc/nix/machines`. The module forbids running its native Linux builder and the VM builder together, so the native one stays off. When Determinate grants the account access, the VM builder is turned off and the native one on, in the same option block. Two phases: the first switch uses the nixpkgs VM defaults, because the VM image is itself an aarch64-linux build and only the cache can supply it. The second switch, built by the running builder, raises the VM's resources.
+**Architecture:** Determinate's own nix-darwin module (`determinateNix`) replaces the `nix.enable = false` workaround and manages `/etc/nix/nix.custom.conf` and `/etc/determinate/config.json` declaratively. The builder is Determinate's native Linux builder on the Virtualization framework, declared in that config. Task 1 originally enabled the nixpkgs VM builder as an interim. Access to the native builder arrived the same day, before any switch, so Task 2 replaces that with the native builder. The module allows only one of the two.
 
 **Tech Stack:** Determinate Nix 3.23.1 on behemoth, Determinate flake `https://flakehub.com/f/DeterminateSystems/determinate/3` (darwin module), nixpkgs `darwin.linux-builder` (NixOS VM on QEMU with HVF, SSH on localhost port 31022, well-known insecure key pair bound to localhost by design), nix-darwin.
 
-**Decision record (2026-10-07):** Determinate's native builder is granted per FlakeHub account and andrey-moor is not yet enabled, so the login alone did nothing. The nix-darwin `nix.linux-builder` option asserts `nix.enable` and is blocked under Determinate (nix-darwin issue 1505). The Determinate module's `nixosVmBasedLinuxBuilder` is the same VM without that assertion. stargazer as an SSH builder and nixbuild.net were rejected for now: the first needs the VM running and cannot serve an ISO rebuild, the second adds a vendor.
+**Decision record (2026-10-07):** Determinate's native builder is granted per FlakeHub account. The login alone did nothing. The access request was answered within the hour and the builder then worked with zero configuration. The nix-darwin `nix.linux-builder` option asserts `nix.enable` and is blocked under Determinate (nix-darwin issue 1505). The Determinate module's `nixosVmBasedLinuxBuilder` is the same VM without that assertion. stargazer as an SSH builder and nixbuild.net were rejected for now: the first needs the VM running and cannot serve an ISO rebuild, the second adds a vendor.
 
 ## Global Constraints
 
@@ -97,43 +97,52 @@ Expected: the daemon running, one machines line with `ssh-ng://builder@…` and 
 
 ---
 
-### Task 2: Raise the builder's resources
+### Task 2: Switch to the native builder (supersedes the VM builder before it ever ran)
 
-Only after Task 1's probe passed. behemoth has 16 cores and 128 GiB.
+**Why:** Determinate granted the account access on 2026-10-07, minutes after the request. With `determinate-nixd version` listing `native-linux-builder`, a trivial aarch64-linux `runCommand` built on behemoth with no configuration and no switch. Task 1's commit 2854f5a is unpushed and unswitched, and the module's interlock means switching it would disable the native builder. This task corrects that commit with a follow-up commit. The original Task 2 (raise the VM's resources) is void.
 
 **Files:**
-- Modify: `hosts/behemoth/default.nix`
-- Modify: `docs/vmware-fusion-workarounds.md` is NOT touched (wrong document). Add one row to the behemoth section of `CLAUDE.md` only if the numbers matter to a reader.
+- Modify: `hosts/behemoth/default.nix`, `CLAUDE.md`
 
-- [ ] **Step 1: Set the resources**
+- [ ] **Step 1: Host block**
+
+Replace the `determinateNix` block with:
 
 ```nix
-    nixosVmBasedLinuxBuilder = {
-      enable = true;
-      # Enough for the patched Hyprland and himmelblau builds that the stargazer
-      # configuration carries (8.5 GiB peak on the VM with max-jobs 2, cores 4).
-      config.virtualisation = {
-        cores = 6;
-        memorySize = 16384;
-        diskSize = 102400;
-      };
+  # Determinate Nix owns /etc/nix/nix.conf. This module turns nix-darwin's
+  # Nix management off for us and manages the custom settings file and
+  # determinate-nixd's config.json instead.
+  determinateNix = {
+    enable = true;
+    # Determinate's native Linux builder (Virtualization framework). It builds
+    # aarch64-linux and x86_64-linux derivations on this Mac. Access is per
+    # FlakeHub account and was granted on 2026-10-07. Keep cpuCount at 1, the
+    # vendor measured more CPUs as slower. The nixpkgs VM builder is not used:
+    # the module allows only one of the two.
+    determinateNixd.builder = {
+      state = "enabled";
+      memoryBytes = 16 * 1024 * 1024 * 1024;
     };
+  };
 ```
 
-`maxJobs` follows `cores` by the module's default. Keep `speedFactor` at 1.
+`cpuCount` stays at the module default of 1. 16 GiB is for the stargazer closure's two compiled packages (Hyprland with the vmwgfx patch and himmelblau, 8.5 GiB peak observed), behemoth has 128 GiB.
 
-- [ ] **Step 2: Build with the running builder, switch, re-probe**
+- [ ] **Step 2: CLAUDE.md**
 
-`just build` now builds the new VM image through the Task 1 builder. Report how long it took. Owner: `just switch`. Rerun the Step 5 probe and `nix build --no-link .#nixosConfigurations.stargazer.config.environment.etc."xdg/hypr/hyprland.lua".source` as a real aarch64-linux build from behemoth.
+Rewrite the behemoth paragraph from Task 1: Determinate Nix is configured through `determinateNix.*`, its native Linux builder builds aarch64-linux derivations locally, `/etc/determinate/config.json` and `/etc/nix/nix.custom.conf` are module-owned, and `determinate-nixd version` lists the enabled features. Three to five sentences. No mention of the VM builder.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Checks and commit**
 
-`feat(behemoth): six cores and 16 GiB for the linux builder VM`.
+`just fmt`, `just lint`, `just build`. Then `nix build --dry-run .#darwinConfigurations.behemoth.system` must show no linux-builder image under "will be fetched". Evaluate stargazer, stargazer-drill and rocinante (rocinante unchanged at `bxkygm8s…`). Commit `fix(behemoth): declare the native linux builder, drop the VM builder` with a body saying why 2854f5a is superseded.
+
+- [ ] **Step 4: Owner switches, controller verifies**
+
+`just switch`. Then: `cat /etc/determinate/config.json` shows `"state": "enabled"` and the memory value, `determinate-nixd version` still lists `native-linux-builder`, and the probe from Task 1 Step 5 prints `aarch64`. Also build one real stargazer artifact from behemoth: `nix build --no-link --print-out-paths '.#nixosConfigurations.stargazer.config.environment.etc."xdg/hypr/hyprland.lua".source'`.
 
 ---
 
 ## Follow-ups outside this plan
 
-- When Determinate grants access: set `nixosVmBasedLinuxBuilder.enable = false` and `determinateNixd.builder.state = "enabled"` (the module allows only one of the two), switch, verify with the Task 1 probe.
 - P9b: the catppuccin/nix ruling can be revisited now that import-from-derivation evaluates on behemoth. Not automatic, a separate decision.
 - The P9b global check "behemoth drvPath unchanged" takes the new baseline after Task 1.
