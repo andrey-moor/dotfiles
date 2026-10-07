@@ -26,6 +26,11 @@
   # One word picks the palette for the compositor and every role module.
   modules.nixos.desktop.theme.name = "catppuccin";
 
+  # ghostty passed its trial on 2026-10-07: text renders and resize follows on
+  # vmwgfx with the DMA-BUF patch, journal clean. alacritty stays installed
+  # as the fallback (modules/nixos/desktop-hyprland.nix).
+  modules.nixos.desktop.terminal = "ghostty";
+
   # Plain lanzaboote. The firmware trusts our db certificate once the VM
   # definition appends it to VMware's default db (`scripts/stargazer-vm
   # secure-boot on`, README §7). ./common.nix wires the signing key.
