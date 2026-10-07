@@ -6,5 +6,8 @@
     ./desktop/bar.nix
     ./desktop/notifications.nix
     ./desktop/launcher.nix
+    ./desktop/lock.nix
+    ./desktop/idle.nix
+    ./desktop/polkit.nix
   ];
 }

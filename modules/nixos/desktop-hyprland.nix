@@ -190,6 +190,16 @@ in
       };
     };
 
+    # The session's auth agent is home-manager's hyprpolkitagent
+    # (home/linux/desktop/polkit.nix), which needs the daemon running.
+    security.polkit.enable = true;
+
+    # Lockers get their own PAM services. programs.hyprlock would do this too,
+    # but it also force-enables the system hypridle unit, and idle has one
+    # owner here, home-manager's services.hypridle.
+    security.pam.services.hyprlock = { };
+    security.pam.services.swaylock = { };
+
     security.rtkit.enable = true;
     services.pipewire = {
       enable = true;
