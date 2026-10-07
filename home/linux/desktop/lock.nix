@@ -42,6 +42,9 @@ in
           outer_color = rgb t.colors.accent;
           inner_color = rgb t.colors.background;
           font_color = rgb t.colors.foreground;
+          # hyprlock fades an empty field to alpha 0 after fade_timeout, 2 s by
+          # default, so the PIN prompt disappeared and only the clock was left.
+          fade_on_empty = false;
           placeholder_text = "<i>Hello PIN</i>";
           fail_text = "<i>Wrong PIN</i>";
           position = "0, -40";

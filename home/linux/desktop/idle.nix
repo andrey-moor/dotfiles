@@ -8,6 +8,13 @@
   lib,
   ...
 }:
+let
+  # `hyprctl dispatch X` evaluates `return hl.dispatch(X)` as Lua under
+  # Hyprland 0.56's Lua config, so the old `dpms off` form is a syntax error.
+  # hl.dsp.dpms takes its action from a table field; a bare string argument
+  # falls through to toggle, so the table is the only form that forces a state.
+  dpms = action: "hyprctl dispatch 'hl.dsp.dpms({ action = \"${action}\" })'";
+in
 {
   services.hypridle = {
     enable = true;
@@ -15,7 +22,7 @@
       general = {
         lock_cmd = "pidof hyprlock || ${lib.getExe config.programs.hyprlock.package}";
         before_sleep_cmd = "loginctl lock-session";
-        after_sleep_cmd = "hyprctl dispatch dpms on";
+        after_sleep_cmd = dpms "on";
       };
       # Repeatable hyprlang sections are lists in home-manager's schema.
       listener = [
@@ -25,8 +32,8 @@
         }
         {
           timeout = 1200;
-          on-timeout = "hyprctl dispatch dpms off";
-          on-resume = "hyprctl dispatch dpms on";
+          on-timeout = dpms "off";
+          on-resume = dpms "on";
         }
       ];
     };
