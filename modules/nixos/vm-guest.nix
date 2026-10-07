@@ -25,13 +25,7 @@ let
   # v0.56.2); `hyprctl eval` re-runs hl.monitor(), which merges into the
   # existing rule for that output and schedules a monitor refresh. Lua takes
   # single-quoted strings, so nothing needs escaping through the shell.
-  # Coupled to modules/nixos/desktop-hyprland.nix on purpose: the two have to
-  # agree on the config format.
-  setMonitorMode =
-    if config.modules.nixos.desktop.configFormat == "lua" then
-      "hyprctl eval \"hl.monitor({ output = '${cfg.connector}', mode = '\${want}@60', position = 'auto', scale = '${scale}' })\""
-    else
-      "hyprctl keyword monitor \"${cfg.connector},\${want}@60,auto,${scale}\"";
+  setMonitorMode = "hyprctl eval \"hl.monitor({ output = '${cfg.connector}', mode = '\${want}@60', position = 'auto', scale = '${scale}' })\"";
 in
 {
   options.modules.nixos.vmGuest = {
