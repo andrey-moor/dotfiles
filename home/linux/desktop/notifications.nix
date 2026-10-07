@@ -42,7 +42,11 @@ in
       PartOf = [ "graphical-session.target" ];
     };
     Service = {
-      Type = "simple";
+      # Same shape as home-manager's dunst and swaync units. A `simple` unit
+      # would go active before mako owns the name, and the dbus service file
+      # the module installs could spawn a rival mako in that window.
+      Type = "dbus";
+      BusName = "org.freedesktop.Notifications";
       ExecStart = lib.getExe mako;
       ExecReload = "${lib.getExe' mako "makoctl"} reload";
       Restart = "on-failure";

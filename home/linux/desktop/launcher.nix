@@ -13,7 +13,7 @@
 #   - the corner radius is launcher_window.rounding
 #   - programs.vicinae.useLayerShell is a no-op from 0.17 on (layer shell is
 #     the default and is switched off through launcher_window.layer_shell)
-# Theme files are TOML from 0.15 on; the slot keys below are the ones
+# Theme files are TOML from 0.15 on. The slot keys below are the ones
 # extra/theme-template.toml documents.
 { config, pkgs, ... }:
 let
