@@ -1,4 +1,4 @@
-# home/linux/desktop/look.nix -- GTK and Qt look, icons, cursor
+# home/linux/desktop/look.nix -- GTK and Qt look, icons
 #
 # Qt uses the Adwaita style rather than kvantum: catppuccin/nix is not enabled
 # here, so there is no kvantum theme to install, and adwaita-qt follows the
@@ -19,6 +19,9 @@ in
       package = pkgs.papirus-icon-theme;
     };
     colorScheme = if dark then "dark" else "light";
+    # Pins today's behaviour: from stateVersion 26.05 on, gtk.theme stops
+    # reaching GTK4 by default.
+    gtk4.theme = config.gtk.theme;
   };
 
   qt = {

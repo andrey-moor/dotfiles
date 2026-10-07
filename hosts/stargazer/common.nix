@@ -67,6 +67,14 @@
   # whatever logind happens to grant.
   services.udev.packages = [ pkgs.libfido2 ];
 
+  # 1Password's desktop app needs the NixOS module, not only the package: it
+  # creates the onepassword group and the setgid browser-support wrapper the
+  # Firefox extension connects through, and installs the polkit policy.
+  programs._1password-gui = {
+    enable = true;
+    polkitPolicyOwners = [ "andreym" ];
+  };
+
   # Build memory ceiling. This host compiles two large things rather than
   # downloading them: Hyprland, because modules/nixos/vmware-guest.nix patches
   # it for vmwgfx, and himmelblau's Rust crates. The VM has 16 GB and no swap,

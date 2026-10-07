@@ -6,9 +6,10 @@
 { config, pkgs, ... }:
 {
   # imv and mpv are not listed here: their programs.* modules below install
-  # the packages, and mpv's wraps it once scripts are added.
+  # the packages, and mpv's wraps it once scripts are added. 1Password comes
+  # from programs._1password-gui in hosts/stargazer/common.nix, which also
+  # installs the browser-support wrapper and the polkit policy.
   home.packages = with pkgs; [
-    _1password-gui
     obsidian
     papers
     qalculate-gtk
@@ -52,7 +53,12 @@
     Unit = {
       Description = "1Password, silent start";
       PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
+      # The tray icon needs waybar's StatusNotifier host already running.
+      After = [
+        "graphical-session.target"
+        "waybar.service"
+      ];
+      ConditionEnvironment = "WAYLAND_DISPLAY";
     };
     Service = {
       ExecStart = "${pkgs._1password-gui}/bin/1password --silent";
