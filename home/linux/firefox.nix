@@ -9,14 +9,6 @@
 with lib;
 {
   config = mkIf pkgs.stdenv.isLinux {
-    # Catppuccin Mocha theme (applies to profiles defined in programs.firefox.profiles)
-    catppuccin.firefox = {
-      enable = true;
-      flavor = "mocha";
-      accent = "lavender";
-      profiles.default.enable = true;
-    };
-
     programs.firefox = {
       enable = true;
 
@@ -27,17 +19,12 @@ with lib;
         id = 0;
         isDefault = true;
 
-        # Allow catppuccin to set extension settings
-        extensions.force = true;
-
         # Privacy extensions from NUR
         extensions.packages = with pkgs.nur.repos.rycee.firefox-addons; [
           ublock-origin
           clearurls
           kagi-search
           onepassword-password-manager
-          # Firefox Color is required for catppuccin theme
-          firefox-color
         ];
 
         settings = {

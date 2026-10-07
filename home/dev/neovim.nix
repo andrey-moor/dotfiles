@@ -24,13 +24,17 @@ with lib;
       withRuby = false; # AstroNvim doesn't use Ruby providers; new HM default
 
       # Extra packages available to neovim
-      extraPackages = with pkgs; [
-        # For telescope and other plugins
-        ripgrep
-        fd
-        # For clipboard support
-        xclip
-      ];
+      extraPackages =
+        with pkgs;
+        [
+          # For telescope and other plugins
+          ripgrep
+          fd
+        ]
+        # Clipboard on Wayland. macOS uses pbcopy via neovim's own provider.
+        ++ optionals stdenv.isLinux [
+          wl-clipboard
+        ];
 
       # NOTE: No extraConfig or plugins here!
       # Full AstroNvim configuration lives in <dotfiles>/config/nvim, deployed
