@@ -9,5 +9,9 @@
     ./desktop/lock.nix
     ./desktop/idle.nix
     ./desktop/polkit.nix
+    ./desktop/wallpaper.nix
+    ./desktop/capture.nix
+    ./desktop/clipboard.nix
+    ./desktop/osd.nix
   ];
 }
