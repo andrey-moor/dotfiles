@@ -325,5 +325,5 @@ hl.bind("SUPER + CTRL + ALT + Z", function()
   hl.config({ cursor = { zoom_factor = 1 } })
 end, { description = "Reset zoom" })
 
--- Not loginctl lock-session: logind points session/auto at the user's Display session, and an SSH login that came first takes that slot.
-hl.bind("SUPER + CTRL + L", hl.dsp.exec_cmd("pidof hyprlock || hyprlock"), { description = "Lock system" })
+-- Not loginctl lock-session, which can resolve to an SSH session. systemd-run keeps the locker in its own unit, out of any launcher's cgroup.
+hl.bind("SUPER + CTRL + L", hl.dsp.exec_cmd("pidof hyprlock || systemd-run --user --quiet --collect -- hyprlock"), { description = "Lock system" })

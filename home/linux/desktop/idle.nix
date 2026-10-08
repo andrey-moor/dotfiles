@@ -12,7 +12,12 @@ let
   # Every lock path runs this, never `loginctl lock-session`. logind points
   # session/auto at the user's Display session, and an SSH login that came
   # first takes that slot. The Lock signal for the seat then never arrives.
-  lock = "pidof hyprlock || ${lib.getExe config.programs.hyprlock.package}";
+  #
+  # systemd-run puts the locker in a transient unit of its own. Spawned
+  # directly it would sit in hypridle.service's cgroup, so restarting hypridle
+  # killed the live lock screen. No --unit name is passed on purpose, because a
+  # unit of that name still awaiting collection would fail the next lock.
+  lock = "pidof hyprlock || systemd-run --user --quiet --collect -- ${lib.getExe config.programs.hyprlock.package}";
 
   # `hyprctl dispatch X` evaluates `return hl.dispatch(X)` as Lua under
   # Hyprland 0.56's Lua config, so the old `dpms off` form is a syntax error.
