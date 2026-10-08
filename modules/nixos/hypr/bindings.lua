@@ -325,4 +325,5 @@ hl.bind("SUPER + CTRL + ALT + Z", function()
   hl.config({ cursor = { zoom_factor = 1 } })
 end, { description = "Reset zoom" })
 
-hl.bind("SUPER + CTRL + L", hl.dsp.exec_cmd("loginctl lock-session"), { description = "Lock system" })
+-- Not loginctl lock-session: logind points session/auto at the user's Display session, and an SSH login that came first takes that slot.
+hl.bind("SUPER + CTRL + L", hl.dsp.exec_cmd("pidof hyprlock || hyprlock"), { description = "Lock system" })

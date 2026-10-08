@@ -9,6 +9,11 @@
   ...
 }:
 let
+  # Every lock path runs this, never `loginctl lock-session`. logind points
+  # session/auto at the user's Display session, and an SSH login that came
+  # first takes that slot. The Lock signal for the seat then never arrives.
+  lock = "pidof hyprlock || ${lib.getExe config.programs.hyprlock.package}";
+
   # `hyprctl dispatch X` evaluates `return hl.dispatch(X)` as Lua under
   # Hyprland 0.56's Lua config, so the old `dpms off` form is a syntax error.
   # hl.dsp.dpms takes its action from a table field. A bare string argument
@@ -20,15 +25,15 @@ in
     enable = true;
     settings = {
       general = {
-        lock_cmd = "pidof hyprlock || ${lib.getExe config.programs.hyprlock.package}";
-        before_sleep_cmd = "loginctl lock-session";
+        lock_cmd = lock;
+        before_sleep_cmd = lock;
         after_sleep_cmd = dpms "on";
       };
       # Repeatable hyprlang sections are lists in home-manager's schema.
       listener = [
         {
           timeout = 600;
-          on-timeout = "loginctl lock-session";
+          on-timeout = lock;
         }
         {
           timeout = 1200;
