@@ -463,6 +463,13 @@ vm# sudo poweroff
 behemoth$ ./scripts/stargazer-vm snapshot installed
 ```
 
+**Where the desktop comes from.** The desktop roles live in
+`home/linux/desktop/`, one module per role, and `home/linux/desktop.nix`
+bundles them. The key map is Omarchy 4's, and `Super+K` opens a pager listing
+every keybind the session has. `modules.nixos.desktop.theme.name` in
+`hosts/stargazer/default.nix` picks the palette, so a different look is one word
+and a rebuild. The palettes themselves are the directories under `themes/`.
+
 ---
 
 ## 6. Enrollment ceremony (owner, local console + YubiKey)
@@ -858,6 +865,16 @@ vm$ printf 'wl-probe' | setsid wl-copy >/dev/null 2>&1; sleep 1.5
 vm$ [ "$("$XC" -o -selection clipboard -t UTF8_STRING)" = wl-probe ] && echo WAYLAND-TO-X11-OK
 ```
 
+**Some Mac shortcuts never reach the VM.** The Mac's Cmd key arrives in the
+guest as Super, so Fusion and macOS claim a few of those combinations before
+the guest sees them. Turn Fusion's own set off first. Open **Settings**, then
+**Keyboard & Mouse**, then the VM's profile, then the **Mac Host Shortcuts**
+tab, and untick **Enable Mac OS Host Keyboard Shortcuts**. Then clear the macOS
+ones in **System Settings**, **Keyboard Shortcuts**, for `Cmd+Shift+3`,
+`Cmd+Shift+4`, `Cmd+Shift+5`, `Cmd+Shift+/`, `Cmd+Space`, `Ctrl+Space` and the
+Mission Control arrows. Verified 2026-10-09: `Super+W` reached the guest only
+after the Fusion change.
+
 **The YubiKey is not in the guest.** Connect it from Fusion's **Virtual
 Machine** menu, under **USB & Bluetooth**. The `.vmx` must contain both
 `usb.generic.allowHID` and `usb.generic.allowLastHID`, or Fusion keeps every HID
@@ -891,6 +908,29 @@ these in order:
 
 `aad-tool offline-breakglass` does not apply here. It caches Entra passwords,
 and this tenant has none.
+
+**Hyprland shows a "lockscreen app died" page.** The locker process died while
+the session was locked, and the compositor holds the screen on purpose. Recover
+over SSH, which takes keys only, by starting a fresh locker:
+
+```bash
+vm$ WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/1000 setsid hyprlock >/dev/null 2>&1 </dev/null &
+```
+
+Then unlock with the PIN at the console. Never clear the page with
+`hl.clear_crashed_lockscreen()`, because that drops the lock without
+authenticating anyone. Two habits keep the state away. Do not run
+`hyprctl reload` while the session is locked, or right after a switch that
+restarts hypridle. Remember that any switch touching `home/linux/desktop/idle.nix`
+restarts hypridle, and the fresh hypridle locks at once when the session has
+been idle longer than the timer. Since 2026-10-07 the locker runs in its own
+transient unit, so a hypridle restart no longer kills it.
+
+**The screen is locked and `himmelblaud` is down.** hyprlock and swaylock take
+the Hello PIN and nothing else, because `andreym` has no local password. With
+the daemon dead the console cannot unlock at all. The escape is SSH with a key,
+then `systemctl restart himmelblaud`, then the PIN at the console. This is the
+same posture as the login stack, so it is written down rather than fixed.
 
 **`/etc/himmelblau/himmelblau.conf.d/` has no `10-tenant.conf`, or it is
 empty.** The host cannot decrypt `secrets/stargazer-tenant.yaml`. Either its age

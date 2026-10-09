@@ -67,18 +67,31 @@ A host imports the bundles it wants plus any one-off feature files (e.g. rocinan
 
 Add an option only when two hosts need the *same* module with *different* values.
 
+### Desktop Roles
+
+`home/linux/desktop/` holds one plain module per desktop role: bar,
+notifications, launcher, lock, idle, polkit, wallpaper, capture, clipboard,
+osd, apps, webapps and look. `home/linux/desktop.nix` bundles them.
+`home/linux/theme.nix` and `modules/nixos/desktop-theme.nix` carry the theme
+option, and `lib/theme.nix` turns `themes/<name>/colors.toml` into colours,
+mode and wallpapers as plain data. The compositor config is the checked-in
+`modules/nixos/hypr/*.lua`, rendered by `modules/nixos/desktop-hyprland.nix`
+under a generated `theme` table.
+
 ### Parameterized Modules
 
-These 12 modules keep options (under their existing `modules.*` names); hosts set values, imports still do the enabling:
+These 14 modules keep options (under their existing `modules.*` names); hosts set values, imports still do the enabling:
 
 | Option path | What it configures |
 |-------------|--------------------|
 | `modules.darwin.containers` | `runtime`, `logDir`, `containers.*` — launchd container services |
 | `modules.darwin.homebrew` | `casks`, `brews`, `masApps` |
-| `modules.linux.containers` | `containers.*` — podman systemd user units |
 | `modules.linux.intune` | `debug` |
 | `modules.linux.wayvnc` | `passwordFile`, `port`, `address`, `monitor`, resolutions, `gpu`, `renderCursor` |
 | `modules.nixos.containers` | `rootful` (rootless Docker by default, rootful daemon and the docker group when true) |
+| `modules.nixos.desktop` | `monitor`, `terminal`, `launcher`, `greeting`, `extraExecOnce` (the compositor, greeter and session) |
+| `modules.nixos.desktop.theme` | `name`, `cursorSize` (the host's palette, handed to every home-manager user) |
+| `modules.desktop.theme` | `name`, `cursorSize`, `wallpaperDir`, read-only `data` (the home-manager side the role modules read) |
 | `modules.shell.git` | `userName`, `userEmail`, `signingKey`, `signingFormat`, `signer` |
 | `modules.shell.lan-mouse` | `port`, `gpu`, `releaseBind`, `authorizedFingerprints`, `clients` |
 | `modules.shell.onepassword` | `signer` (op-ssh-sign path; read by the andreym profile) |
@@ -166,6 +179,13 @@ sudo nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer --refres
 patch, open-vm-tools, the copy/paste agent and its clipboard bridge, fast resize timing,
 and the ALSA rule that stops audio breaking up.
 Another hypervisor means a new guest module that imports `vm-guest.nix`.
+
+**Desktop layer (P9b, implemented 2026-10-09):** `modules/nixos/desktop-hyprland.nix`
+owns the compositor, greeter and session. Every other role is a plain
+home-manager module under `home/linux/desktop/`, as Desktop Roles above
+describes. To try an uncommitted change on the VM, run
+`nixos-rebuild-ng test --flake .#stargazer --build-host stargazer --target-host stargazer --sudo`
+from behemoth.
 
 **Notes:**
 - `system.autoUpgrade` refreshes from the same `github:` ref daily (persistent timer)

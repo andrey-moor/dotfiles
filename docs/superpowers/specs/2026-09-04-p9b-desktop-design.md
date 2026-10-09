@@ -1,12 +1,12 @@
 # P9b — stargazer as the daily-driver desktop (design)
 
-Date: 2026-09-04, revised 2026-10-06 for VMware Fusion. Status: approved in
-brainstorm, awaiting owner review of this document. Predecessor P9 delivered
-the stargazer NixOS VM, installed, Entra joined, Intune enrolled, Secure Boot
-on and compliant. Predecessor P9c moved that machine from Parallels to VMware
-Fusion, rebuilt it from the runbook on 2026-09-17 and 18, and passed the fire
-drill on 2026-09-18. Successor: P7, the same configuration on rocinante's
-physical hardware.
+Date: 2026-09-04, revised 2026-10-06 for VMware Fusion. Status: implemented
+2026-10-09, see `docs/superpowers/plans/2026-10-06-env-refactor-p9b-desktop.md`.
+Predecessor P9 delivered the stargazer NixOS VM, installed, Entra joined,
+Intune enrolled, Secure Boot on and compliant. Predecessor P9c moved that
+machine from Parallels to VMware Fusion, rebuilt it from the runbook on
+2026-09-17 and 18, and passed the fire drill on 2026-09-18. Successor: P7, the
+same configuration on rocinante's physical hardware.
 
 The revision changes what the hypervisor changed and nothing else. The
 hardware facts are now these. Graphics are vmwgfx (SVGA3D) with OpenGL 4.3 and
@@ -302,3 +302,25 @@ of P9c's findings:
 
 Not changed: the goal, the composed-stack decision, the role contract, the
 theme pipeline, the key map, the app set, Docker, the rollout order.
+
+### 2026-10-09 implementation notes
+
+Rulings taken while building, each one a change to this document's letter:
+
+- catppuccin/nix is not used. Its ports read a palette through
+  import-from-derivation, which needs an aarch64-linux build and so breaks
+  evaluation on behemoth. The `lib/theme.nix` palette data styles everything.
+- Qt uses adwaita-qt, not kvantum. With catppuccin/nix out there is no kvantum
+  theme to install.
+- 1Password comes from the NixOS module `programs._1password-gui`, which owns
+  the `onepassword` group and the browser-support wrapper.
+- `modules/nixos/vmware-guest.nix` was declared out of scope and was touched
+  anyway. Its clipboard bridge got content guards to stop a feedback loop.
+- Every lock path runs hyprlock directly in a transient systemd unit instead of
+  `loginctl lock-session`. The reason is logind, which hands `session/auto` to
+  an SSH login when one came first, so the seat's Lock signal never arrived.
+- Polkit is tested with `pkcheck`, because the setuid `pkexec` wrapper stays
+  off on this host.
+- `notify-send` is installed from `libnotify`, so the capture scripts find it
+  on the shell PATH as well as through their runtime inputs.
+- D7 resolved to ghostty.
