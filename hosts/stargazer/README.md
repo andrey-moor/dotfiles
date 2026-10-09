@@ -673,16 +673,18 @@ so the disk is always openable regardless of firmware state.
 ## 8. Fire drill
 
 The point is to prove this document, from scratch, without touching the real VM.
-Last run: **2026-09-18 on Fusion, passed on the second attempt.** A clean pass
-takes about 45 minutes with someone at the keyboard, and the install in §4.4 is
-33 of them. The first attempt ran out of memory 21 minutes into the install,
-which is how the swapfile in §4.4 was found. The drill found three more
-defects. The `type` helper dropped characters. The `KEYS-OK` check in §4.1 could
-be fooled. `destroy` could not delete a VM that Fusion still had open. All four
-are fixed in this text and in `scripts/stargazer-vm`. The real machine was
-built from this runbook on 2026-09-17 and 2026-09-18, and that run fixed §4.4 to
-§7 and §10. The `stargazer-drill` configuration was written after that drill. It
-evaluates and builds, and the next drill is its first full run.
+Last run: **2026-10-09 on Fusion, passed clean on the first attempt.** It was
+the first full run of the `stargazer-drill` configuration. A clean pass takes
+about 58 minutes with someone at the keyboard, and the install in §4.4 is 39 of
+them. That install is six minutes longer than on 2026-09-18, because the desktop
+layer added packages. Swap use peaked at 9 GB. No hand-fix was needed. The run
+before, on 2026-09-18, passed on the second attempt. Its first attempt ran out
+of memory 21 minutes into the install, which is how the swapfile in §4.4 was
+found. That drill found three more defects. The `type` helper dropped
+characters. The `KEYS-OK` check in §4.1 could be fooled. `destroy` could not
+delete a VM that Fusion still had open. All four are fixed in this text and in
+`scripts/stargazer-vm`. The real machine was built from this runbook on
+2026-09-17 and 2026-09-18, and that run fixed §4.4 to §7 and §10.
 
 **Suspend the real VM first.** The drill sends a disk-wiping command to a
 console, the real VM has passwordless `sudo`, and the script picks its target

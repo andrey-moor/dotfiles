@@ -1,7 +1,7 @@
 # P9b — stargazer as the daily-driver desktop (design)
 
 Date: 2026-09-04, revised 2026-10-06 for VMware Fusion. Status: implemented
-2026-10-09, fire drill pending, see
+2026-10-09, fire drill passed 2026-10-09, see
 `docs/superpowers/plans/2026-10-06-env-refactor-p9b-desktop.md`.
 Predecessor P9 delivered the stargazer NixOS VM, installed, Entra joined,
 Intune enrolled, Secure Boot on and compliant. Predecessor P9c moved that
