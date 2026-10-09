@@ -867,13 +867,15 @@ vm$ [ "$("$XC" -o -selection clipboard -t UTF8_STRING)" = wl-probe ] && echo WAY
 
 **Some Mac shortcuts never reach the VM.** The Mac's Cmd key arrives in the
 guest as Super, so Fusion and macOS claim a few of those combinations before
-the guest sees them. Turn Fusion's own set off first. Open **Settings**, then
-**Keyboard & Mouse**, then the VM's profile, then the **Mac Host Shortcuts**
-tab, and untick **Enable Mac OS Host Keyboard Shortcuts**. Then clear the macOS
-ones in **System Settings**, **Keyboard Shortcuts**, for `Cmd+Shift+3`,
-`Cmd+Shift+4`, `Cmd+Shift+5`, `Cmd+Shift+/`, `Cmd+Space`, `Ctrl+Space` and the
-Mission Control arrows. Verified 2026-10-09: `Super+W` reached the guest only
-after the Fusion change.
+the guest sees them. A handful more, `Ctrl+Space` and the Mission Control
+arrows among them, are taken by macOS whatever the Cmd mapping does. Turn
+Fusion's own set off first. Open **Settings**, then **Keyboard & Mouse**, then
+the VM's profile, then the **Mac Host Shortcuts** tab, and untick **Enable Mac
+OS Host Keyboard Shortcuts**. Then clear the macOS ones in **System Settings**,
+**Keyboard**, **Keyboard Shortcuts**, for `Cmd+Shift+3`, `Cmd+Shift+4`,
+`Cmd+Shift+5`, `Cmd+Shift+/`, `Cmd+Space`, `Ctrl+Space` and the Mission Control
+arrows. Verified 2026-10-09: `Super+W` reached the guest only after the Fusion
+change.
 
 **The YubiKey is not in the guest.** Connect it from Fusion's **Virtual
 Machine** menu, under **USB & Bluetooth**. The `.vmx` must contain both
@@ -917,9 +919,13 @@ over SSH, which takes keys only, by starting a fresh locker:
 vm$ WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/1000 setsid hyprlock >/dev/null 2>&1 </dev/null &
 ```
 
-Then unlock with the PIN at the console. Never clear the page with
-`hl.clear_crashed_lockscreen()`, because that drops the lock without
-authenticating anyone. Two habits keep the state away. Do not run
+This is the one path that uses `setsid` rather than the
+`systemd-run --user --collect` form every in-session lock path uses. An SSH
+login has no user bus to talk to, and nothing here will restart the locker's
+parent, so the transient unit buys nothing. Then unlock with the PIN at the
+console. Never clear the page with `hl.clear_crashed_lockscreen()`, because
+that drops the lock without authenticating anyone. Two habits keep the state
+away. Do not run
 `hyprctl reload` while the session is locked, or right after a switch that
 restarts hypridle. Remember that any switch touching `home/linux/desktop/idle.nix`
 restarts hypridle, and the fresh hypridle locks at once when the session has

@@ -73,8 +73,9 @@ Add an option only when two hosts need the *same* module with *different* values
 notifications, launcher, lock, idle, polkit, wallpaper, capture, clipboard,
 osd, apps, webapps and look. `home/linux/desktop.nix` bundles them.
 `home/linux/theme.nix` and `modules/nixos/desktop-theme.nix` carry the theme
-option, and `lib/theme.nix` turns `themes/<name>/colors.toml` into colours,
-mode and wallpapers as plain data. The compositor config is the checked-in
+option, and `lib/theme.nix` turns `themes/<name>/` into colours, mode and
+wallpapers as plain data. The colours and the mode come from `colors.toml`, the
+wallpapers from `backgrounds.json`. The compositor config is the checked-in
 `modules/nixos/hypr/*.lua`, rendered by `modules/nixos/desktop-hyprland.nix`
 under a generated `theme` table.
 
@@ -184,7 +185,7 @@ Another hypervisor means a new guest module that imports `vm-guest.nix`.
 owns the compositor, greeter and session. Every other role is a plain
 home-manager module under `home/linux/desktop/`, as Desktop Roles above
 describes. To try an uncommitted change on the VM, run
-`nixos-rebuild-ng test --flake .#stargazer --build-host stargazer --target-host stargazer --sudo`
+`nix run nixpkgs#nixos-rebuild-ng -- test --flake .#stargazer --build-host stargazer --target-host stargazer --sudo`
 from behemoth.
 
 **Notes:**
