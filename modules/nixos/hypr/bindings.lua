@@ -304,7 +304,7 @@ hl.bind("XF86Calculator", hl.dsp.exec_cmd("qalculate-gtk"), { description = "Cal
 hl.bind("SUPER + SHIFT + SPACE", hl.dsp.exec_cmd("pkill -SIGUSR1 waybar"), { description = "Toggle top bar" })
 hl.bind("SUPER + CTRL + SPACE", hl.dsp.exec_cmd("desktop-wallpaper-next"), { description = "Background switcher" })
 
--- xkbcommon names the comma keysym "comma"; the upper-case "COMMA" does not match.
+-- xkbcommon names the comma keysym "comma". The upper-case "COMMA" does not match.
 hl.bind("SUPER + comma", hl.dsp.exec_cmd("makoctl dismiss"), { description = "Dismiss last notification" })
 hl.bind("SUPER + SHIFT + comma", hl.dsp.exec_cmd("makoctl dismiss -a"), { description = "Dismiss all notifications" })
 hl.bind("SUPER + CTRL + comma", hl.dsp.exec_cmd("makoctl mode -t do-not-disturb"), {

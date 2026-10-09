@@ -30,10 +30,11 @@ fails at eval rather than at runtime.
 wallpapers themselves are never committed. Nix fetches each one by hash at
 build time, which keeps the repo small and the images reproducible.
 
-Optional per-app fragments may sit in the same directory and are picked up when
-present: `vscode.json`, `neovim.lua`, `obsidian.css`, `firefox.json`,
-`icons.theme`. A missing fragment is `null`, which lets an app module keep its
-own default.
+Optional per-app fragments may sit in the same directory: `vscode.json`,
+`neovim.lua`, `obsidian.css`, `firefox.json`, `icons.theme`. `lib/theme.nix`
+computes a path for each one, or `null` when the file is absent. Nothing
+consumes them yet. The theme fragments follow-up plan wires the app modules
+that read them.
 
 ## Adding a theme
 

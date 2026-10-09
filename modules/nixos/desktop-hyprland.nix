@@ -74,7 +74,6 @@ let
         name = ${luaStr themeData.name},
         mode = ${luaStr themeData.mode},
         cursor_size = ${toString cfg.theme.cursorSize},
-        scale = ${luaStr (elemAt monitorFields 3)},
         terminal = ${luaStr cfg.terminal},
         launcher = ${luaStr cfg.launcher},
         colors = ${luaTable themeData.colors},
@@ -129,7 +128,7 @@ in
     terminal = mkOption {
       type = types.str;
       default = "alacritty";
-      description = "Terminal launched by the Hyprland keybind. Alacritty (GL 3.3) renders on virgl; Ghostty >= 1.2 needs GL 4.3, which Parallels does not give Linux guests.";
+      description = "Terminal the Hyprland keybind launches, reaching bindings.lua through the generated theme table. The default stays alacritty, and a host sets another terminal only once that terminal is proven on its graphics stack.";
     };
 
     launcher = mkOption {

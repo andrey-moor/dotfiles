@@ -325,3 +325,7 @@ Rulings taken while building, each one a change to this document's letter:
 - `notify-send` is installed from `libnotify`, so the capture scripts find it
   on the shell PATH as well as through their runtime inputs.
 - D7 resolved to ghostty.
+- The per-app `fragments` (vscode, neovim, obsidian, firefox, icons) are
+  computed by `lib/theme.nix` and consumed by nothing. Section 4 reads as if an
+  app module already picks them up. The theme fragments follow-up plan wires
+  those consumers.

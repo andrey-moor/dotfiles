@@ -81,7 +81,7 @@ under a generated `theme` table.
 
 ### Parameterized Modules
 
-These 14 modules keep options (under their existing `modules.*` names); hosts set values, imports still do the enabling:
+These 14 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
 
 | Option path | What it configures |
 |-------------|--------------------|

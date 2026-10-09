@@ -74,11 +74,12 @@
   # republishes the text under an owner that can serve it. A Wayland copy is not
   # mirrored to X11 at all, so the Wayland to X11 half is needed too. Both
   # halves compare content before they write. Without that they answer each
-  # other, because every write shows up as a fresh selection on the far side,
-  # and the bridge spun at about 400 cycles per second. The Wayland to X11 half
-  # also skips empty data, so an unreadable mirrored selection never clears the
-  # X11 clipboard. The cost: on this host any X11 client can read text copied in
-  # a Wayland app. Copies a password manager marks sensitive stay put.
+  # other, because every write shows up as a fresh selection on the far side.
+  # Unguarded, the bridge spun at about 400 cycles per second. The Wayland to
+  # X11 half also skips empty data, so an unreadable mirrored selection never
+  # clears the X11 clipboard. The cost: on this host any X11 client can read
+  # text copied in a Wayland app. Copies a password manager marks sensitive
+  # stay put.
   systemd.user.services.vmware-clipboard-bridge = {
     description = "Copy text between the VMware agent's X11 clipboard and the Wayland clipboard";
     partOf = [ "hyprland-session.target" ];
@@ -97,8 +98,8 @@
       # Wayland to X11: each text copy becomes the X11 CLIPBOARD, where the
       # agent reads it when the host asks. The handler writes only what X11 does
       # not already hold, and never writes nothing. Reading the offer is capped
-      # at 2 s, so an offer that never closes its pipe cannot wedge this service,
-      # at the price of a truncated copy in that case. The shell path is absolute
+      # at 2 s, so an offer that never closes its pipe cannot wedge this service.
+      # The price is a truncated copy in that case. The shell path is absolute
       # because a service's PATH has no sh. CLIPBOARD_STATE belongs to that
       # inner shell, and a selection marked sensitive is dropped before the read.
       # shellcheck disable=SC2016
