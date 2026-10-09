@@ -284,6 +284,11 @@ in
       enable = true;
       settings.includedir = [ "/etc/krb5.conf.d/" ];
     };
+    # security.krb5.enable also turns on security.pam.krb5 by nixpkgs default.
+    # That puts pam_krb5 and two pam_ccreds lines into every PAM stack. Nothing
+    # on this host authenticates through Kerberos, himmelblau does that, and
+    # the lock and polkit stacks are PIN-only. Keep the PAM module out.
+    security.pam.krb5.enable = false;
 
     systemd.tmpfiles.rules = [
       "d /etc/krb5.conf.d 0755 root root -"
