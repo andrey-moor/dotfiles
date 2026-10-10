@@ -49,7 +49,16 @@ in
     Unit = {
       Description = "Set the theme's first wallpaper";
       # The daemon unit is named awww by home-manager's services/awww.nix.
-      After = [ "awww.service" ];
+      # graphical-session.target is listed too, with a reason. A target orders
+      # itself after every unit it wants unless that unit is already ordered
+      # after the target. Without this entry the target waited for this
+      # oneshot, which waited for awww, which waited for the target. systemd
+      # broke that cycle by dropping awww's start job (seen 2026-10-09: bar
+      # up, no wallpaper).
+      After = [
+        "graphical-session.target"
+        "awww.service"
+      ];
       PartOf = [ "graphical-session.target" ];
       # Same guard as the daemon: outside a Wayland session there is nothing
       # to set, and the unit would only fail.

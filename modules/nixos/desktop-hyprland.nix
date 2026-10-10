@@ -51,6 +51,29 @@ let
 
   themeData = (import ../../lib/theme.nix { inherit pkgs; }) cfg.theme.name;
 
+  # What greetd runs, instead of start-hyprland directly. Hyprland unsets its
+  # variables in the user manager when it exits but leaves
+  # hyprland-session.target running. The role units are PartOf
+  # graphical-session.target and restart on their own. After a logout they
+  # restart against a dead socket until systemd's start limit, and the next
+  # login finds them failed (seen 2026-10-09: no bar, no notifications).
+  # Stopping graphical-session.target once the compositor returns takes every
+  # role unit down with it (they are PartOf it) and hyprland-session.target
+  # too (BindsTo). Stopping only hyprland-session.target was tried first and
+  # left graphical-session.target up, so the units kept restarting. Units
+  # that lose the socket a moment before the stop reaches them end as failed.
+  # That is noise and can block their next start, so the failed state is
+  # cleared too. The reset covers every failed user unit, which on this
+  # single-user host is an accepted trade. Logout and crash take the same
+  # path.
+  sessionCommand = pkgs.writeShellScript "hyprland-session" ''
+    ${config.programs.hyprland.package}/bin/start-hyprland "$@"
+    status=$?
+    systemctl --user stop graphical-session.target
+    systemctl --user reset-failed
+    exit "$status"
+  '';
+
   # Flat attrset -> a one-line Lua table literal. Only used for colours.
   luaTable =
     attrs: "{ " + concatStringsSep ", " (mapAttrsToList (k: v: "${k} = ${luaStr v}") attrs) + " }";
@@ -184,7 +207,7 @@ in
       settings.default_session = {
         command = "${lib.getExe pkgs.tuigreet} --time --remember${
           optionalString (cfg.greeting != null) " --greeting ${escapeShellArg cfg.greeting}"
-        } --cmd ${config.programs.hyprland.package}/bin/start-hyprland";
+        } --cmd ${sessionCommand}";
         user = "greeter";
       };
     };
