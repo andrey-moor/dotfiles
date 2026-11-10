@@ -81,7 +81,7 @@ under a generated `theme` table.
 
 ### Parameterized Modules
 
-These 14 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
+These 15 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
 
 | Option path | What it configures |
 |-------------|--------------------|
@@ -92,6 +92,7 @@ These 14 modules keep options, under their existing `modules.*` names. Hosts set
 | `modules.nixos.containers` | `rootful` (rootless Docker by default, rootful daemon and the docker group when true) |
 | `modules.nixos.desktop` | `monitor`, `terminal`, `launcher`, `greeting`, `extraExecOnce` (the compositor, greeter and session) |
 | `modules.nixos.desktop.theme` | `name`, `cursorSize` (the host's palette, handed to every home-manager user) |
+| `modules.nixos.defender` | `onboardingFile` (runtime path of the tenant's `mdatp_onboard.json`, a sops secret; unset means installed but not onboarded) |
 | `modules.desktop.theme` | `name`, `cursorSize`, `wallpaperDir`, read-only `data` (the home-manager side the role modules read) |
 | `modules.shell.git` | `userName`, `userEmail`, `signingKey`, `signingFormat`, `signer` |
 | `modules.shell.lan-mouse` | `port`, `gpu`, `releaseBind`, `authorizedFingerprints`, `clients` |

@@ -158,7 +158,7 @@ creation_rules:
           - *stargazer
 ```
 
-Re-encrypt **all three** secrets to the new recipient list. `updatekeys` has to
+Re-encrypt **all four** secrets to the new recipient list. `updatekeys` has to
 *decrypt* first, so it needs the **admin private key**. That key lives in
 1Password, so hand it to sops through a short-lived temp file rather than
 installing it:
@@ -173,14 +173,15 @@ behemoth$ export SOPS_AGE_KEY_FILE="$agekey"
 behemoth$ nix run nixpkgs#sops -- updatekeys -y secrets/wayvnc.yaml
 behemoth$ nix run nixpkgs#sops -- updatekeys -y secrets/stargazer-tenant.yaml
 behemoth$ nix run nixpkgs#sops -- updatekeys -y secrets/stargazer-sbctl.yaml
+behemoth$ nix run nixpkgs#sops -- updatekeys -y secrets/stargazer-defender.yaml
 behemoth$ rm -f "$agekey"; unset SOPS_AGE_KEY_FILE
 ```
 
-Check that all three files list **two** recipients, publish, and replace both
+Check that all four files list **two** recipients, publish, and replace both
 1Password Documents with the new pair so the next install finds the current key:
 
 ```bash
-behemoth$ grep -c 'recipient:' secrets/*.yaml            # 2, 2 and 2
+behemoth$ grep -c 'recipient:' secrets/*.yaml            # 2 for each file
 behemoth$ git commit -am 'chore(secrets): rotate the stargazer host recipient'
 behemoth$ git push
 behemoth$ op document edit "stargazer ssh host key"     "$SCRATCH/stargazer_host_ed25519_key"     --vault Private
@@ -706,8 +707,9 @@ with these deltas:
 
 - **Install `#stargazer-drill`, not `#stargazer`**, in the disko line of §4.2 and
   in the install line of §4.4. `hosts/stargazer/drill.nix` is the same machine
-  with three differences: its own hostname, no console login, and a banner on
-  the greeter. `flake.nix` builds both from one module list, so the drill cannot
+  with four differences: its own hostname, no console login, a banner on the
+  greeter, and Defender running but never onboarded, so `mdatp health` there
+  reports `licensed: false`. `flake.nix` builds both from one module list, so the drill cannot
   drift from what it has to prove.
 - **Reuse the host key from §3.** It is already a sops recipient, so no repo
   change is needed and the drill VM decrypts on its first boot exactly like the
@@ -761,6 +763,31 @@ is the case here, since the real VM is suspended.
 ---
 
 ## 9. Day-2 operations
+
+**Microsoft Defender.** The tenant's Intune compliance policy requires Defender
+for Endpoint onboarded, licensed and healthy, from 2026-11-09.
+`modules/nixos/defender.nix` runs the official arm64 package with unmodified
+binaries. `secrets/stargazer-defender.yaml` holds the onboarding file, taken
+from the Intune-pushed onboarding script. Check it with:
+
+```bash
+vm# mdatp health --field healthy          # true
+vm# mdatp health --field health_issues    # []
+vm# aad-tool compliance-check
+```
+
+The device's identity in the Defender portal is the VM's DMI product UUID.
+Reinstalling into the same `.vmx` keeps it. A new VM from `stargazer-vm create`
+gets a new UUID and so a second Defender device. Delete the old one in the
+Defender portal together with the old Entra and Intune records. Bump the
+package by changing the version and hash in `packages/mdatp/default.nix`, from
+the `noble` arm64 index on packages.microsoft.com. Each version expires after
+about nine months, and `mdatp health --field product_expiration` shows when.
+
+The Intune onboarding script never runs here, because himmelblau 4.0.4 hands
+script policies to `/etc/cron.d` and NixOS has no cron. Later himmelblau
+releases run them as systemd timers. The script would then try `apt` and flag
+the device, so check its handling before raising the himmelblau pin.
 
 **Updates.** `system.autoUpgrade` (see `modules/nixos/base.nix`) runs
 `nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer` daily, with

@@ -20,6 +20,7 @@
     ./disko.nix
     ../../modules/nixos/base.nix
     ../../modules/nixos/containers.nix
+    ../../modules/nixos/defender.nix
     ../../modules/nixos/desktop-hyprland.nix
     ../../modules/nixos/himmelblau.nix
     ../../modules/nixos/intune-identity.nix
@@ -30,6 +31,10 @@
   # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
   # unconditional and works identically from `github:andrey-moor/dotfiles#…`.
   modules.nixos.himmelblau.enable = true;
+
+  # Intune's compliance policy requires Defender onboarded, licensed and
+  # healthy (from 2026-11-09). See modules/nixos/defender.nix.
+  modules.nixos.defender.onboardingFile = config.sops.secrets."defender-onboarding".path;
 
   sops = {
     # First host done the §10 way: the recipient is derived from this machine's
@@ -46,6 +51,13 @@
     # carry it. The private half is age-encrypted here. The public half and
     # sbctl's owner GUID are plain files in ./secureboot, placed by tmpfiles
     # below. Only the db key exists: the firmware keeps VMware's PK and KEK.
+    # Defender onboarding file for the tenant (mdatp_onboard.json, the payload
+    # of the Intune-pushed onboarding script). Read only by root at boot.
+    secrets."defender-onboarding" = {
+      sopsFile = ../../secrets/stargazer-defender.yaml;
+      key = "mdatp_onboard";
+    };
+
     secrets."sbctl-db-key" = {
       sopsFile = ../../secrets/stargazer-sbctl.yaml;
       key = "db.key";

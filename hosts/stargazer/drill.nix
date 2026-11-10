@@ -1,6 +1,6 @@
 # hosts/stargazer/drill.nix -- the fire drill's configuration (README section 8)
 #
-# Everything stargazer is, with three differences that make the drill safe to
+# Everything stargazer is, with four differences that make the drill safe to
 # run next to the real machine. On 2026-09-18 the drill booted the production
 # configuration itself. Someone logged in at its greeter with the YubiKey, and
 # it joined the tenant as a second device named `stargazer`.
@@ -20,6 +20,10 @@
   # pam_deny is left. greetd uses this stack as a substack. SSH is unaffected:
   # it takes keys only, and every drill check runs over it.
   security.pam.services.login.rules.auth.himmelblau.enable = lib.mkForce false;
+
+  # Defender runs but never onboards here, so a drill cannot register a second
+  # device in the tenant's Defender portal.
+  modules.nixos.defender.onboardingFile = lib.mkForce null;
 
   modules.nixos.desktop.greeting = "FIRE DRILL. Console login is disabled here. Verify over SSH.";
 }
