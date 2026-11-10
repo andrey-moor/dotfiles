@@ -243,6 +243,30 @@ in
       };
     };
 
+    # Owner decision 2026-11-10: no automatic sample (file) uploads to
+    # Microsoft. Hash lookups and EDR telemetry are unaffected, and the
+    # tenant's compliance script does not read this setting (tested). Set
+    # through the CLI on every daemon start, not a local mdatp_managed.json,
+    # because that file is where tenant policy lives and it locks other settings.
+    systemd.services.mdatp-local-settings = {
+      description = "Apply local Microsoft Defender settings";
+      after = [ "mdatp.service" ];
+      requisite = [ "mdatp.service" ];
+      wantedBy = [ "mdatp.service" ];
+      partOf = [ "mdatp.service" ];
+      serviceConfig.Type = "oneshot";
+      script = ''
+        # The daemon takes a few seconds to answer after it starts.
+        for _ in $(seq 1 30); do
+          if ${mdatpCli}/bin/mdatp config cloud-automatic-sample-submission --value disabled; then
+            exit 0
+          fi
+          sleep 2
+        done
+        exit 1
+      '';
+    };
+
     # The tenant's discovery script fails the updates check when definitions
     # are more than 1440 minutes old. The daemon's own schedule once went 14
     # hours without an update while a manual one worked at once, so a timer
