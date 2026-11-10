@@ -117,6 +117,14 @@ in
         "tailscaled.service"
       ];
       wants = [ "network-online.target" ];
+      # himmelblaud hands its broker PRTs to systemd's descriptor store when it
+      # stops and takes them back on start. Upstream's generated unit sets
+      # these, the NixOS one does not, so every restart (and every switch that
+      # restarts it) dropped the session's tokens until the next sign-in.
+      serviceConfig = {
+        FileDescriptorStoreMax = 1;
+        FileDescriptorStorePreserve = "yes";
+      };
     };
 
     # Upstream (4.0.0) force-appends "sudo" and "sshd" to its PAM service list

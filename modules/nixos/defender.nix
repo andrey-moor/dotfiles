@@ -86,6 +86,11 @@ in
 
     environment.systemPackages = [ mdatpCli ];
 
+    # The tenant's Intune discovery script runs inside himmelblaud-tasks and
+    # finds Defender with `command -v mdatp`. That unit's PATH holds only its
+    # own store paths, so without this every Defender field reports false.
+    systemd.services.himmelblaud-tasks.path = [ mdatpCli ];
+
     systemd.tmpfiles.rules = [
       "d /opt/microsoft 0755 root root -"
       "d /etc/opt/microsoft 0755 root root -"
@@ -235,6 +240,29 @@ in
         Restart = "always";
         RestartSec = 5;
         Delegate = "yes";
+      };
+    };
+
+    # The tenant's discovery script fails the updates check when definitions
+    # are more than 1440 minutes old. The daemon's own schedule once went 14
+    # hours without an update while a manual one worked at once, so a timer
+    # asks for one every 6 hours. Persistent catches up after a suspend.
+    systemd.services.mdatp-definitions-update = {
+      description = "Update Microsoft Defender definitions";
+      after = [ "mdatp.service" ];
+      requisite = [ "mdatp.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${mdatpCli}/bin/mdatp definitions update";
+        TimeoutStartSec = "10min";
+      };
+    };
+    systemd.timers.mdatp-definitions-update = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "00/6:00";
+        RandomizedDelaySec = "10min";
+        Persistent = true;
       };
     };
   };
