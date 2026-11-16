@@ -53,7 +53,8 @@ wait_port() {
 stop_stray_server() {
   [ -n "$(server_user)" ] || return 0
   say "stopping a VirtualHere server that launchd did not start (sudo)..."
-  sudo pkill -x vhusbdosx || true
+  # The app ignores TERM when it was started by hand (seen 2026-11-16).
+  sudo sh -c 'pkill -x vhusbdosx; sleep 2; pkill -9 -x vhusbdosx' || true
   wait_port closed || die "a VirtualHere server is still listening on port $PORT."
 }
 
@@ -71,7 +72,7 @@ start_server() {
 stop_server() {
   if daemon_running; then
     say "stopping the VirtualHere server (sudo)..."
-    sudo launchctl kill TERM "$SERVICE"
+    sudo sh -c "launchctl kill TERM $SERVICE; sleep 3; launchctl kill KILL $SERVICE 2>/dev/null" || true
     wait_port closed || true
   fi
   stop_stray_server
