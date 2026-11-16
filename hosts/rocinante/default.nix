@@ -41,13 +41,7 @@
   home.packages = [
     (pkgs.azure-cli.withExtensions [
       pkgs.azure-cli-extensions.bastion
-      (pkgs.azure-cli-extensions.ssh.overridePythonAttrs (old: {
-        # nixpkgs has oras 0.2.x but extension pins 0.1.30 — works fine with newer
-        pythonRelaxDeps = [ "oras" ];
-        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-          pkgs.python3Packages.pythonRelaxDepsHook
-        ];
-      }))
+      pkgs.azure-cli-extensions.ssh
     ])
     pkgs._1password-cli # op CLI for secret management
     pkgs.uv # Python package runner (uvx)
