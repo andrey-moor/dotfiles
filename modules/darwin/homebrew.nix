@@ -10,6 +10,56 @@
 with lib;
 let
   cfg = config.modules.darwin.homebrew;
+
+  # Every declared cask and formula must exist in the pinned taps. Upstream
+  # renames them (tigervnc-viewer, google-cloud-sdk) and moves formulae to casks
+  # (azure-cli, vercel-cli). Without this check such a change builds fine,
+  # passes CI, and fails only when `just switch` reaches `brew bundle`. With
+  # it, the weekly lock PR goes red instead.
+  taps = {
+    cask = {
+      src = inputs.homebrew-cask;
+      # Casks/<first letter>/<name>.rb, fonts under Casks/font/font-<letter>/
+      file =
+        name:
+        if hasPrefix "font-" name then
+          "Casks/font/font-${substring 5 1 name}/${name}.rb"
+        else
+          "Casks/${substring 0 1 name}/${name}.rb";
+      renames = "cask_renames.json";
+    };
+    formula = {
+      src = inputs.homebrew-core;
+      # Formula/<first letter>/<name>.rb, lib* under Formula/lib/
+      file =
+        name:
+        if hasPrefix "lib" name then
+          "Formula/lib/${name}.rb"
+        else
+          "Formula/${substring 0 1 name}/${name}.rb";
+      renames = "formula_renames.json";
+    };
+  };
+
+  pinned =
+    kind: name:
+    let
+      tap = taps.${kind};
+      read = file: builtins.fromJSON (builtins.readFile "${tap.src}/${file}");
+      renames = read tap.renames;
+      moves = read "tap_migrations.json";
+    in
+    {
+      # A name with a slash comes from another tap and is not checked.
+      assertion =
+        hasInfix "/" name
+        || builtins.pathExists "${tap.src}/${tap.file name}"
+        || (kind == "formula" && builtins.pathExists "${tap.src}/Aliases/${name}");
+      message =
+        "Homebrew ${kind} `${name}` is not in the pinned tap."
+        + optionalString (renames ? ${name}) " Upstream renamed it to `${renames.${name}}`."
+        + optionalString (moves ? ${name}) " Upstream moved it to `${moves.${name}}`.";
+    };
 in
 {
   options.modules.darwin.homebrew = {
@@ -34,6 +84,10 @@ in
   };
 
   config = {
+    assertions =
+      map (c: pinned "cask" c.name) config.homebrew.casks
+      ++ map (b: pinned "formula" b.name) config.homebrew.brews;
+
     # nix-homebrew configuration
     nix-homebrew = {
       enable = true;
@@ -68,9 +122,8 @@ in
         # and crashed brew 6.0.18. Upgrades arrive by bumping the flake inputs.
         autoUpdate = false;
         upgrade = true;
-        # Homebrew 6 made `brew bundle --cleanup` a dry-run that exits non-zero
-        # unless cleanup is forced, which aborts activation. Force it through.
-        extraFlags = [ "--force-cleanup" ];
+        # Homebrew 6 made `brew bundle --cleanup` a dry-run unless it is forced.
+        # nix-darwin passes --force-cleanup itself for "zap".
       };
 
       # GUI applications
