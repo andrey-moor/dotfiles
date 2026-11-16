@@ -25,7 +25,7 @@ let
   linkerPath = "${glibcX86}/lib/ld-linux-x86-64.so.2";
 in
 {
-  config = mkIf (pkgs.stdenv.isLinux && pkgs.stdenv.hostPlatform.isAarch64) {
+  config = mkIf (pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isAarch64) {
     # Note: extra-platforms must be set system-wide in /etc/nix/nix.custom.conf
     # (done by prerequisites script or Determinate Nix installer)
     # Setting it in user config causes warnings since it's a restricted setting

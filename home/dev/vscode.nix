@@ -31,7 +31,7 @@ with lib;
             ms-python.python
             hashicorp.terraform
           ]
-          ++ optionals pkgs.stdenv.isLinux [
+          ++ optionals pkgs.stdenv.hostPlatform.isLinux [
             ms-vscode.cpptools # gdb dependency broken on macOS
           ]
           ++ [

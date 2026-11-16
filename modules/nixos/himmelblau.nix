@@ -97,7 +97,9 @@ in
       requisite = [ "himmelblaud.service" ];
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${inputs.himmelblau.packages.${pkgs.system}.aad-tool}/bin/aad-tool status";
+        ExecStart = "${
+          inputs.himmelblau.packages.${pkgs.stdenv.hostPlatform.system}.aad-tool
+        }/bin/aad-tool status";
         SuccessExitStatus = "0 1";
         TimeoutStartSec = 40;
       };

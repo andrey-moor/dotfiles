@@ -17,7 +17,7 @@ let
   tomlFormat = pkgs.formats.toml { };
 
   lanMousePkg =
-    if pkgs.stdenv.isDarwin then
+    if pkgs.stdenv.hostPlatform.isDarwin then
       pkgs.lan-mouse-app
     else if cfg.gpu then
       config.lib.nixGL.wrap pkgs.lan-mouse
@@ -132,7 +132,7 @@ in
       tomlFormat.generate "lan-mouse-config.toml" configToml;
 
     # Systemd user service (Linux only)
-    systemd.user.services.lan-mouse = mkIf pkgs.stdenv.isLinux {
+    systemd.user.services.lan-mouse = mkIf pkgs.stdenv.hostPlatform.isLinux {
       Unit = {
         Description = "LAN Mouse - keyboard/mouse sharing";
         After = [ "graphical-session.target" ];

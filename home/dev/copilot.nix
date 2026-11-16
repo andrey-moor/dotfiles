@@ -44,7 +44,7 @@
 with lib;
 let
   pin = builtins.fromJSON (builtins.readFile ./copilot-pin.json);
-  base = inputs.copilot-cli-flake.packages.${pkgs.system}.default;
+  base = inputs.copilot-cli-flake.packages.${pkgs.stdenv.hostPlatform.system}.default;
   copilot =
     if builtins.compareVersions base.version pin.version >= 0 then
       base

@@ -8,7 +8,7 @@
 
 with lib;
 {
-  config = mkIf pkgs.stdenv.isLinux {
+  config = mkIf pkgs.stdenv.hostPlatform.isLinux {
     programs.firefox = {
       enable = true;
 

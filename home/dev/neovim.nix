@@ -32,7 +32,7 @@ with lib;
           fd
         ]
         # Clipboard on Wayland. macOS uses pbcopy via neovim's own provider.
-        ++ optionals stdenv.isLinux [
+        ++ optionals stdenv.hostPlatform.isLinux [
           wl-clipboard
         ];
 

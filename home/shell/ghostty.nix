@@ -14,9 +14,9 @@ let
   # 4.3 from the guest GPU, which VMware Fusion provides (SVGA3D) and Parallels
   # does not (virgl caps at 4.0 there, so that host uses Alacritty).
   ghosttyPkg =
-    if pkgs.stdenv.isDarwin then
+    if pkgs.stdenv.hostPlatform.isDarwin then
       null
-    else if pkgs.stdenv.isAarch64 then
+    else if pkgs.stdenv.hostPlatform.isAarch64 then
       pkgs.ghostty
     else
       lib.hiPrio (config.lib.nixGL.wrap pkgs.ghostty);
