@@ -23,6 +23,7 @@ in
     ../../modules/darwin/default.nix
     ../../modules/darwin/containers.nix
     ../../modules/darwin/homebrew.nix
+    ../../modules/darwin/yubikey-share.nix
   ];
 
   # Determinate Nix owns /etc/nix/nix.conf. This module turns nix-darwin's
@@ -150,7 +151,6 @@ in
       "vercel"
       # Utilities
       "balenaetcher"
-      "virtualhereserver"
       "tigervnc" # renamed upstream from tigervnc-viewer
     ];
     brews = [

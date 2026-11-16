@@ -94,6 +94,18 @@ rebuild:
     just switch
     just clean
 
+# Lend this Mac's YubiKey to a Linux host over VirtualHere (hosts/behemoth/README.md)
+yubikey host="rocinante":
+    scripts/yubikey to {{host}}
+
+# Take the YubiKey back and stop sharing it
+yubikey-back host="rocinante":
+    scripts/yubikey back {{host}}
+
+# Show where the YubiKey is
+yubikey-status host="rocinante":
+    scripts/yubikey status {{host}}
+
 # ============================================
 # Linux (home-manager) hosts
 # ============================================

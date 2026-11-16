@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016  # the REMOTE_* strings expand on the far side
+# Lend the YubiKey plugged into this Mac to a Linux host over VirtualHere,
+# and take it back. Runs on behemoth. modules/darwin/yubikey-share.nix
+# declares the server, hosts/behemoth/README.md explains the setup.
+#
+#   scripts/yubikey to [host]      start the server, attach the key on host
+#   scripts/yubikey back [host]    release the key, stop the server
+#   scripts/yubikey status [host]  show both ends
+#
+# host defaults to rocinante. It needs passwordless sudo and the VirtualHere
+# client at ~/.local/bin/vhclient<arch>.
+set -euo pipefail
+
+SERVICE=system/org.nixos.virtualhere-server
+PORT=7575
+
+usage() {
+  sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//'
+  exit 64
+}
+
+cmd=${1:-}
+host=${2:-rocinante}
+[ -n "$cmd" ] || usage
+
+say() { printf '%s\n' "$*" >&2; }
+die() {
+  say "error: $*"
+  exit 1
+}
+
+# --- this Mac ---------------------------------------------------------------
+
+key_on_mac() { ioreg -p IOUSB | grep -i yubikey >/dev/null; }
+listening() { nc -z -G 2 127.0.0.1 "$PORT" >/dev/null 2>&1; }
+server_user() { ps -axo user=,comm= | awk '$2 ~ /vhusbdosx$/ { u = $1 } END { print u }'; }
+daemon_running() { launchctl print "$SERVICE" 2>/dev/null | grep 'state = running' >/dev/null; }
+
+# wait_port open|closed: up to 10 seconds
+wait_port() {
+  local _
+  for _ in $(seq 1 20); do
+    if listening; then [ "$1" = open ] && return 0; else [ "$1" = closed ] && return 0; fi
+    sleep 0.5
+  done
+  return 1
+}
+
+# A server that launchd did not start is the app opened by hand, or a
+# leftover. It does not carry the YubiKey-only restriction, and if it runs as
+# the user it cannot take the key at all. It is always replaced.
+stop_stray_server() {
+  [ -n "$(server_user)" ] || return 0
+  say "stopping a VirtualHere server that launchd did not start (sudo)..."
+  sudo pkill -x vhusbdosx || true
+  wait_port closed || die "a VirtualHere server is still listening on port $PORT."
+}
+
+start_server() {
+  launchctl print "$SERVICE" >/dev/null 2>&1 ||
+    die "launchd does not know $SERVICE. Run 'just switch' first."
+  if ! daemon_running; then
+    stop_stray_server
+    say "starting the VirtualHere server (sudo)..."
+    sudo launchctl kickstart "$SERVICE"
+  fi
+  wait_port open || die "the server is not listening on port $PORT. See /var/log/vhusbd.log."
+}
+
+stop_server() {
+  if daemon_running; then
+    say "stopping the VirtualHere server (sudo)..."
+    sudo launchctl kill TERM "$SERVICE"
+    wait_port closed || true
+  fi
+  stop_stray_server
+  if listening; then die "something is still listening on port $PORT."; fi
+  say "sharing is off"
+}
+
+# --- the Linux host ---------------------------------------------------------
+
+# Runs the given script body there. The client talks to its server by the
+# address this ssh connection came from, so no address is configured anywhere.
+#   * The body is wrapped in a function, so bash reads all of it before it runs
+#     any. Otherwise a command that reads stdin would eat the rest.
+#   * It goes through a pipe, not a here-string. Nix bash on macOS (5.2 and
+#     5.3) hangs on here-strings above 512 bytes.
+remote() {
+  printf '%s\nmain() {\n%s\n}\nmain\n' "$REMOTE_COMMON" "$1" |
+    ssh -o ConnectTimeout=15 "$host" bash -s -- "$PORT"
+}
+
+REMOTE_COMMON='
+set -euo pipefail
+port=$1; shift
+case $(uname -m) in
+  x86_64) client=$HOME/.local/bin/vhclientx86_64 ;;
+  aarch64) client=$HOME/.local/bin/vhclientarm64 ;;
+  *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
+esac
+server=${SSH_CLIENT%% *}
+case $server in *:*) server="[$server]" ;; esac
+vh() { sudo "$client" -t "$1"; }
+key_address() { vh LIST | grep -i yubikey | grep -o "[A-Za-z0-9_-]*\.[0-9][0-9]*" | head -1; }
+key_hidraw() {
+  for h in /sys/class/hidraw/*; do
+    grep -qs Yubico "$h/device/uevent" && { echo "/dev/$(basename "$h")"; return 0; }
+  done
+  return 1
+}
+'
+
+REMOTE_TO='
+if [ ! -x "$client" ]; then
+  echo "the VirtualHere client is missing at $client" >&2
+  echo "download it from https://www.virtualhere.com/usb_client_software and chmod +x it" >&2
+  exit 1
+fi
+sudo modprobe vhci-hcd
+if ! systemctl is-active --quiet vhclient; then
+  sudo systemd-run --quiet --unit vhclient --collect "$client"
+fi
+ready=
+for _ in $(seq 1 20); do [ -p /tmp/vhclient ] && { ready=1; break; }; sleep 0.5; done
+[ -n "$ready" ] || { echo "the VirtualHere client did not start, see: journalctl -u vhclient" >&2; exit 1; }
+vh "MANUAL HUB ADD,$server:$port" >/dev/null || true
+addr=
+for _ in $(seq 1 30); do
+  addr=$(key_address) && [ -n "$addr" ] && break
+  sleep 0.5
+done
+[ -n "$addr" ] || { echo "the server at $server offers no YubiKey" >&2; vh LIST >&2; exit 1; }
+if ! vh LIST | grep -i yubikey | grep "In-use by you" >/dev/null; then
+  vh "USE,$addr" >/dev/null || { echo "the client could not take $addr" >&2; exit 1; }
+fi
+for _ in $(seq 1 20); do
+  dev=$(key_hidraw) && break
+  sleep 0.5
+done
+[ -n "${dev:-}" ] || { echo "the key attached but no FIDO device appeared, see: sudo dmesg | tail" >&2; exit 1; }
+[ -r "$dev" ] && [ -w "$dev" ] || { echo "$dev exists but $USER cannot use it" >&2; exit 1; }
+echo "YubiKey ready on $(hostname) as $dev"
+'
+
+REMOTE_BACK='
+if systemctl is-active --quiet vhclient; then
+  vh "STOP USING ALL" >/dev/null || true
+  sudo systemctl stop vhclient
+fi
+echo "released on $(hostname)"
+'
+
+REMOTE_STATUS='
+if systemctl is-active --quiet vhclient; then
+  vh LIST | grep -E "^ *-->|Hub" || echo "client running, no server found"
+else
+  echo "client not running"
+fi
+if dev=$(key_hidraw); then echo "FIDO device: $dev"; else echo "no YubiKey FIDO device"; fi
+'
+
+case $cmd in
+to)
+  key_on_mac || die "no YubiKey is plugged into this Mac."
+  start_server
+  remote "$REMOTE_TO"
+  say "This Mac cannot use the key until you run: just yubikey-back"
+  ;;
+back)
+  remote "$REMOTE_BACK" || say "could not reach $host, stopping the server anyway"
+  stop_server
+  ;;
+status)
+  owner=$(server_user)
+  if [ -n "$owner" ]; then say "server on this Mac: running as $owner"; else say "server on this Mac: stopped"; fi
+  if key_on_mac; then say "YubiKey: plugged into this Mac"; else say "YubiKey: not plugged into this Mac"; fi
+  say "--- $host"
+  remote "$REMOTE_STATUS" || true
+  ;;
+*) usage ;;
+esac
