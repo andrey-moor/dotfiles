@@ -27,5 +27,7 @@ hl.config({
 
   ecosystem = {
     no_update_news = true,
+    -- 0.57 opens a donation window after an update. Off by owner decision.
+    no_donation_nag = true,
   },
 })
