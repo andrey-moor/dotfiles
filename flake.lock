@@ -34,26 +34,6 @@
         "type": "github"
       }
     },
-    "catppuccin": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1792238796,
-        "narHash": "sha256-mRsa8oJ8R7fkvR5K+uQYfuxX9Np0ai/KvzTE8FYVx7E=",
-        "owner": "catppuccin",
-        "repo": "nix",
-        "rev": "30c87b95a628e81ec82a4fa0ed4db85d7c7d46d6",
-        "type": "github"
-      },
-      "original": {
-        "owner": "catppuccin",
-        "repo": "nix",
-        "type": "github"
-      }
-    },
     "claude-code-nix": {
       "inputs": {
         "nixpkgs": [
@@ -640,7 +620,6 @@
     },
     "root": {
       "inputs": {
-        "catppuccin": "catppuccin",
         "claude-code-nix": "claude-code-nix",
         "copilot-cli-flake": "copilot-cli-flake",
         "darwin": "darwin",

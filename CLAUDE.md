@@ -35,7 +35,7 @@ For a different host: `just --set host <hostname> switch`
 Shared pieces, all inline in `flake.nix`:
 - **`mkPkgs system`** — `import nixpkgs` with `config.allowUnfree = true` and overlays, in order: `./overlays`, a `pkgs.main` overlay (nixpkgs master, also allowUnfree, for packages that land there first), `nur.overlays.default`.
 - **`specialArgs` / `extraSpecialArgs` = `{ inherit inputs dotfilesDir; }`** — `dotfilesDir` is a per-host string literal (`/Users/andreym/Documents/dotfiles` on behemoth, `/home/andreym/dotfiles` on Linux), not an option. Modules take it as a function argument.
-- **`homeBase`** — `./home` (HM base: stateVersion, `$DOTFILES`, xdg, core packages) + `catppuccin.homeModules.catppuccin` + `sops-nix.homeManagerModules.sops`, applied on every host.
+- **`homeBase`** — `./home` (HM base: stateVersion, `$DOTFILES`, xdg, core packages) + `sops-nix.homeManagerModules.sops`, applied on every host.
 - `formatter.<system> = pkgs.nixfmt` and `devShells.<system>.default = import ./shell.nix` for `x86_64-linux`, `aarch64-linux`, `aarch64-darwin` (`x86_64-darwin` is dropped — nixpkgs 26.11 no longer evaluates it).
 
 Each `hosts/<host>/default.nix` is a self-contained plain module: its own `imports` list plus its config. The flake block only supplies `system`, `pkgs`, `dotfilesDir` and the HM wiring.

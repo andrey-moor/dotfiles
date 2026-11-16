@@ -55,10 +55,6 @@
     };
 
     # Additional inputs
-    catppuccin = {
-      url = "github:catppuccin/nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     nixgl = {
       url = "github:nix-community/nixGL";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -85,7 +81,6 @@
       nixpkgs,
       darwin,
       home-manager,
-      catppuccin,
       sops-nix,
       nur,
       ...
@@ -123,7 +118,6 @@
       # Home-manager modules loaded on every host, before the host's own imports.
       homeBase = [
         ./home
-        catppuccin.homeModules.catppuccin
         sops-nix.homeManagerModules.sops
       ];
     in
