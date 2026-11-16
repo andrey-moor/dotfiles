@@ -61,6 +61,19 @@
   # which greetd never runs, so the Hyprland session starts it instead.
   modules.nixos.desktop.extraExecOnce = [ "${config.security.wrapperDir}/vmware-user-suid-wrapper" ];
 
+  # The module mounts vmblock (drag and drop, file copy and paste) with
+  # `type = "fuse"`, which needs the `mount.fuse` helper. That helper came
+  # from fuse 2, and nixpkgs removed fuse 2 in 2026-11. The mount then fails
+  # at every boot with "wrong fs type". vmware-vmblock-fuse links libfuse3 and
+  # mounts fine with the fuse 3 helper, so `mount.fuse` is provided as a link
+  # to it. Drop this when the NixOS module switches to `type = "fuse3"`.
+  environment.systemPackages = [
+    (pkgs.runCommand "mount-fuse-compat" { } ''
+      mkdir -p $out/bin
+      ln -s ${pkgs.fuse3}/bin/mount.fuse3 $out/bin/mount.fuse
+    '')
+  ];
+
   # The two clipboards do not share text on their own here, so this bridge
   # carries it both ways. Measured 2026-10-07 on Hyprland 0.56.2. An X11
   # CLIPBOARD write, which is what the agent does on a host copy, was announced
