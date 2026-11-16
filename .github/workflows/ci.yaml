@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
       # Mirrors `just lint`. Directory args to `nix fmt` are deprecated, so the
       # file list comes from git. spikes/ holds standalone throwaway flakes:
       # excluded from deadnix here and from statix via statix.toml.
@@ -23,32 +23,68 @@ jobs:
         run: nix run nixpkgs#deadnix -- --fail --exclude spikes
       # Several scripts call sudo. Warnings and errors fail, style notes do not.
       - name: shellcheck
-        run: nix run nixpkgs#shellcheck -- -S warning scripts/*
+        run: nix run nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
+      # A workflow with an invalid expression does not run at all, so no check
+      # goes red. This catches it. SC2046 is the deliberate word splitting above.
+      - name: actionlint
+        run: nix run nixpkgs#actionlint -- -ignore SC2046
+
+  # Boots config/containers/compose.yaml exactly as pinned and waits until every
+  # service reports healthy. Renovate's image updates have to pass this.
+  compose-smoke:
+    runs-on: ubuntu-24.04-arm
+    env:
+      # The Mac binds the tailnet address here. Any second local address does.
+      TAILSCALE_IP: 127.0.0.2
+    defaults:
+      run:
+        working-directory: config/containers
+    steps:
+      - uses: actions/checkout@v5
+      - name: Placeholder secrets
+        run: |
+          GATEWAY_ENV_FILE="$RUNNER_TEMP/gateway.env"
+          echo "GATEWAY_ENV_FILE=$GATEWAY_ENV_FILE" >> "$GITHUB_ENV"
+          # Same variable names as the real file, all empty, then the two the
+          # gateway cannot start without.
+          sed -E 's/\{\{[^}]*\}\}//' gateway.env.tpl | grep -E '^[A-Z_]+=' > "$GATEWAY_ENV_FILE"
+          sed -i -E "s/^BIFROST_VIRTUAL_KEY=.*/BIFROST_VIRTUAL_KEY=sk-bf-ci-placeholder/; s/^BIFROST_ENCRYPTION_KEY=.*/BIFROST_ENCRYPTION_KEY=$(openssl rand -hex 32)/" "$GATEWAY_ENV_FILE"
+      - name: Compose file is valid
+        run: docker compose config -q
+      - name: Services start and become healthy
+        run: docker compose up -d --wait --wait-timeout 180
+      - name: Gateway answers, and refuses a request without a key
+        run: |
+          curl -fsS -o /dev/null http://127.0.0.1:8080/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/models)" = 401
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color | tail -100
 
   flake-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
       - run: nix flake check --no-build --all-systems
 
   build-behemoth:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
       - run: nix build .#darwinConfigurations.behemoth.system --no-link --fallback
 
   build-rocinante:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
       - run: nix build .#homeConfigurations.rocinante.activationPackage --no-link --fallback
 
   build-stargazer:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
       - run: nix build .#nixosConfigurations.stargazer.config.system.build.toplevel --no-link --fallback

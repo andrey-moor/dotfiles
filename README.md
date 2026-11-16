@@ -45,7 +45,7 @@ just build       # Build without applying
 just update      # Update flake inputs (nixpkgs, etc.)
 just clean       # Delete old generations (removes the rollback)
 just fmt         # Format nix files (nixfmt)
-just lint        # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck
+just lint        # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck + actionlint
 ```
 
 ## Mutable Configs
@@ -238,10 +238,10 @@ hosts need the same module with different values.
 
 ```bash
 just fmt     # nixfmt over `git ls-files '*.nix'`
-just lint    # nixfmt --check + statix check + deadnix --fail + shellcheck (the CI gate)
+just lint    # nixfmt --check + statix check + deadnix --fail + shellcheck + actionlint (the CI gate)
 ```
 
-CI runs the same four checks in a `lint` job, plus `nix flake check --all-systems` and a
+CI runs the same five checks in a `lint` job, plus `nix flake check --all-systems` and a
 build of each host (stargazer builds on an `ubuntu-24.04-arm` runner). `statix.toml` disables `repeated_keys` and
 ignores `spikes/`.
 

@@ -9,7 +9,7 @@ just switch          # Build and apply nix configuration
 just build           # Build without applying
 just update          # Update flake inputs (nixpkgs, etc.)
 just fmt             # Format nix files (nixfmt over `git ls-files '*.nix'`)
-just lint            # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck
+just lint            # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck + actionlint
 just check           # Check flake validity
 ```
 
@@ -102,7 +102,7 @@ These 14 modules keep options, under their existing `modules.*` names. Hosts set
 
 ### Formatting & Lint
 
-`nix fmt` uses `pkgs.nixfmt`. `just fmt` formats, `just lint` runs the exact CI gate: `nixfmt --check` over `git ls-files '*.nix'`, `statix check .`, `deadnix --fail --exclude spikes`, and `shellcheck -S warning scripts/*`. CI runs the same four in a `lint` job alongside `flake-check` and the three per-host builds.
+`nix fmt` uses `pkgs.nixfmt`. `just fmt` formats, `just lint` runs the exact CI gate: `nixfmt --check` over `git ls-files '*.nix'`, `statix check .`, `deadnix --fail --exclude spikes`, `shellcheck -S warning` over the tracked scripts, and `actionlint`. CI runs the same five in a `lint` job alongside `flake-check` and the three per-host builds.
 
 `statix.toml` disables `repeated_keys` (flat dotted paths like `home.packages` / `programs.git.enable` are the nixpkgs idiom here) and ignores `spikes/`.
 
