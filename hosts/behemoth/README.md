@@ -144,7 +144,28 @@ macOS asks for these once. All are under System Settings, Privacy & Security.
 | Input Monitoring, driver extension | Karabiner-Elements | Key remapping |
 | Network extension | Little Snitch, Tailscale, Mullvad | Each app prompts on first launch |
 
-Little Snitch also needs one rule: allow UDP 4242 for Lan Mouse.
+Little Snitch needs two rules of its own:
+
+- Allow UDP 4242 for Lan Mouse.
+- Allow every outgoing connection for VMware's NAT process, as a rule for all
+  users:
+  `/Library/Application Support/VMware/VMware Fusion/Services/Contents/Library/vmnet-natd`
+
+The second rule matters more than it looks. All of stargazer's traffic leaves
+through that process. Little Snitch cannot see the VM's encrypted DNS, so it
+guesses a hostname from each address. Google serves `proxy.golang.org` and
+`sum.golang.org` from addresses it shares with hostnames on tracker blocklists,
+and Little Snitch then refuses the connection. Without the rule, every Go
+module download on the VM fails with "connection refused", and the VM's
+nightly upgrade fails with it. That went on from 2026-11-09 to 2026-11-16.
+
+To see what Little Snitch did with an address:
+
+```bash
+sudo "/Applications/Little Snitch.app/Contents/Components/littlesnitch" log-traffic -b "2026-11-16 09:00:00" | grep 142.251.33.209
+```
+
+The columns after the port are connections allowed and connections denied.
 
 Open OrbStack once to finish its own setup. The `litellm` and `mediamtx`
 container agents keep failing until Docker is up.
