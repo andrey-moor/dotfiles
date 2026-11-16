@@ -17,6 +17,7 @@ with lib;
       nix-tree # Dependency tree viewer
       nix-output-monitor # Pretty build output
       nix-diff # Compare derivations
+      nh # Rebuild helper: shows the package diff before `just switch` applies
     ];
   };
 }

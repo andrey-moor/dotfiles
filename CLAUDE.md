@@ -9,7 +9,7 @@ just switch          # Build and apply nix configuration
 just build           # Build without applying
 just update          # Update flake inputs (nixpkgs, etc.)
 just fmt             # Format nix files (nixfmt over `git ls-files '*.nix'`)
-just lint            # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck
+just lint            # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck + actionlint
 just check           # Check flake validity
 ```
 
@@ -20,7 +20,7 @@ For a different host: `just --set host <hostname> switch`
 **Hybrid dotfiles approach:**
 - **Nix (nix-darwin + home-manager)**: Packages, services, declarative configs
 - **agents/**: AI agent config (AGENTS.md, skills, commands) — fanned out by home-manager as out-of-store symlinks
-- **config/**: Authored configs (nvim, nushell, alacritty, karabiner) — deployed by home-manager as out-of-store symlinks, edits live immediately (karabiner goes through the store)
+- **config/**: Authored configs (nvim, nushell, alacritty, karabiner, containers) — deployed by home-manager as out-of-store symlinks, edits live immediately (karabiner and containers go through the store)
 - **Homebrew** (macOS only): GUI applications via casks
 
 ### Flake Structure
@@ -81,11 +81,10 @@ under a generated `theme` table.
 
 ### Parameterized Modules
 
-These 15 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
+These 14 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
 
 | Option path | What it configures |
 |-------------|--------------------|
-| `modules.darwin.containers` | `runtime`, `logDir`, `containers.*` — launchd container services |
 | `modules.darwin.homebrew` | `casks`, `brews`, `masApps` |
 | `modules.linux.intune` | `debug` |
 | `modules.linux.wayvnc` | `passwordFile`, `port`, `address`, `monitor`, resolutions, `gpu`, `renderCursor` |
@@ -103,7 +102,7 @@ These 15 modules keep options, under their existing `modules.*` names. Hosts set
 
 ### Formatting & Lint
 
-`nix fmt` uses `pkgs.nixfmt`. `just fmt` formats, `just lint` runs the exact CI gate: `nixfmt --check` over `git ls-files '*.nix'`, `statix check .`, `deadnix --fail --exclude spikes`, and `shellcheck -S warning scripts/*`. CI runs the same four in a `lint` job alongside `flake-check` and the three per-host builds.
+`nix fmt` uses `pkgs.nixfmt`. `just fmt` formats, `just lint` runs the exact CI gate: `nixfmt --check` over `git ls-files '*.nix'`, `statix check .`, `deadnix --fail --exclude spikes`, `shellcheck -S warning` over the tracked scripts, and `actionlint`. CI runs the same five in a `lint` job alongside `flake-check` and the three per-host builds.
 
 `statix.toml` disables `repeated_keys` (flat dotted paths like `home.packages` / `programs.git.enable` are the nixpkgs idiom here) and ignores `spikes/`.
 
@@ -151,6 +150,12 @@ flake inputs. `cleanup = "zap"` removes anything not declared, so a cask install
 with `brew install` disappears at the next switch. Declare it in the host file instead. An
 assertion in `modules/darwin/homebrew.nix` checks every declared cask and formula against
 the pinned taps at eval time, so an upstream rename fails CI, not the switch.
+
+**Containers and the LLM gateway:** `config/containers/compose.yaml` is the one Compose project, applied from the Nix
+store by a launchd agent (`modules/darwin/containers.nix`), so an edit needs `just switch`. Images are pinned by tag
+and digest and updated by Renovate. Secrets are `op://` references in `gateway.env.tpl`, rendered by
+`just gateway-secrets`. The model server (LM Studio) runs on the host, because no macOS container can use the GPU.
+Codex reaches the gateway through the profile files in `home/dev/codex-gateway.nix`. The runbook has the details.
 
 **YubiKey for rocinante:** `just yubikey` / `just yubikey-back` (`scripts/yubikey`).
 `modules/darwin/yubikey-share.nix` declares the VirtualHere server as a root launchd

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Container images in config/containers/compose.yaml and GitHub Actions only.",
+    "flake.lock stays with the weekly update-flake-lock workflow.",
+    "Nothing with a fresh release is proposed: seven days must pass first."
+  ],
+  "extends": ["config:recommended", "docker:pinDigests", "helpers:pinGitHubActionDigests"],
+  "enabledManagers": ["docker-compose", "github-actions"],
+  "docker-compose": { "managerFilePatterns": ["/(^|/)config/containers/compose\\.ya?ml$/"] },
+  "schedule": ["before 6am on monday"],
+  "timezone": "America/Los_Angeles",
+  "minimumReleaseAge": "7 days",
+  "packageRules": [
+    {
+      "description": "One weekly pull request for all images. A person reads the release notes and merges.",
+      "matchManagers": ["docker-compose"],
+      "groupName": "container images",
+      "automerge": false
+    },
+    {
+      "description": "Bifrost releases every few days and has regressed in patch releases. Its image carries no source label, so link the notes by hand.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["maximhq/bifrost"],
+      "changelogUrl": "https://docs.getbifrost.ai/changelogs"
+    },
+    {
+      "description": "Actions are pinned to a commit. Small updates merge themselves once CI is green.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "automerge": true
+    }
+  ]
+}

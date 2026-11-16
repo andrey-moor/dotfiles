@@ -1,0 +1,25 @@
+# Containers on behemoth, run by OrbStack. One launchd agent applies this file
+# (modules/darwin/containers.nix). hosts/behemoth/README.md explains the setup.
+#
+# Every image is pinned by tag and digest. Renovate proposes updates in one
+# weekly pull request, and the compose-smoke CI job boots them first.
+name: behemoth
+
+services:
+  # LLM gateway. One endpoint and one key in front of the local model server
+  # (LM Studio, on the host) and the hosted providers.
+  bifrost:
+    image: maximhq/bifrost:v2.5.1@sha256:5ec9873acaf1687556b6e4dd854b92b539d9debf87a5a683b66338648b84d3c8
+    restart: unless-stopped
+    ports:
+      # This Mac, and the tailnet. Never the LAN: 0.0.0.0 is not published.
+      - "127.0.0.1:8080:8080"
+      - "${TAILSCALE_IP:?set by the launchd agent}:8080:8080"
+    env_file:
+      - ${GATEWAY_ENV_FILE:?set by the launchd agent}
+    volumes:
+      - ./bifrost/config.json:/app/data/config.json:ro
+      - bifrost-data:/app/data
+
+volumes:
+  bifrost-data:
