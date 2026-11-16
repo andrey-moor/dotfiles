@@ -217,6 +217,84 @@ Two things to know:
 
 Logs: `/var/log/vhusbd.log` here, `journalctl -u vhclient` on rocinante.
 
+## Local models and the LLM gateway
+
+One gateway, Bifrost, sits in front of every model provider. Codex and other
+tools talk to it with one key. It runs in a container. The model server cannot:
+no container on macOS can use the Apple GPU, so LM Studio runs on the host.
+
+```
+Codex --profile local ──► Bifrost (container, :8080) ──► LM Studio (host, :1234)
+                                   ├──► OpenRouter, OpenAI
+                                   ├──► Anthropic, personal key
+                                   ├──► Anthropic, work key
+                                   └──► Azure OpenAI
+```
+
+| Piece | Where it is declared |
+|---|---|
+| Containers | `config/containers/compose.yaml`, images pinned by tag and digest |
+| Gateway config | `config/containers/bifrost/config.json` |
+| Secret references | `config/containers/gateway.env.tpl`, `op://` pointers only |
+| The agent that applies it, and LM Studio's server | `modules/darwin/containers.nix` |
+| Codex profiles | `home/dev/codex-gateway.nix` |
+
+### First setup, and after changing a key
+
+1. Paste the provider keys into the 1Password item `llm-gateway-behemoth`,
+   vault Private. A provider with an empty key just does not work.
+2. `just gateway-secrets` renders them to
+   `~/.config/behemoth-containers/gateway.env`, readable by you only.
+3. `just gateway-up` applies the Compose file. `just gateway-status` checks it.
+
+### Using it
+
+```bash
+codex --profile local          # Qwen3.8-27B on this Mac
+codex --profile openrouter     # hosted open-weight models
+codex --profile claude         # Claude, personal API key
+codex --profile claude-work    # Claude, work API key
+codex --profile openai-api     # OpenAI API key
+codex                          # unchanged: your own ~/.codex/config.toml
+```
+
+Add `-m provider/model` for another model. Changing provider needs a new
+session. A Claude subscription cannot be used here: Anthropic allows that
+login only in Claude Code. The `claude` profiles use API keys.
+
+### Adding a local model
+
+Download it in LM Studio, or with `lms get`. Nothing else: LM Studio serves
+every downloaded model by name and loads it on first request, and the gateway
+passes any `lmstudio/<name>` through. LM Studio loads a model with its largest
+context by default. Set a per-model default in LM Studio if memory gets tight.
+
+### What is and is not pinned
+
+| Thing | Pinned? | Updated by |
+|---|---|---|
+| Bifrost image | Yes, tag and digest | Renovate, one pull request a week, releases at least 7 days old, never merged automatically |
+| Codex | Yes, `flake.lock` | The weekly lock pull request |
+| LM Studio | No. The app updates itself. | Itself |
+| Model files | No | You, in LM Studio |
+
+Read Bifrost's release notes before merging its update. It releases every
+few days, has shipped regressions in patch releases, and does not label
+breaking changes. After the merge: `just switch`, then one real request,
+`codex --profile local`.
+
+### Known limits, measured on 2026-11-16
+
+- Codex through Bifrost to LM Studio keeps Codex's file-edit tool and the
+  prompt cache. The same task took about three minutes with or without the
+  gateway.
+- Bifrost's built-in Ollama provider translates between API styles and loses
+  the edit tool. That is why LM Studio is set up as a generic provider.
+- The gateway needs its small database for keys to be enforced. The config
+  file still wins at every start (`source_of_truth`).
+- It listens on this Mac and on the tailnet, never on the LAN, and refuses
+  requests without the key. Prompt logging is off.
+
 ## Linux builds and Mullvad
 
 Determinate's native Linux builder builds aarch64-linux and x86_64-linux

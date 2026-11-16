@@ -48,17 +48,6 @@ in
   networking.hostName = "behemoth";
   networking.computerName = "Behemoth";
 
-  # Ollama local LLM server
-  launchd.user.agents.ollama = {
-    command = "${pkgs.main.ollama}/bin/ollama serve";
-    serviceConfig = {
-      KeepAlive = true;
-      RunAtLoad = true;
-      StandardOutPath = "/tmp/ollama.log";
-      StandardErrorPath = "/tmp/ollama.log";
-    };
-  };
-
   # LAN Mouse -- keyboard/mouse sharing with Linux machines
   # Requires: Accessibility permission (System Settings > Privacy & Security > Accessibility)
   # Little Snitch: allow UDP 4242
@@ -72,10 +61,11 @@ in
     };
   };
 
-  # Container runtime. No containers are declared at the moment: litellm and
-  # mediamtx were removed on 2026-11-16 after four weeks without a request.
-  # New services are planned as a Compose file.
-  modules.darwin.containers.runtime = "orbstack";
+  # Containers and the local model server: modules/darwin/containers.nix and
+  # config/containers/compose.yaml. LM Studio (cask below) is the model
+  # runtime. Ollama was removed on 2026-11-16: the nixpkgs build has no MLX
+  # engine, so it was the slower of the two and needed its own copy of each
+  # model.
 
   modules.darwin.homebrew = {
     casks = [
@@ -149,6 +139,7 @@ in
         ../../home/core.nix
         ../../home/dev.nix
         ../../home/darwin.nix
+        ../../home/dev/codex-gateway.nix
         ../../home/dev/copilot.nix
         ../../home/dev/herdr.nix
         ../../home/dev/hunk.nix
@@ -175,7 +166,6 @@ in
         uv # Python package runner (uvx)
         nodejs # Node.js runtime (npx)
         # goose-cli  # AI coding agent — BLOCKED: nixpkgs v1.23.2 broken, upstream flake broken (block/goose#8514)
-        main.ollama # Local LLM inference
         qemu # VM emulation (qemu-img, qemu-system-*)
         (ghidra.withExtensions (_exts: [ ghidra-extensions.ghydramcp ])) # RE toolkit with MCP bridge
         yubikey-manager # ykman CLI for Yubikey management

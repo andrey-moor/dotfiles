@@ -43,7 +43,7 @@ included. After that, `just switch` applies changes.
 just switch      # Apply configuration
 just build       # Build without applying
 just update      # Update flake inputs (nixpkgs, etc.)
-just clean       # Garbage collect old generations
+just clean       # Delete old generations (removes the rollback)
 just fmt         # Format nix files (nixfmt)
 just lint        # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck
 ```
@@ -129,7 +129,7 @@ Neovim/nushell/alacritty configs are symlinked from `config/` by the home-manage
 ├── modules/darwin/        # macOS system modules (base, containers, homebrew, yubikey-share)
 ├── overlays/              # nixpkgs overlays
 ├── packages/              # Local package definitions
-├── config/                # Mutable configs (nvim, nushell, alacritty, karabiner)
+├── config/                # Mutable configs (nvim, nushell, alacritty, karabiner, containers)
 ├── scripts/               # Helpers: stargazer-vm, yubikey
 ├── justfile               # Command runner
 └── README.md
@@ -176,6 +176,7 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `rust.nix` | Rust toolchain via rustup + cargo tools | dev |
 | `terraform.nix` | Terraform infrastructure tools | dev |
 | `vscode.nix` | VS Code with extensions | dev |
+| `codex-gateway.nix` | Codex profiles for the LLM gateway (`codex --profile local`, ...) | behemoth |
 | `copilot.nix` | GitHub Copilot CLI | behemoth, rocinante |
 | `hunk.nix` | Review-first terminal diff viewer | behemoth, rocinante |
 | `lmstudio.nix` | LM Studio desktop app for local LLMs | rocinante |
@@ -200,7 +201,7 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | Module | Description | Imported by |
 |--------|-------------|-------------|
 | `default.nix` | macOS base (user and login shell, defaults, state version, HM backup ext) | behemoth |
-| `containers.nix` | Container services via launchd (**options**) | behemoth |
+| `containers.nix` | One Compose project (`config/containers`) and LM Studio's server, via launchd | behemoth |
 | `homebrew.nix` | Homebrew integration via nix-homebrew (**options**) | behemoth |
 | `yubikey-share.nix` | VirtualHere server as an on-demand root daemon, for `just yubikey` | behemoth |
 

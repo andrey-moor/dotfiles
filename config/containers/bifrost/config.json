@@ -1,0 +1,211 @@
+{
+  "$schema": "https://www.getbifrost.ai/schema",
+  "source_of_truth": "config.json",
+  "encryption_key": "env.BIFROST_ENCRYPTION_KEY",
+  "client": {
+    "enable_logging": false,
+    "disable_content_logging": true,
+    "enforce_auth_on_inference": true,
+    "allow_direct_keys": false,
+    "allowed_origins": [
+      "http://127.0.0.1:8080"
+    ]
+  },
+  "providers": {
+    "lmstudio": {
+      "keys": [
+        {
+          "name": "local",
+          "value": "lm-studio",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "network_config": {
+        "base_url": "http://host.docker.internal:1234",
+        "default_request_timeout_in_seconds": 900
+      },
+      "custom_provider_config": {
+        "base_provider_type": "openai",
+        "allowed_requests": {
+          "list_models": true,
+          "text_completion": false,
+          "text_completion_stream": false,
+          "chat_completion": true,
+          "chat_completion_stream": true,
+          "responses": true,
+          "responses_stream": true,
+          "embedding": true,
+          "speech": false,
+          "speech_stream": false,
+          "transcription": false,
+          "transcription_stream": false
+        }
+      }
+    },
+    "azure-work": {
+      "keys": [
+        {
+          "name": "azure",
+          "value": "env.AZURE_OPENAI_KEY",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "network_config": {
+        "base_url": "env.AZURE_OPENAI_BASE_URL",
+        "default_request_timeout_in_seconds": 900
+      },
+      "custom_provider_config": {
+        "base_provider_type": "openai",
+        "allowed_requests": {
+          "list_models": true,
+          "text_completion": false,
+          "text_completion_stream": false,
+          "chat_completion": true,
+          "chat_completion_stream": true,
+          "responses": true,
+          "responses_stream": true,
+          "embedding": true,
+          "speech": false,
+          "speech_stream": false,
+          "transcription": false,
+          "transcription_stream": false
+        }
+      }
+    },
+    "openai": {
+      "keys": [
+        {
+          "name": "personal",
+          "value": "env.OPENAI_API_KEY",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ]
+    },
+    "openrouter": {
+      "keys": [
+        {
+          "name": "personal",
+          "value": "env.OPENROUTER_API_KEY",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ]
+    },
+    "anthropic-personal": {
+      "keys": [
+        {
+          "name": "personal",
+          "value": "env.ANTHROPIC_PERSONAL_KEY",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "custom_provider_config": {
+        "base_provider_type": "anthropic"
+      }
+    },
+    "anthropic-work": {
+      "keys": [
+        {
+          "name": "work",
+          "value": "env.ANTHROPIC_WORK_KEY",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "custom_provider_config": {
+        "base_provider_type": "anthropic"
+      }
+    }
+  },
+  "governance": {
+    "virtual_keys": [
+      {
+        "id": "vk-behemoth",
+        "name": "behemoth",
+        "value": "env.BIFROST_VIRTUAL_KEY",
+        "is_active": true,
+        "provider_configs": [
+          {
+            "provider": "lmstudio",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          },
+          {
+            "provider": "azure-work",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          },
+          {
+            "provider": "openai",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          },
+          {
+            "provider": "openrouter",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          },
+          {
+            "provider": "anthropic-personal",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          },
+          {
+            "provider": "anthropic-work",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          }
+        ]
+      }
+    ]
+  },
+  "logs_store": {
+    "enabled": false
+  }
+}
