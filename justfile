@@ -12,8 +12,20 @@ bootstrap:
     nix build .#darwinConfigurations.{{host}}.system
     sudo ./result/sw/bin/darwin-rebuild switch --flake .#{{host}}
 
-# Build and apply configuration
+# Build, show which packages change, then apply
 switch:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # nh is installed by this config. The plain command covers a system that
+    # does not have it yet.
+    if command -v nh >/dev/null; then
+      nh darwin switch --hostname {{host}} .
+    else
+      sudo darwin-rebuild switch --flake .#{{host}}
+    fi
+
+# Apply without the change summary
+switch-plain:
     sudo darwin-rebuild switch --flake .#{{host}}
 
 # Build without applying (creates ./result symlink)
@@ -34,33 +46,9 @@ update-claude:
 
 # Bump copilot CLI pin to the latest @github/copilot release on npm
 bump-copilot:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    pin_file=home/dev/copilot-pin.json
-    latest=$(curl -fsSL "https://registry.npmjs.org/@github/copilot/latest" \
-      | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])")
-    current=$(python3 -c "import json;print(json.load(open('$pin_file'))['version'])")
-    echo "current pin: $current"
-    echo "npm latest:  $latest"
-    if [ "$latest" = "$current" ]; then
-      echo "already at latest, no change."
-      exit 0
-    fi
-    echo "prefetching tarball hash..."
-    hash=$(nix-prefetch-url --type sha256 \
-      "https://registry.npmjs.org/@github/copilot/-/copilot-$latest.tgz" 2>/dev/null | tail -1)
-    python3 -c "
-    import json
-    p='$pin_file'
-    d=json.load(open(p))
-    d['version']='$latest'
-    d['hash']='$hash'
-    json.dump(d,open(p,'w'),indent=2)
-    open(p,'a').write('\n')
-    "
-    echo "updated $pin_file -> $latest ($hash)"
+    scripts/bump-copilot
 
-# Garbage collect old generations
+# Delete every old generation and collect garbage (removes the rollback)
 clean:
     nix-collect-garbage -d
 
@@ -77,7 +65,7 @@ lint:
     nix fmt -- --check $(git ls-files '*.nix')
     nix run nixpkgs#statix -- check .
     nix run nixpkgs#deadnix -- --fail --exclude spikes
-    nix run nixpkgs#shellcheck -- -S warning scripts/*
+    nix run nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
 
 # Pure theme-library checks (no build)
 test-theme:
@@ -91,11 +79,13 @@ check:
 info:
     nix flake show
 
-# Full rebuild: update inputs, switch, and clean
+# Update inputs and switch. Old generations are kept, so a bad update can be
+# rolled back. `just clean` removes them, and is a separate step on purpose.
+
+# Update inputs and switch (keeps the rollback generations)
 rebuild:
     just update
     just switch
-    just clean
 
 # Lend this Mac's YubiKey to a Linux host over VirtualHere (hosts/behemoth/README.md)
 yubikey host="rocinante":
@@ -108,6 +98,27 @@ yubikey-back host="rocinante":
 # Show where the YubiKey is
 yubikey-status host="rocinante":
     scripts/yubikey status {{host}}
+
+# Render the gateway's secrets from 1Password (run again after changing a key)
+gateway-secrets:
+    mkdir -p ~/.config/behemoth-containers
+    umask 077 && op inject --force -i config/containers/gateway.env.tpl -o ~/.config/behemoth-containers/gateway.env
+    @echo "rendered. Apply with: just gateway-up"
+
+# Apply config/containers/compose.yaml as it was at the last `just switch`
+gateway-up:
+    launchctl kickstart -k gui/$(id -u)/org.nixos.behemoth-containers
+    @echo "started. Follow with: just gateway-logs"
+
+# Show the containers and what the gateway can reach
+gateway-status:
+    /usr/local/bin/docker compose -p behemoth ps
+    @curl -s -m 5 -o /dev/null -w "gateway /health: %{http_code}\n" http://127.0.0.1:8080/health
+    @curl -s -m 5 -o /dev/null -w "LM Studio server: %{http_code}\n" http://127.0.0.1:1234/v1/models
+
+# Follow the log of the agent that applies the Compose file
+gateway-logs:
+    tail -n 40 -f ~/Library/Logs/behemoth-containers.log
 
 # ============================================
 # Linux (home-manager) hosts
