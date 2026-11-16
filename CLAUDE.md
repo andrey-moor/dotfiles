@@ -20,7 +20,7 @@ For a different host: `just --set host <hostname> switch`
 **Hybrid dotfiles approach:**
 - **Nix (nix-darwin + home-manager)**: Packages, services, declarative configs
 - **agents/**: AI agent config (AGENTS.md, skills, commands) — fanned out by home-manager as out-of-store symlinks
-- **config/**: Authored configs (nvim, nushell, alacritty, karabiner, litellm) — deployed by home-manager as out-of-store symlinks, edits live immediately (karabiner goes through the store, litellm is mounted into its container)
+- **config/**: Authored configs (nvim, nushell, alacritty, karabiner) — deployed by home-manager as out-of-store symlinks, edits live immediately (karabiner goes through the store)
 - **Homebrew** (macOS only): GUI applications via casks
 
 ### Flake Structure

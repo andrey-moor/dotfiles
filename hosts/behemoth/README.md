@@ -127,7 +127,6 @@ These hold tokens that no file in this repo can supply.
 | Claude Code | `claude`, then `/login` |
 | Codex | `~/.codex/config.toml` is written by hand. See `home/dev/codex.nix`. |
 | Google Cloud, Azure | `gcloud auth login`, `az login` |
-| LiteLLM | Auth tokens live in `~/.local/share/litellm`, the container's volume |
 
 App accounts and licences (Raycast, Obsidian, Craft, Fantastical, Granola,
 Things, Parallels, CrossOver, Little Snitch, Mullvad, ChatGPT) are signed in
@@ -167,8 +166,7 @@ sudo "/Applications/Little Snitch.app/Contents/Components/littlesnitch" log-traf
 
 The columns after the port are connections allowed and connections denied.
 
-Open OrbStack once to finish its own setup. The `litellm` and `mediamtx`
-container agents keep failing until Docker is up.
+Open OrbStack once to finish its own setup.
 
 ## Config that is not in this repo
 
@@ -246,8 +244,5 @@ problem. It was never tested to the end.
 
 ## Things that are deliberately not reproducible
 
-- **Container images.** `litellm` runs `main-latest` with pull-always, and
-  `mediamtx` runs `latest`. Two machines, or the same machine on two days, can
-  run different versions.
 - **Homebrew casks marked `auto_updates`.** Those apps update themselves
   between switches.

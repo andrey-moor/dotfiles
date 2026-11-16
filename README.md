@@ -129,7 +129,7 @@ Neovim/nushell/alacritty configs are symlinked from `config/` by the home-manage
 ├── modules/darwin/        # macOS system modules (base, containers, homebrew, yubikey-share)
 ├── overlays/              # nixpkgs overlays
 ├── packages/              # Local package definitions
-├── config/                # Mutable configs (nvim, nushell, alacritty, karabiner, litellm)
+├── config/                # Mutable configs (nvim, nushell, alacritty, karabiner)
 ├── scripts/               # Helpers: stargazer-vm, yubikey
 ├── justfile               # Command runner
 └── README.md

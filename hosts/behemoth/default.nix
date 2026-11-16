@@ -9,14 +9,12 @@
 {
   config,
   pkgs,
-  dotfilesDir,
   ...
 }:
 
 let
   # Named once, in modules/darwin/default.nix.
   user = config.system.primaryUser;
-  inherit (config.users.users.${user}) home;
 in
 {
   imports = [
@@ -74,42 +72,10 @@ in
     };
   };
 
-  # Darwin system-level modules
-  modules.darwin.containers = {
-    runtime = "orbstack";
-    containers.litellm = {
-      image = "ghcr.io/berriai/litellm:main-latest";
-      ports = [ "4000:4000" ];
-      pull = true;
-      volumes = [
-        "${dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
-        "${home}/.local/share/litellm:/root/.config/litellm" # Persist auth tokens
-      ];
-      cmd = [
-        "--config"
-        "/app/config.yaml"
-        "--num_workers"
-        "4"
-      ];
-    };
-
-    # RTMP/WebRTC streaming server for screen sharing
-    # OBS: rtmp://localhost:1935 with stream key (e.g., "stream")
-    # View: http://localhost:8889/<key> (WebRTC, <1s latency)
-    # Note: OBS must use x264 with bframes=0 or tune=zerolatency for WebRTC
-    containers.mediamtx = {
-      image = "bluenviron/mediamtx:latest";
-      ports = [
-        "1935:1935" # RTMP input
-        "8889:8889" # WebRTC player
-        "8189:8189/udp" # WebRTC ICE/UDP
-        "8888:8888" # HLS (fallback)
-        "8554:8554" # RTSP
-      ];
-      environment.MTX_WEBRTCADDITIONALHOSTS = "10.0.0.239,10.0.0.157";
-      autoStart = true;
-    };
-  };
+  # Container runtime. No containers are declared at the moment: litellm and
+  # mediamtx were removed on 2026-11-16 after four weeks without a request.
+  # New services are planned as a Compose file.
+  modules.darwin.containers.runtime = "orbstack";
 
   modules.darwin.homebrew = {
     casks = [
