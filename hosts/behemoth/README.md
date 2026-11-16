@@ -203,6 +203,11 @@ Logs: `/var/log/vhusbd.log` here, `journalctl -u vhclient` on rocinante.
 Determinate's native Linux builder builds aarch64-linux and x86_64-linux
 derivations on this Mac. Its VM gets DNS from macOS at 192.168.64.1.
 
+The builder has no disk of its own. Its build directory lives in memory and
+gets half of `determinateNixd.builder.memoryBytes`. A build that fails there
+with "no space left on device" ran out of that, not out of disk. The Mac's
+own disk is a separate matter: `/nix/store` is shared into the builder.
+
 Mullvad's daemon breaks that DNS, even when the VPN is disconnected. It holds
 a UDP socket on port 53, so macOS never answers the builder's UDP queries.
 Builds that download anything then fail with name resolution errors. There is

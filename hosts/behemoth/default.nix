@@ -36,9 +36,14 @@ in
     # FlakeHub account and was granted on 2026-10-07. Keep cpuCount at 1, the
     # vendor measured more CPUs as slower. The nixpkgs VM builder is not used:
     # the module allows only one of the two.
+    #
+    # Memory is also the builder's disk. Its build directory is a tmpfs sized
+    # at half of this value, and there is no separate disk setting. At 16 GB,
+    # builds had 7.8 GB of scratch space and terraform's test link failed with
+    # "no space left on device" (2026-11-16). 48 GB gives 24 GB.
     determinateNixd.builder = {
       state = "enabled";
-      memoryBytes = 16 * 1024 * 1024 * 1024;
+      memoryBytes = 48 * 1024 * 1024 * 1024;
     };
   };
 
