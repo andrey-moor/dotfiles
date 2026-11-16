@@ -13,7 +13,7 @@
 
 with lib;
 let
-  isDarwin = pkgs.stdenv.isDarwin;
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
 
   # Out-of-store symlink into the live repo working copy.
   mkNushellLink = name: config.lib.file.mkOutOfStoreSymlink "${dotfilesDir}/config/nushell/${name}";

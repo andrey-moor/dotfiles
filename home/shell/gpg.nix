@@ -46,7 +46,8 @@ with lib;
       enable = true;
       enableSshSupport = true;
       # macOS: GUI pinentry, Linux: tty (curses has terminal size issues)
-      pinentry.package = if pkgs.stdenv.isDarwin then pkgs.pinentry_mac else pkgs.pinentry-tty;
+      pinentry.package =
+        if pkgs.stdenv.hostPlatform.isDarwin then pkgs.pinentry_mac else pkgs.pinentry-tty;
       # Cache passphrases for 24 hours (long sessions with AI tools need
       # persistent cache since non-interactive shells can't re-prompt via pinentry)
       defaultCacheTtl = 86400;

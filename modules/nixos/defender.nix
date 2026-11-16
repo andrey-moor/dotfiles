@@ -256,13 +256,23 @@ in
       partOf = [ "mdatp.service" ];
       serviceConfig.Type = "oneshot";
       script = ''
-        # The daemon takes a few seconds to answer after it starts.
+        mdatp=${mdatpCli}/bin/mdatp
+        # The daemon takes a few seconds to answer after it starts, so both
+        # calls are retried. The state is read first: `mdatp config` exits
+        # non-zero when the value is already set ("New setting value is the
+        # same as the current value"), which made this unit fail on every
+        # start after the first.
         for _ in $(seq 1 30); do
-          if ${mdatpCli}/bin/mdatp config cloud-automatic-sample-submission --value disabled; then
+          state=$($mdatp health --field cloud_automatic_sample_submission_consent 2>/dev/null || true)
+          if [ "$state" = '"none"' ]; then
             exit 0
+          fi
+          if [ -n "$state" ]; then
+            $mdatp config cloud-automatic-sample-submission --value disabled || true
           fi
           sleep 2
         done
+        echo "sample submission is still $state" >&2
         exit 1
       '';
     };

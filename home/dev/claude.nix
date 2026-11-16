@@ -125,7 +125,7 @@ in
   config = {
     programs.claude-code = {
       enable = true;
-      package = inputs.claude-code-nix.packages.${pkgs.system}.default;
+      package = inputs.claude-code-nix.packages.${pkgs.stdenv.hostPlatform.system}.default;
       # ~/.claude/CLAUDE.md is a thin importer; content lives in the repo.
       context = "@~/.agents/AGENTS.md\n";
       # Pull programs.mcp.servers in via HM's synthesized `hm` personal

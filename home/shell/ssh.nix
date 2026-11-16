@@ -14,11 +14,11 @@ with lib;
       [
         sshpass # Non-interactive SSH password auth
       ]
-      ++ optionals stdenv.isLinux [
+      ++ optionals stdenv.hostPlatform.isLinux [
         lxqt.lxqt-openssh-askpass
       ];
 
-    home.sessionVariables = mkIf pkgs.stdenv.isLinux {
+    home.sessionVariables = mkIf pkgs.stdenv.hostPlatform.isLinux {
       SSH_ASKPASS = "${pkgs.lxqt.lxqt-openssh-askpass}/bin/lxqt-openssh-askpass";
       SSH_ASKPASS_REQUIRE = "prefer";
     };
@@ -29,7 +29,7 @@ with lib;
     # On each SSH login, ~/.ssh/rc re-links ~/.ssh/agent.sock to the new
     # ephemeral forwarded socket.  Shell init (env.nu) sets SSH_AUTH_SOCK
     # to the symlink, so even long-running tmux panes follow the update.
-    home.file.".ssh/rc" = mkIf pkgs.stdenv.isLinux {
+    home.file.".ssh/rc" = mkIf pkgs.stdenv.hostPlatform.isLinux {
       text = ''
         #!/bin/bash
         if [ -n "$SSH_AUTH_SOCK" ] && [ "$SSH_AUTH_SOCK" != "$HOME/.ssh/agent.sock" ]; then
@@ -76,14 +76,14 @@ with lib;
         #   * Local 1P locked / agent down + behemoth SSH agent reachable →
         #     falls through to forwarded agent (current pre-2026-05-07 behavior).
         #   * Both unavailable → auth fails (expected; unlock something).
-        "00-github-local-1p" = mkIf pkgs.stdenv.isLinux (
+        "00-github-local-1p" = mkIf pkgs.stdenv.hostPlatform.isLinux (
           lib.hm.dag.entryBefore [ "github.com" "github.com-microsoft" "github.com-linkedin" ] {
             header = ''Match host github.com,github.com-microsoft,github.com-linkedin exec "test -S ~/.1password/agent.sock && timeout 1 env SSH_AUTH_SOCK=~/.1password/agent.sock ssh-add -l >/dev/null 2>&1"'';
             IdentityAgent = "~/.1password/agent.sock";
           }
         );
 
-        "01-github-forwarded-fallback" = mkIf pkgs.stdenv.isLinux (
+        "01-github-forwarded-fallback" = mkIf pkgs.stdenv.hostPlatform.isLinux (
           lib.hm.dag.entryBefore [ "github.com" "github.com-microsoft" "github.com-linkedin" ] {
             header = ''Match host github.com,github.com-microsoft,github.com-linkedin exec "test -n \"$SSH_AUTH_SOCK\" && timeout 1 ssh-add -l >/dev/null 2>&1"'';
             IdentityAgent = "$SSH_AUTH_SOCK";

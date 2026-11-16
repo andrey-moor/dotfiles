@@ -144,7 +144,7 @@ in
     };
   };
 
-  config = mkIf pkgs.stdenv.isLinux {
+  config = mkIf pkgs.stdenv.hostPlatform.isLinux {
     home.packages = [
       wayvncPkg
       cycleResolution

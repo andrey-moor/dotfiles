@@ -212,6 +212,27 @@ in
       };
     };
 
+    # NumLock on for the text consoles. tuigreet runs on tty1, where NumLock is
+    # off by default, while input.lua turns it on inside the session. A Hello
+    # PIN typed on the numeric keypad then works at the lock screen and fails
+    # at the greeter, and three failures force a YubiKey sign-in and a new PIN
+    # (two were lost this way on 2026-11-16).
+    systemd.services.console-numlock = {
+      description = "NumLock on for the text consoles";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "greetd.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      script = ''
+        for tty in /dev/tty[1-6]; do
+          ${pkgs.kbd}/bin/setleds -D +num < "$tty"
+          ${pkgs.kbd}/bin/setleds +num < "$tty"
+        done
+      '';
+    };
+
     # The session's auth agent is home-manager's hyprpolkitagent
     # (home/linux/desktop/polkit.nix), which needs the daemon running.
     security.polkit.enable = true;

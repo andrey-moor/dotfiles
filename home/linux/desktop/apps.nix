@@ -41,6 +41,9 @@
   xdg.userDirs = {
     enable = true;
     createDirectories = true;
+    # Keep exporting XDG_PICTURES_DIR and friends to the session. home-manager
+    # changed the default to false for state versions from 26.05.
+    setSessionVariables = true;
   };
 
   xdg.terminal-exec = {

@@ -584,7 +584,7 @@ in
     };
   };
 
-  config = mkIf (pkgs.stdenv.isLinux && mode != null) {
+  config = mkIf (pkgs.stdenv.hostPlatform.isLinux && mode != null) {
     home.packages = with pkgSource; [
       # Tools: keyring, YubiKey, helpers, wrappers
       pkgs.gnome-keyring
