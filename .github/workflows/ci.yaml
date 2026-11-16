@@ -21,6 +21,9 @@ jobs:
         run: nix run nixpkgs#statix -- check .
       - name: deadnix
         run: nix run nixpkgs#deadnix -- --fail --exclude spikes
+      # Several scripts call sudo. Warnings and errors fail, style notes do not.
+      - name: shellcheck
+        run: nix run nixpkgs#shellcheck -- -S warning scripts/*
 
   flake-check:
     runs-on: ubuntu-latest
