@@ -38,12 +38,13 @@ in
     nix-homebrew = {
       enable = true;
       enableRosetta = false;
-      user = "andreym";
+      user = config.system.primaryUser;
       # Migrate existing Homebrew installation
       autoMigrate = true;
+      # No homebrew-bundle tap: `brew bundle` has been part of Homebrew itself
+      # since 2025 and the old tap now holds only a README.
       taps = {
         "homebrew/homebrew-core" = inputs.homebrew-core;
-        "homebrew/homebrew-bundle" = inputs.homebrew-bundle;
         # With nix-homebrew pinning homebrew-core, HOMEBREW_NO_INSTALL_FROM_API is
         # set, so casks MUST also come from a pinned tap — without this line they
         # silently resolve from a stale local API cache (bit us 2026-08-31: months-old
