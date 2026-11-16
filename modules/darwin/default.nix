@@ -1,10 +1,14 @@
 # modules/darwin/default.nix -- Darwin (macOS) base configuration
 #
-# Imported by hosts/behemoth. The single macOS user is hard-coded here; the
-# old `user.name`/`user.homeDir`/`user.dataDir` option set is gone.
+# Imported by hosts/behemoth. The single macOS user is named once, as
+# `system.primaryUser`. Every other darwin module reads it from there.
 
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 
+let
+  user = config.system.primaryUser;
+  inherit (config.users.users.${user}) home;
+in
 {
   config = {
     # Note: Nix configuration is handled by Determinate Nix
@@ -30,12 +34,17 @@
 
     # XDG base directories (set at launchd level so nushell finds its config)
     # Note: launchd doesn't expand $HOME, so we use the explicit path
-    launchd.user.envVariables.XDG_CONFIG_HOME = "/Users/andreym/.config";
+    launchd.user.envVariables.XDG_CONFIG_HOME = "${home}/.config";
 
-    # User account configuration
-    users.users.andreym = {
-      name = "andreym";
-      home = "/Users/andreym";
+    # User account configuration. nix-darwin applies `shell` only to users in
+    # `knownUsers`, and it needs the uid to recognise the account. 501 is the
+    # first account macOS Setup Assistant creates. Without this pair the login
+    # shell silently stays zsh on a fresh Mac.
+    users.knownUsers = [ user ];
+    users.users.${user} = {
+      name = user;
+      uid = 501;
+      home = "/Users/${user}";
       shell = pkgs.nushell;
     };
 
@@ -45,12 +54,14 @@
       dock = {
         show-recents = false;
         mru-spaces = false;
+        tilesize = 43;
       };
 
       # Finder settings
       finder = {
         AppleShowAllExtensions = true;
         FXEnableExtensionChangeWarning = false;
+        FXPreferredViewStyle = "Nlsv"; # list view
         QuitMenuItem = true;
         ShowPathbar = true;
         ShowStatusBar = true;
@@ -58,6 +69,7 @@
 
       # Global settings
       NSGlobalDomain = {
+        AppleInterfaceStyle = "Dark";
         AppleShowAllExtensions = true;
         InitialKeyRepeat = 15;
         KeyRepeat = 2;

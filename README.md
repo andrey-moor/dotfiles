@@ -23,43 +23,19 @@ files. Importing a module is what enables it.
 
 ## Initial Setup (macOS)
 
-**1. Install Nix (Determinate Systems installer):**
+`hosts/behemoth/README.md` is the runbook for a new Mac. It covers the
+bootstrap, and everything Nix cannot declare: manual apps, sign-ins and
+permission prompts. The short version:
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
-```
-
-**2. Install Homebrew:**
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-**3. Clone this repository:**
-```bash
-git clone <your-repo-url> ~/Documents/dotfiles
+nix run nixpkgs#git -- clone https://github.com/andrey-moor/dotfiles ~/Documents/dotfiles
 cd ~/Documents/dotfiles
+nix develop --command just bootstrap
 ```
 
-**4. Bootstrap nix-darwin:**
-
-Since `just` isn't available yet, run the bootstrap command directly:
-```bash
-nix run nixpkgs#darwin-rebuild -- switch --flake .#behemoth
-```
-
-This builds the configuration and installs nix-darwin itself along with all packages (including `just`).
-
-**5. After bootstrap, use `just` commands:**
-```bash
-just switch
-```
-
-## Prerequisites
-
-After initial setup, you'll have:
-- [Nix](https://nixos.org/) with flakes enabled (via Determinate Systems)
-- [Just](https://github.com/casey/just) command runner (installed by nix-darwin)
-
-## Quick Start
+The first switch installs Homebrew, nix-darwin and every package, `just`
+included. After that, `just switch` applies changes.
 
 ## Common Commands
 
@@ -69,12 +45,12 @@ just build       # Build without applying
 just update      # Update flake inputs (nixpkgs, etc.)
 just clean       # Garbage collect old generations
 just fmt         # Format nix files (nixfmt)
-just lint        # Same gate as CI: nixfmt --check + statix + deadnix
+just lint        # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck
 ```
 
 ## Mutable Configs
 
-Neovim, nushell, and alacritty configs live in `config/` and are deployed by home-manager as out-of-store symlinks into `~/.config`.
+Neovim, nushell, and alacritty configs live in `config/` and are deployed by home-manager as out-of-store symlinks into `~/.config`. The Karabiner config also lives there, but it is deployed through the Nix store, so an edit to it needs `just switch`.
 
 **Editing configs (e.g., neovim):**
 ```bash
@@ -97,7 +73,11 @@ just update   # Update all flake inputs
 just switch   # Rebuild with new versions
 ```
 
-Homebrew packages auto-update on each `switch` (configured via `onActivation.autoUpdate`).
+Homebrew is pinned too. Formulae and casks come from the `homebrew-core` and
+`homebrew-cask` flake inputs, so `just update` is what moves them. Each
+`switch` then upgrades installed packages to the pinned versions and removes
+anything not declared (`cleanup = "zap"`). Casks marked `auto_updates` also
+update themselves in between.
 
 ## Initial Setup (Linux - standalone home-manager)
 
@@ -146,10 +126,11 @@ Neovim/nushell/alacritty configs are symlinked from `config/` by the home-manage
 │   ├── dev/               # Dev tools (neovim, go, rust, jj, kubernetes, claude)
 │   ├── linux/             # Linux-only features (intune, wayvnc, edge, firefox)
 │   └── profiles/          # User-specific configs
-├── modules/darwin/        # macOS system modules (base, containers, homebrew)
+├── modules/darwin/        # macOS system modules (base, containers, homebrew, yubikey-share)
 ├── overlays/              # nixpkgs overlays
 ├── packages/              # Local package definitions
-├── config/                # Mutable configs (nvim, nushell, alacritty, litellm)
+├── config/                # Mutable configs (nvim, nushell, alacritty, karabiner)
+├── scripts/               # Helpers: stargazer-vm, yubikey
 ├── justfile               # Command runner
 └── README.md
 ```
@@ -177,6 +158,7 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `ssh.nix` | SSH client config (GitHub, FIDO2 keys) | core |
 | `starship.nix` | Prompt with Nerd Font symbols | core |
 | `tmux.nix` | Terminal multiplexer (Catppuccin theme) | core |
+| `karabiner.nix` | Karabiner-Elements key remapping (config from `config/karabiner`, through the store) | darwin |
 | `lan-mouse.nix` | Keyboard/mouse sharing over LAN (**options**) | darwin |
 
 ### Dev (`home/dev/`)
@@ -217,11 +199,12 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 ### Darwin (`modules/darwin/`)
 | Module | Description | Imported by |
 |--------|-------------|-------------|
-| `default.nix` | macOS base (defaults, state version, HM backup ext) | behemoth |
+| `default.nix` | macOS base (user and login shell, defaults, state version, HM backup ext) | behemoth |
 | `containers.nix` | Container services via launchd (**options**) | behemoth |
 | `homebrew.nix` | Homebrew integration via nix-homebrew (**options**) | behemoth |
+| `yubikey-share.nix` | VirtualHere server as an on-demand root daemon, for `just yubikey` | behemoth |
 
-Modules marked **options** are the 11 parameterized ones; they declare settings under
+Modules marked **options** are the parameterized ones (CLAUDE.md lists them all). They declare settings under
 `modules.<category>.<name>` that hosts fill in. Everything else is a plain module.
 
 ## Adding a New Tool
@@ -254,10 +237,10 @@ hosts need the same module with different values.
 
 ```bash
 just fmt     # nixfmt over `git ls-files '*.nix'`
-just lint    # nixfmt --check + statix check + deadnix --fail (the CI gate)
+just lint    # nixfmt --check + statix check + deadnix --fail + shellcheck (the CI gate)
 ```
 
-CI runs the same three checks in a `lint` job, plus `nix flake check --all-systems` and a
+CI runs the same four checks in a `lint` job, plus `nix flake check --all-systems` and a
 build of each host (stargazer builds on an `ubuntu-24.04-arm` runner). `statix.toml` disables `repeated_keys` and
 ignores `spikes/`.
 

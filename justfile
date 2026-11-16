@@ -5,6 +5,8 @@ host := "behemoth"
 default:
     @just --list
 
+# On a Mac without `just` yet: nix develop --command just bootstrap
+
 # Bootstrap nix-darwin (first-time setup only)
 bootstrap:
     nix build .#darwinConfigurations.{{host}}.system
@@ -24,7 +26,7 @@ update:
 
 # Update a specific input
 update-input input:
-    nix flake lock --update-input {{input}}
+    nix flake update {{input}}
 
 # Update only the Claude Code input (leaves nixpkgs and everything else pinned)
 update-claude:
@@ -70,11 +72,12 @@ clean-result:
 fmt:
     nix fmt -- $(git ls-files '*.nix')
 
-# Check formatting + run statix/deadnix (same gate as CI)
+# Check formatting + run statix/deadnix/shellcheck (same gate as CI)
 lint:
     nix fmt -- --check $(git ls-files '*.nix')
     nix run nixpkgs#statix -- check .
     nix run nixpkgs#deadnix -- --fail --exclude spikes
+    nix run nixpkgs#shellcheck -- -S warning scripts/*
 
 # Pure theme-library checks (no build)
 test-theme:
@@ -94,6 +97,18 @@ rebuild:
     just switch
     just clean
 
+# Lend this Mac's YubiKey to a Linux host over VirtualHere (hosts/behemoth/README.md)
+yubikey host="rocinante":
+    scripts/yubikey to {{host}}
+
+# Take the YubiKey back and stop sharing it
+yubikey-back host="rocinante":
+    scripts/yubikey back {{host}}
+
+# Show where the YubiKey is
+yubikey-status host="rocinante":
+    scripts/yubikey status {{host}}
+
 # ============================================
 # Linux (home-manager) hosts
 # ============================================
@@ -101,10 +116,6 @@ rebuild:
 # Build home-manager config for a Linux host (from this machine)
 hm-build linux-host:
     nix build '.#homeConfigurations.{{linux-host}}.activationPackage'
-
-# Apply home-manager on rocinante via prlctl
-rocinante-switch:
-    prlctl exec Rocinante -- bash -c 'cd ~/dotfiles && home-manager switch --flake .#rocinante'
 
 # Build rocinante config locally (cross-compile check)
 rocinante-build:

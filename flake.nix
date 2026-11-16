@@ -41,12 +41,10 @@
     # Determinate's nix-darwin module: manages nix.custom.conf and
     # determinate-nixd's config, and runs the Linux builder VM. The flakehub
     # URL is the vendor's documented form and resolves the 3.x range on update.
+    # It keeps its own nixpkgs: it ships vendor-built Nix and determinate-nixd,
+    # tested against the vendor's pins.
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
     nix-homebrew.url = "github:zhaofengli-wip/nix-homebrew";
-    homebrew-bundle = {
-      url = "github:homebrew/homebrew-bundle";
-      flake = false;
-    };
     homebrew-core = {
       url = "github:homebrew/homebrew-core";
       flake = false;
@@ -56,11 +54,7 @@
       flake = false;
     };
 
-    # macOS app trampoline (makes Nix apps visible in Spotlight/Raycast)
-    mac-app-util.url = "github:hraban/mac-app-util";
-
     # Additional inputs
-    catppuccin.url = "github:catppuccin/nix";
     nixgl = {
       url = "github:nix-community/nixGL";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -76,7 +70,10 @@
     # goose.url = "github:block/goose";  # BLOCKED: upstream flake broken (issue #8514 — missing cargo outputHashes)
 
     # Nix User Repository for Firefox addons
-    nur.url = "github:nix-community/NUR";
+    nur = {
+      url = "github:nix-community/NUR";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -84,7 +81,6 @@
       nixpkgs,
       darwin,
       home-manager,
-      catppuccin,
       sops-nix,
       nur,
       ...
@@ -122,7 +118,6 @@
       # Home-manager modules loaded on every host, before the host's own imports.
       homeBase = [
         ./home
-        catppuccin.homeModules.catppuccin
         sops-nix.homeManagerModules.sops
       ];
     in
@@ -140,10 +135,7 @@
           specialArgs = { inherit inputs dotfilesDir; };
 
           modules = [
-            {
-              nixpkgs.pkgs = lib.mkDefault pkgs;
-              networking.hostName = lib.mkDefault "behemoth";
-            }
+            { nixpkgs.pkgs = lib.mkDefault pkgs; }
             home-manager.darwinModules.home-manager
             {
               home-manager.useGlobalPkgs = true;
@@ -153,8 +145,6 @@
             }
             inputs.determinate.darwinModules.default
             inputs.nix-homebrew.darwinModules.nix-homebrew
-            # mac-app-util: trampolines so Nix apps appear in Spotlight/Raycast
-            inputs.mac-app-util.darwinModules.default
             ./hosts/behemoth
           ];
         };

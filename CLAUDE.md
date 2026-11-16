@@ -9,7 +9,7 @@ just switch          # Build and apply nix configuration
 just build           # Build without applying
 just update          # Update flake inputs (nixpkgs, etc.)
 just fmt             # Format nix files (nixfmt over `git ls-files '*.nix'`)
-just lint            # Same gate as CI: nixfmt --check + statix + deadnix
+just lint            # Same gate as CI: nixfmt --check + statix + deadnix + shellcheck
 just check           # Check flake validity
 ```
 
@@ -20,7 +20,7 @@ For a different host: `just --set host <hostname> switch`
 **Hybrid dotfiles approach:**
 - **Nix (nix-darwin + home-manager)**: Packages, services, declarative configs
 - **agents/**: AI agent config (AGENTS.md, skills, commands) — fanned out by home-manager as out-of-store symlinks
-- **config/**: Authored configs (nvim, nushell, alacritty, litellm) — deployed by home-manager as out-of-store symlinks, edits live immediately
+- **config/**: Authored configs (nvim, nushell, alacritty, karabiner) — deployed by home-manager as out-of-store symlinks, edits live immediately (karabiner goes through the store)
 - **Homebrew** (macOS only): GUI applications via casks
 
 ### Flake Structure
@@ -35,7 +35,7 @@ For a different host: `just --set host <hostname> switch`
 Shared pieces, all inline in `flake.nix`:
 - **`mkPkgs system`** — `import nixpkgs` with `config.allowUnfree = true` and overlays, in order: `./overlays`, a `pkgs.main` overlay (nixpkgs master, also allowUnfree, for packages that land there first), `nur.overlays.default`.
 - **`specialArgs` / `extraSpecialArgs` = `{ inherit inputs dotfilesDir; }`** — `dotfilesDir` is a per-host string literal (`/Users/andreym/Documents/dotfiles` on behemoth, `/home/andreym/dotfiles` on Linux), not an option. Modules take it as a function argument.
-- **`homeBase`** — `./home` (HM base: stateVersion, `$DOTFILES`, xdg, core packages) + `catppuccin.homeModules.catppuccin` + `sops-nix.homeManagerModules.sops`, applied on every host.
+- **`homeBase`** — `./home` (HM base: stateVersion, `$DOTFILES`, xdg, core packages) + `sops-nix.homeManagerModules.sops`, applied on every host.
 - `formatter.<system> = pkgs.nixfmt` and `devShells.<system>.default = import ./shell.nix` for `x86_64-linux`, `aarch64-linux`, `aarch64-darwin` (`x86_64-darwin` is dropped — nixpkgs 26.11 no longer evaluates it).
 
 Each `hosts/<host>/default.nix` is a self-contained plain module: its own `imports` list plus its config. The flake block only supplies `system`, `pkgs`, `dotfilesDir` and the HM wiring.
@@ -50,7 +50,7 @@ Layout:
   - `dev` — dev tooling every host gets
   - `darwin` / `linux` — platform-only members
 - `home/{shell,dev,linux,profiles}/*.nix` — the feature files themselves.
-- `modules/darwin/{default,containers,homebrew}.nix` — macOS system-level (nix-darwin) modules, imported explicitly by `hosts/behemoth`.
+- `modules/darwin/{default,containers,homebrew,yubikey-share}.nix` — macOS system-level (nix-darwin) modules, imported explicitly by `hosts/behemoth`. The macOS user is named once, as `system.primaryUser` in `default.nix`; the other darwin modules and the host read it from there.
 
 A host imports the bundles it wants plus any one-off feature files (e.g. rocinante adds `home/dev/lmstudio.nix`; behemoth deliberately gets `home/shell/lan-mouse.nix` via `home/darwin.nix` while rocinante deliberately does not import it).
 
@@ -103,7 +103,7 @@ These 15 modules keep options, under their existing `modules.*` names. Hosts set
 
 ### Formatting & Lint
 
-`nix fmt` uses `pkgs.nixfmt`. `just fmt` formats, `just lint` runs the exact CI gate: `nixfmt --check` over `git ls-files '*.nix'`, `statix check .`, `deadnix --fail --exclude spikes`. CI runs the same three in a `lint` job alongside `flake-check` and the three per-host builds.
+`nix fmt` uses `pkgs.nixfmt`. `just fmt` formats, `just lint` runs the exact CI gate: `nixfmt --check` over `git ls-files '*.nix'`, `statix check .`, `deadnix --fail --exclude spikes`, and `shellcheck -S warning scripts/*`. CI runs the same four in a `lint` job alongside `flake-check` and the three per-host builds.
 
 `statix.toml` disables `repeated_keys` (flat dotted paths like `home.packages` / `programs.git.enable` are the nixpkgs idiom here) and ignores `spikes/`.
 
@@ -112,6 +112,7 @@ These 15 modules keep options, under their existing `modules.*` names. Hosts set
 Frequently-edited configs live in `config/{nvim,nushell,alacritty}` and are deployed by home-manager as out-of-store symlinks into `~/.config` — edits in the repo are live immediately, no apply step. Notes:
 - nvim's `lazy-lock.json` writes through the symlink; commit it straight from the working copy
 - nushell: only `config.nu`, `env.nu`, `catppuccin_mocha.nu` are symlinked — `history.txt` and `vendor/` stay machine-local
+- `config/karabiner` (macOS) is the exception: it is deployed through the Nix store, so an edit needs `just switch`. An out-of-store symlink would point into `~/Documents`, which macOS guards per app, and Karabiner's services are not children of the terminal
 
 ### Agent Stack
 
@@ -140,6 +141,21 @@ owns `/etc/determinate/config.json` and `/etc/nix/nix.custom.conf`, and it sets
 Determinate's native Linux builder, so `nix build` for aarch64-linux derivations runs
 locally on this Mac. Access to that builder is granted per FlakeHub account, not by
 configuration. Run `determinate-nixd version` to see which features are enabled.
+
+**New Mac:** `hosts/behemoth/README.md` is the runbook. It lists what Nix cannot declare
+(manual apps, App Store apps, sign-ins, permission prompts) and must be kept current when
+such a thing is added.
+
+**Homebrew:** formulae and casks are pinned by the `homebrew-core` and `homebrew-cask`
+flake inputs. `cleanup = "zap"` removes anything not declared, so a cask installed by hand
+with `brew install` disappears at the next switch. Declare it in the host file instead. An
+assertion in `modules/darwin/homebrew.nix` checks every declared cask and formula against
+the pinned taps at eval time, so an upstream rename fails CI, not the switch.
+
+**YubiKey for rocinante:** `just yubikey` / `just yubikey-back` (`scripts/yubikey`).
+`modules/darwin/yubikey-share.nix` declares the VirtualHere server as a root launchd
+daemon that stays stopped until the script starts it. Do not open the VirtualHere app by
+hand: as a user process it cannot take the key from macOS.
 
 ### Rocinante (Tailscale)
 

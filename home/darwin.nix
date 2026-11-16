@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ./shell/karabiner.nix
     ./shell/lan-mouse.nix
   ];
 }

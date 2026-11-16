@@ -1,19 +1,27 @@
 # Behemoth -- macOS workstation (nix-darwin + home-manager)
 #
-# Home-manager feature modules: the home/{core,dev,darwin} bundles plus copilot
-# and hunk, imported below under home-manager.users.andreym.
+# Home-manager feature modules: the home/{core,dev,darwin} bundles plus copilot,
+# herdr and hunk, imported below in the home-manager user block.
+#
+# README.md in this directory is the new-Mac runbook. It lists everything this
+# file cannot declare: manual apps, sign-ins and permission prompts.
 
 {
+  config,
   pkgs,
-  dotfilesDir,
   ...
 }:
 
+let
+  # Named once, in modules/darwin/default.nix.
+  user = config.system.primaryUser;
+in
 {
   imports = [
     ../../modules/darwin/default.nix
     ../../modules/darwin/containers.nix
     ../../modules/darwin/homebrew.nix
+    ../../modules/darwin/yubikey-share.nix
   ];
 
   # Determinate Nix owns /etc/nix/nix.conf. This module turns nix-darwin's
@@ -26,9 +34,14 @@
     # FlakeHub account and was granted on 2026-10-07. Keep cpuCount at 1, the
     # vendor measured more CPUs as slower. The nixpkgs VM builder is not used:
     # the module allows only one of the two.
+    #
+    # Memory is also the builder's disk. Its build directory is a tmpfs sized
+    # at half of this value, and there is no separate disk setting. At 16 GB,
+    # builds had 7.8 GB of scratch space and terraform's test link failed with
+    # "no space left on device" (2026-11-16). 48 GB gives 24 GB.
     determinateNixd.builder = {
       state = "enabled";
-      memoryBytes = 16 * 1024 * 1024 * 1024;
+      memoryBytes = 48 * 1024 * 1024 * 1024;
     };
   };
 
@@ -59,42 +72,10 @@
     };
   };
 
-  # Darwin system-level modules
-  modules.darwin.containers = {
-    runtime = "orbstack";
-    containers.litellm = {
-      image = "ghcr.io/berriai/litellm:main-latest";
-      ports = [ "4000:4000" ];
-      pull = true;
-      volumes = [
-        "${dotfilesDir}/config/litellm/config.yaml:/app/config.yaml:ro"
-        "/Users/andreym/.local/share/litellm:/root/.config/litellm" # Persist auth tokens
-      ];
-      cmd = [
-        "--config"
-        "/app/config.yaml"
-        "--num_workers"
-        "4"
-      ];
-    };
-
-    # RTMP/WebRTC streaming server for screen sharing
-    # OBS: rtmp://localhost:1935 with stream key (e.g., "stream")
-    # View: http://localhost:8889/<key> (WebRTC, <1s latency)
-    # Note: OBS must use x264 with bframes=0 or tune=zerolatency for WebRTC
-    containers.mediamtx = {
-      image = "bluenviron/mediamtx:latest";
-      ports = [
-        "1935:1935" # RTMP input
-        "8889:8889" # WebRTC player
-        "8189:8189/udp" # WebRTC ICE/UDP
-        "8888:8888" # HLS (fallback)
-        "8554:8554" # RTSP
-      ];
-      environment.MTX_WEBRTCADDITIONALHOSTS = "10.0.0.239,10.0.0.157";
-      autoStart = true;
-    };
-  };
+  # Container runtime. No containers are declared at the moment: litellm and
+  # mediamtx were removed on 2026-11-16 after four weeks without a request.
+  # New services are planned as a Compose file.
+  modules.darwin.containers.runtime = "orbstack";
 
   modules.darwin.homebrew = {
     casks = [
@@ -116,13 +97,17 @@
       # Communication
       "zoom"
       # AI/ML
+      "chatgpt" # includes the Codex desktop app since 2026-07
       "claude"
       "lm-studio"
       # System
+      "betterdisplay"
+      "crossover"
       "karabiner-elements"
       "monitorcontrol"
       "parallels"
       "little-snitch"
+      "mullvad-vpn" # its daemon breaks the Linux builder's DNS, see README.md
       "tailscale-app"
       # Design
       "figma"
@@ -130,31 +115,30 @@
       # Media
       "obs"
       "imaging-edge"
-      # Cloud
+      # Cloud CLIs. Homebrew moved azure-cli and vercel-cli from formulae to
+      # casks in 2026-10. The vercel cask replaces the vercel-cli formula.
+      "azure-cli"
       "gcloud-cli" # renamed upstream from google-cloud-sdk
+      "vercel"
       # Utilities
       "balenaetcher"
-      "virtualhereserver"
       "tigervnc" # renamed upstream from tigervnc-viewer
     ];
     brews = [
       # CLI tools better via Homebrew
       "agent-browser"
-      "azure-cli"
       "openssh" # FIDO2/Yubikey SSH support (macOS default lacks it)
       "firebase-cli"
       "supabase"
-      "vercel-cli"
     ];
-    # Mac App Store apps managed manually (`mas install <id>`).
+    # Mac App Store apps are installed by hand, see README.md.
     # nix-homebrew's brew-bundle mas integration is flaky on Apple Silicon.
     masApps = { };
   };
 
   # Home-manager user configuration
-  home-manager.users.andreym =
+  home-manager.users.${user} =
     {
-      lib,
       config,
       pkgs,
       dotfilesDir,
@@ -170,10 +154,16 @@
         ../../home/dev/hunk.nix
       ];
 
-      home.stateVersion = "24.05";
+      # home.stateVersion comes from home/default.nix. Username and home
+      # directory come from users.users (home-manager's nix-darwin module).
       home.enableNixpkgsReleaseCheck = false; # Using pkgs.main for some packages
-      home.username = lib.mkForce "andreym";
-      home.homeDirectory = lib.mkForce "/Users/andreym";
+
+      # Copy Nix GUI apps into ~/Applications/Home Manager Apps so Spotlight
+      # and Raycast index them. Symlinks (linkApps, the default below state
+      # version 25.11) are not indexed. The terminal that runs `just switch`
+      # needs App Management permission, see README.md.
+      targets.darwin.copyApps.enable = true;
+      targets.darwin.linkApps.enable = false;
 
       # Canonical fleet-wide dotfiles path (spec §4): the repo lives in
       # ~/Documents/dotfiles here; Linux hosts already have it at ~/dotfiles.
@@ -189,10 +179,16 @@
         qemu # VM emulation (qemu-img, qemu-system-*)
         (ghidra.withExtensions (_exts: [ ghidra-extensions.ghydramcp ])) # RE toolkit with MCP bridge
         yubikey-manager # ykman CLI for Yubikey management
+        sops # this Mac holds the admin age key and is where secrets/ is edited
       ];
 
+      # The admin age key sits where sops looks on macOS by default. Because
+      # XDG_CONFIG_HOME is set here, sops would look under ~/.config instead
+      # and fail to decrypt, so the path is stated.
+      home.sessionVariables.SOPS_AGE_KEY_FILE = "${config.home.homeDirectory}/Library/Application Support/sops/age/keys.txt";
+
       # Settings for the parameterized modules
-      modules.dev.claude.obsidianVault = "/Users/andreym/Library/Mobile Documents/iCloud~md~obsidian/Documents";
+      modules.dev.claude.obsidianVault = "${config.home.homeDirectory}/Library/Mobile Documents/iCloud~md~obsidian/Documents";
 
       modules.shell.lan-mouse = {
         gpu = false;
