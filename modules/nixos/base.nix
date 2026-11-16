@@ -63,18 +63,20 @@
   ];
   services.resolved = {
     enable = true;
-    dnssec = "false";
-    # DNS-over-TLS: one TCP session per resolver instead of parallel UDP
-    # queries. With plain UDP, resolved's A+AAAA pair stalled ~5 s about once
-    # in 30 lookups (second reply lost/mishandled) — enough to trip
-    # himmelblau's 3 s probe cap at login. Direct UDP bursts to the resolver
-    # never stalled, so it is resolved-side, and TLS sidesteps it.
-    dnsovertls = "opportunistic"; # TLS preferred; plain fallback so a TLS hiccup is never a full outage
-    llmnr = "false";
-    fallbackDns = [
-      "9.9.9.9"
-      "1.0.0.1"
-    ];
+    settings.Resolve = {
+      DNSSEC = "false";
+      # DNS-over-TLS: one TCP session per resolver instead of parallel UDP
+      # queries. With plain UDP, resolved's A+AAAA pair stalled ~5 s about once
+      # in 30 lookups (second reply lost/mishandled) — enough to trip
+      # himmelblau's 3 s probe cap at login. Direct UDP bursts to the resolver
+      # never stalled, so it is resolved-side, and TLS sidesteps it.
+      DNSOverTLS = "opportunistic"; # TLS preferred; plain fallback so a TLS hiccup is never a full outage
+      LLMNR = "false";
+      FallbackDNS = [
+        "9.9.9.9"
+        "1.0.0.1"
+      ];
+    };
   };
 
   services.tailscale.enable = true;

@@ -12,7 +12,6 @@
   boot.loader.systemd-boot.enable = lib.mkDefault true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # systemd in the initrd: needed for the LUKS passphrase prompt to behave, and
-  # a prerequisite for anything TPM-shaped later.
-  boot.initrd.systemd.enable = true;
+  # The initrd is systemd-based, which the LUKS passphrase prompt needs. NixOS
+  # 26.11 removed the scripted initrd, so there is no option to set any more.
 }

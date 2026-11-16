@@ -33,11 +33,11 @@
   # in the patch header. The version check turns a nixpkgs Hyprland bump into
   # an evaluation error, not a silently failing patch or an unpatched session.
   programs.hyprland.package =
-    lib.throwIfNot (pkgs.hyprland.version == "0.56.2")
-      "modules/nixos/vmware-guest.nix: the vmwgfx DMA-BUF patch targets Hyprland 0.56.2, but nixpkgs now has ${pkgs.hyprland.version}. Check Hyprland discussion #12966 for an upstream fix, then update or drop the patch."
+    lib.throwIfNot (pkgs.hyprland.version == "0.57.2")
+      "modules/nixos/vmware-guest.nix: the vmwgfx DMA-BUF patch targets Hyprland 0.57.2, but nixpkgs now has ${pkgs.hyprland.version}. Check Hyprland discussion #12966 for an upstream fix, then update or drop the patch."
       (
         pkgs.hyprland.overrideAttrs (old: {
-          patches = (old.patches or [ ]) ++ [ ./patches/hyprland-0.56.2-vmwgfx-dmabuf.patch ];
+          patches = (old.patches or [ ]) ++ [ ./patches/hyprland-0.57.2-vmwgfx-dmabuf.patch ];
         })
       );
 

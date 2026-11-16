@@ -1,4 +1,4 @@
-Hyprland 0.56.2: release vmwgfx surface handles during linux-dmabuf import.
+Hyprland 0.57.2: release vmwgfx surface handles during linux-dmabuf import.
 
 On vmwgfx, drmPrimeFDToHandle returns a TTM surface handle. DRM_IOCTL_GEM_CLOSE
 rejects that handle with EINVAL, so Hyprland treats every GPU client buffer as
@@ -8,12 +8,14 @@ This patch retries the release with DRM_VMW_UNREF_SURFACE, and only on vmwgfx.
 Source: https://github.com/ClaireDuSoleil/hyprland-vmware-fix
   patches/hyprland-0.56.2-vmwgfx-dmabuf.patch at commit 2ccd2bebb821 (BSD-3-Clause)
 Discussion: https://github.com/hyprwm/Hyprland/discussions/12966
-Status 2026-09-14: not merged upstream. Drop this file when Hyprland ships a fix.
+Status 2026-11-15: not merged upstream. 0.57.2 still releases the handle with
+drmCloseBufferHandle only. Drop this file when Hyprland ships a fix.
+Rebased 2026-11-15 from the 0.56.2 patch. The added lines are identical. Only
+one context line changed: upstream renamed the LOGM macro to LOG.
 Reviewed 2026-09-14: ioctl 10 and the argument struct match drm_vmw_surface_arg
 in include/uapi/drm/vmwgfx_drm.h. The fallback runs only after GEM_CLOSE fails.
 
 diff --git a/src/protocols/LinuxDMABUF.cpp b/src/protocols/LinuxDMABUF.cpp
-index 897c98dc..74eeba2c 100644
 --- a/src/protocols/LinuxDMABUF.cpp
 +++ b/src/protocols/LinuxDMABUF.cpp
 @@ -1,5 +1,6 @@
@@ -23,10 +25,11 @@ index 897c98dc..74eeba2c 100644
  #include <set>
  #include <tuple>
  #include "../helpers/MiscFunctions.hpp"
-@@ -18,6 +19,30 @@
+@@ -18,7 +19,31 @@
+ #include "../state/MonitorState.hpp"
  
  using namespace Hyprutils::OS;
- 
++
 +// vmwgfx returns TTM-backed surface handles from drmPrimeFDToHandle, which
 +// DRM_IOCTL_GEM_CLOSE cannot release. Fall back to the vmwgfx surface unref.
 +#define DRM_VMW_UNREF_SURFACE 10
@@ -46,7 +49,7 @@ index 897c98dc..74eeba2c 100644
 +        drmFreeVersion(version);
 +    if (!isVmwgfx)
 +        return -1;
-+
+ 
 +    struct drmVmwSurfaceArg arg = {sc<int32_t>(handle), 0};
 +    return drmCommandWrite(fd, DRM_VMW_UNREF_SURFACE, &arg, sizeof(arg));
 +}
@@ -54,13 +57,13 @@ index 897c98dc..74eeba2c 100644
  static std::optional<dev_t> devIDFromFD(int fd) {
      struct stat stat;
      if (fstat(fd, &stat) != 0)
-@@ -272,7 +297,8 @@ bool CLinuxDMABUFParamsResource::commence() {
+@@ -283,7 +308,8 @@
              return false;
          }
  
 -        if (drmCloseBufferHandle(PROTO::linuxDma->m_mainDeviceFD.get(), handle)) {
 +        if (drmCloseBufferHandle(PROTO::linuxDma->m_mainDeviceFD.get(), handle) != 0 &&
 +            closeVmwGFXHandle(PROTO::linuxDma->m_mainDeviceFD.get(), handle) != 0) {
-             LOGM(Log::ERR, "Failed to close dmabuf handle");
+             LOG(Log::ERR, "Failed to close dmabuf handle");
              return false;
          }
