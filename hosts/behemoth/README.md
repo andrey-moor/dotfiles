@@ -178,7 +178,7 @@ Open OrbStack once to finish its own setup.
 | Extra SSH hosts | `~/.ssh/extra_config` | Copy by hand. It is private, and this repo is public. |
 | Codex provider config | `~/.codex/config.toml`, `~/.codex/azure.config.toml`, `~/.codex/model-catalog.json` | Copy by hand. They name a private Azure endpoint, and this repo is public. |
 | Project LaunchAgents | `~/Library/LaunchAgents/com.andreym.*.plist` | Each belongs to a project, which installs it. One of them expects an npm-installed `codex` at `/opt/homebrew/bin/codex`. |
-| npm global packages `gsd-pi` and `xcodebuildmcp` | `/opt/homebrew/lib/node_modules` | `npm install -g` by hand. They sit on Homebrew's `node`, which no file declares. Homebrew installed it only as a dependency of `agent-browser` and `firebase-cli`. `npm ls -g --depth=0` lists them. |
+| npm global packages `gsd-pi` and `xcodebuildmcp` | `/opt/homebrew/lib/node_modules` | `npm install -g` by hand, from before Nix led on PATH. They sit in Homebrew's `node`, which no file declares. Homebrew installed it only as a dependency of `agent-browser` and `firebase-cli`. A new `npm install -g` goes to `~/.npm-global`, set in `config/nushell/env.nu`. |
 | OrbStack's Kubernetes | OrbStack's settings | Turn it on in OrbStack's settings. `orbctl config show` prints `k8s.enable: true` when it is on. |
 | Dock layout | macOS | Arrange it by hand. `modules/darwin/default.nix` sets the Dock's size and behaviour, not which apps are in it. |
 
