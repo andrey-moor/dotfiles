@@ -1,0 +1,88 @@
+#!/bin/bash
+# Find apps that were replaced on disk while they kept running.
+# modules/darwin/homebrew.nix runs this around `brew bundle` at every switch.
+# hosts/behemoth/README.md, "Apps upgraded while running", explains why.
+#
+#   scripts/stale-apps snapshot       print "pid, app, version" for every
+#                                     running process of an /Applications app
+#   scripts/stale-apps check <file>   warn about each app in that snapshot that
+#                                     still runs under the same pid and now
+#                                     has another version on disk
+#
+# Runs as root under macOS's own bash 3.2, with absolute tool paths. It always
+# exits 0, because a warning must never fail an activation.
+set -u
+
+TAB=$'\t'
+
+usage() {
+  /usr/bin/sed -n '2,11p' "$0" | /usr/bin/sed 's/^# \{0,1\}//'
+  exit 64
+}
+
+# "pid<TAB>/Applications/Name.app" for each process started from an app bundle.
+running() {
+  /bin/ps -axww -o pid=,comm= | while read -r pid comm; do
+    if [[ $comm =~ ^(/Applications/[^/]+\.app)/ ]]; then
+      printf '%s\t%s\n' "$pid" "${BASH_REMATCH[1]}"
+    fi
+  done
+}
+
+version_of() {
+  local plist="$1/Contents/Info.plist" short build
+  if [ ! -f "$plist" ]; then
+    echo "removed"
+    return
+  fi
+  short=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist" 2>/dev/null)
+  build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist" 2>/dev/null)
+  echo "${short:-?} (${build:-?})"
+}
+
+snapshot() {
+  local last="" version="" pid app
+  running | /usr/bin/sort -t "$TAB" -k 2 | while IFS=$TAB read -r pid app; do
+    if [ "$app" != "$last" ]; then
+      version=$(version_of "$app")
+      last=$app
+    fi
+    printf '%s\t%s\t%s\n' "$pid" "$app" "$version"
+  done
+}
+
+check() {
+  local file="$1" now reported="" found=0 pid app before after name
+  [ -s "$file" ] || return 0
+  now=$(/usr/bin/mktemp -t stale-apps) || return 0
+  running >"$now"
+  while IFS=$TAB read -r pid app before; do
+    [ "$app" = "$reported" ] && continue
+    # The pid must still belong to the same app, or it was reused.
+    /usr/bin/grep -qxF -- "$pid$TAB$app" "$now" || continue
+    after=$(version_of "$app")
+    [ "$after" = "$before" ] && continue
+    if [ "$found" -eq 0 ]; then
+      echo "warning: these apps were upgraded while running. Quit and reopen each one:" >&2
+      found=1
+    fi
+    name=${app##*/}
+    echo "  ${name%.app}: $before -> $after" >&2
+    reported=$app
+  done <"$file"
+  /bin/rm -f "$now"
+  if [ "$found" -eq 1 ]; then
+    echo "  An old copy that keeps running can lose its macOS permissions." >&2
+  fi
+  return 0
+}
+
+case "${1:-}" in
+  snapshot) snapshot ;;
+  check)
+    [ $# -eq 2 ] || usage
+    check "$2"
+    ;;
+  *) usage ;;
+esac
+exit 0

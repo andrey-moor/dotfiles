@@ -125,7 +125,7 @@ These hold tokens that no file in this repo can supply.
 | GitHub CLI | `gh auth login` |
 | Atuin | `atuin login`, then `atuin sync` |
 | Claude Code | `claude`, then `/login` |
-| Codex | `~/.codex/config.toml` is written by hand. See `home/dev/codex.nix`. |
+| Codex | `codex login`, with the ChatGPT plan. The ChatGPT app shares that login. Other providers: "Local models and the LLM gateway" below. |
 | Google Cloud, Azure | `gcloud auth login`, `az login` |
 
 App accounts and licences (Raycast, Obsidian, Craft, Fantastical, Granola,
@@ -175,7 +175,7 @@ Open OrbStack once to finish its own setup.
 | Raycast settings and extensions | Raycast's own store | Raycast Settings, Advanced, Export and Import |
 | Little Snitch rules | Little Snitch | Its own backup and restore |
 | Extra SSH hosts | `~/.ssh/extra_config` | Copy by hand. It is private, and this repo is public. |
-| Codex provider config | `~/.codex/config.toml` | Copy by hand |
+| Codex provider config | `~/.codex/config.toml`, `~/.codex/azure.config.toml`, `~/.codex/model-catalog.json` | Copy by hand. They name a private Azure endpoint, and this repo is public. |
 | Project LaunchAgents | `~/Library/LaunchAgents/com.andreym.*.plist` | Each belongs to a project, which installs it. One of them expects an npm-installed `codex` at `/opt/homebrew/bin/codex`. |
 
 ## Lending the YubiKey to rocinante
@@ -254,9 +254,27 @@ codex --profile local          # Qwen3.8-27B on this Mac
 codex --profile openrouter     # hosted open-weight models
 codex --profile claude         # Claude, personal API key
 codex --profile claude-work    # Claude, work API key
-codex --profile openai-api     # OpenAI API key
-codex                          # unchanged: your own ~/.codex/config.toml
+codex --profile openai-api     # OpenAI API key, billed per token
+codex --profile azure          # the work Azure deployment, direct
+codex                          # your ChatGPT plan, direct
 ```
+
+Two routes do not use the gateway:
+
+- **Plain `codex` and the ChatGPT app** use the plan login from `codex login`.
+  A plan login works only with OpenAI directly. The `openai-api` profile is
+  for an API key and can stay unused.
+- **`codex --profile azure`** is written by hand in `~/.codex`, because the
+  endpoint is private. `azure.config.toml` picks the provider and the model.
+  The provider block in `config.toml` gets its key from 1Password when Codex
+  starts, so no key sits in a file or in the shell:
+
+  ```toml
+  [model_providers.azure.auth]
+  command = "/etc/profiles/per-user/andreym/bin/op"
+  args = ["read", "--no-newline", "op://Private/llm-gateway-behemoth/providers/azure-openai-key"]
+  refresh_interval_ms = 0
+  ```
 
 Add `-m provider/model` for another model. Changing provider needs a new
 session. A Claude subscription cannot be used here: Anthropic allows that
@@ -294,6 +312,32 @@ breaking changes. After the merge: `just switch`, then one real request,
   file still wins at every start (`source_of_truth`).
 - It listens on this Mac and on the tailnet, never on the LAN, and refuses
   requests without the key. Prompt logging is off.
+- Codex warns "Model metadata not found" for gateway models and assumes a
+  default context size. Bifrost cannot yet hand Codex its model list in
+  Codex's format. Bifrost pull request 10096 adds that. Once it ships, one
+  gateway profile with a working `/model` picker can replace the five.
+
+## Apps upgraded while running
+
+`just switch` upgrades Homebrew casks. An upgrade replaces the app on disk
+while the old copy keeps running. macOS then no longer trusts the running
+copy, and what breaks depends on the app:
+
+| App | What broke on 2026-11-16 |
+|---|---|
+| Ghostty | It filters key presses for its global shortcut. macOS refused the old copy, and every key press on the Mac was dropped. |
+| LM Studio | Model loads failed with "file not found". |
+
+The switch now ends with a warning that names each such app. Quit and reopen
+every app it lists. If the keyboard is already dead, quit Ghostty with the
+mouse. LM Studio's server ignores a normal quit:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/org.nixos.lmstudio-server
+```
+
+`scripts/stale-apps` does the comparing, and `modules/darwin/homebrew.nix`
+runs it before and after Homebrew.
 
 ## Linux builds and Mullvad
 

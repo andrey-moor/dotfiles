@@ -88,6 +88,22 @@ in
       map (c: pinned "cask" c.name) config.homebrew.casks
       ++ map (b: pinned "formula" b.name) config.homebrew.brews;
 
+    # `brew bundle` replaces an app on disk while its old copy keeps running.
+    # macOS then stops trusting that copy. On 2026-11-16 an old Ghostty with a
+    # keyboard event tap made every key press drop, system-wide. So: note what
+    # runs before Homebrew, compare after it, and name the apps to restart.
+    # A snapshot that is still there comes from an activation that stopped
+    # before the check, and is the one to compare against.
+    system.activationScripts.preActivation.text = ''
+      if [ ! -s /var/run/stale-apps.snapshot ]; then
+        /bin/bash ${../../scripts/stale-apps} snapshot > /var/run/stale-apps.snapshot || true
+      fi
+    '';
+    system.activationScripts.postActivation.text = ''
+      /bin/bash ${../../scripts/stale-apps} check /var/run/stale-apps.snapshot || true
+      rm -f /var/run/stale-apps.snapshot
+    '';
+
     # nix-homebrew configuration
     nix-homebrew = {
       enable = true;
