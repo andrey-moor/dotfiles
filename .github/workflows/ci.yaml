@@ -10,24 +10,24 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       # Mirrors `just lint`. Directory args to `nix fmt` are deprecated, so the
       # file list comes from git. spikes/ holds standalone throwaway flakes:
       # excluded from deadnix here and from statix via statix.toml.
       - name: nixfmt --check
         run: nix fmt -- --check $(git ls-files '*.nix')
       - name: statix
-        run: nix run nixpkgs#statix -- check .
+        run: nix run --inputs-from . nixpkgs#statix -- check .
       - name: deadnix
-        run: nix run nixpkgs#deadnix -- --fail --exclude spikes
+        run: nix run --inputs-from . nixpkgs#deadnix -- --fail --exclude spikes
       # Several scripts call sudo. Warnings and errors fail, style notes do not.
       - name: shellcheck
-        run: nix run nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
+        run: nix run --inputs-from . nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
       # A workflow with an invalid expression does not run at all, so no check
       # goes red. This catches it. SC2046 is the deliberate word splitting above.
       - name: actionlint
-        run: nix run nixpkgs#actionlint -- -ignore SC2046
+        run: nix run --inputs-from . nixpkgs#actionlint -- -ignore SC2046
 
   # Boots config/containers/compose.yaml exactly as pinned and waits until every
   # service reports healthy. Renovate's image updates have to pass this.
@@ -40,7 +40,7 @@ jobs:
       run:
         working-directory: config/containers
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Placeholder secrets
         run: |
           GATEWAY_ENV_FILE="$RUNNER_TEMP/gateway.env"
@@ -72,27 +72,27 @@ jobs:
   flake-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix flake check --no-build --all-systems
 
   build-behemoth:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix build .#darwinConfigurations.behemoth.system --no-link --fallback
 
   build-rocinante:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix build .#homeConfigurations.rocinante.activationPackage --no-link --fallback
 
   build-stargazer:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix build .#nixosConfigurations.stargazer.config.system.build.toplevel --no-link --fallback

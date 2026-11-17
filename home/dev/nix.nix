@@ -1,23 +1,19 @@
 # home/dev/nix.nix -- Nix development tools (home-manager)
 
 {
-  lib,
   pkgs,
   ...
 }:
 
-with lib;
 {
-  config = {
-    home.packages = with pkgs; [
-      # Nix tools
-      nixfmt # Formatter (RFC-style; nixfmt-rfc-style is now an alias)
-      nil # LSP
-      nix-prefetch-git # Prefetch git repos
-      nix-tree # Dependency tree viewer
-      nix-output-monitor # Pretty build output
-      nix-diff # Compare derivations
-      nh # Rebuild helper: shows the package diff before `just switch` applies
-    ];
-  };
+  home.packages = with pkgs; [
+    # Nix tools
+    nixfmt # Formatter (RFC-style; nixfmt-rfc-style is now an alias)
+    nil # LSP
+    nix-prefetch-git # Prefetch git repos
+    nix-tree # Dependency tree viewer
+    nix-output-monitor # Pretty build output
+    nix-diff # Compare derivations
+    nh # Rebuild helper: shows the package diff before `just switch` applies
+  ];
 }

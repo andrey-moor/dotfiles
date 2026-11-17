@@ -46,7 +46,7 @@ bump-copilot:
 
 # Delete every old generation and collect garbage (removes the rollback)
 clean:
-    nix-collect-garbage -d
+    sudo nix-collect-garbage -d
 
 # Remove result symlink
 clean-result:
@@ -59,10 +59,10 @@ fmt:
 # Check formatting + run statix/deadnix/shellcheck/actionlint (same gate as CI)
 lint:
     nix fmt -- --check $(git ls-files '*.nix')
-    nix run nixpkgs#statix -- check .
-    nix run nixpkgs#deadnix -- --fail --exclude spikes
-    nix run nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
-    nix run nixpkgs#actionlint -- -ignore SC2046
+    nix run --inputs-from . nixpkgs#statix -- check .
+    nix run --inputs-from . nixpkgs#deadnix -- --fail --exclude spikes
+    nix run --inputs-from . nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
+    nix run --inputs-from . nixpkgs#actionlint -- -ignore SC2046
 
 # Pure theme-library checks (no build)
 test-theme:

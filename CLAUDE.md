@@ -81,7 +81,7 @@ under a generated `theme` table.
 
 ### Parameterized Modules
 
-These 14 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
+These 12 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
 
 | Option path | What it configures |
 |-------------|--------------------|
@@ -95,9 +95,7 @@ These 14 modules keep options, under their existing `modules.*` names. Hosts set
 | `modules.desktop.theme` | `name`, `cursorSize`, `wallpaperDir`, read-only `data` (the home-manager side the role modules read) |
 | `modules.shell.git` | `userName`, `userEmail`, `signingKey`, `signingFormat`, `signer` |
 | `modules.shell.lan-mouse` | `port`, `gpu`, `releaseBind`, `authorizedFingerprints`, `clients` |
-| `modules.shell.onepassword` | `signer` (op-ssh-sign path; read by the andreym profile) |
 | `modules.dev.claude` | `obsidianVault` (adds the obsidian MCP server when set) |
-| `modules.dev.jj` | `userName`, `userEmail` |
 | `modules.dev.kubernetes` | `helm` (opt-in; nixpkgs helm breaks recurrently) |
 
 ### Formatting & Lint

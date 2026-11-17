@@ -178,6 +178,9 @@ Open OrbStack once to finish its own setup.
 | Extra SSH hosts | `~/.ssh/extra_config` | Copy by hand. It is private, and this repo is public. |
 | Codex provider config | `~/.codex/config.toml`, `~/.codex/azure.config.toml`, `~/.codex/model-catalog.json` | Copy by hand. They name a private Azure endpoint, and this repo is public. |
 | Project LaunchAgents | `~/Library/LaunchAgents/com.andreym.*.plist` | Each belongs to a project, which installs it. One of them expects an npm-installed `codex` at `/opt/homebrew/bin/codex`. |
+| npm global packages `gsd-pi` and `xcodebuildmcp` | `/opt/homebrew/lib/node_modules` | `npm install -g` by hand. They sit on Homebrew's `node`, which no file declares. Homebrew installed it only as a dependency of `agent-browser` and `firebase-cli`. `npm ls -g --depth=0` lists them. |
+| OrbStack's Kubernetes | OrbStack's settings | Turn it on in OrbStack's settings. `orbctl config show` prints `k8s.enable: true` when it is on. |
+| Dock layout | macOS | Arrange it by hand. `modules/darwin/default.nix` sets the Dock's size and behaviour, not which apps are in it. |
 
 ## Lending the YubiKey to rocinante
 
@@ -372,6 +375,23 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/net.mullvad.daemon.plist
 
 Unknown: whether starting Mullvad after the builder VM is already up avoids the
 problem. It was never tested to the end.
+
+## Sources pinned by hand
+
+These are pinned in the repo, and no updater watches them. The weekly lock
+pull request covers `flake.lock` only, and Renovate covers container images
+and GitHub Actions only. Bump each by hand.
+
+| Source | Pinned in | How to bump |
+|---|---|---|
+| Lan Mouse macOS app | `packages/lan-mouse-app` | Pick a newer release, update `version` and `sha256` |
+| Lan Mouse for Linux | the `lan-mouse` override in `overlays/default.nix` | Update `rev`, `hash` and the `cargoDeps` hash. Keep it on the same protocol as the macOS app. |
+| hunk | `packages/hunk` | Update `version` and the four `sha256` values |
+| GhidraMCP extension | `overlays/ghidra-extensions/ghydramcp.nix` | Update `version` and the hash |
+| bat theme | `home/shell/bat.nix` | Update `rev` and `sha256` |
+| nu_scripts | `home/shell/nushell.nix` | Update `rev` and `sha256`, see the comment there |
+| Copilot CLI | `home/dev/copilot-pin.json` | `just bump-copilot` |
+| MCP servers (kagimcp, mcp-server-fetch, mcpvault) | `home/dev/claude.nix` | Update the version in each server's arguments |
 
 ## Things that are deliberately not reproducible
 

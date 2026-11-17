@@ -29,8 +29,8 @@
 #   copilot plugin install cathrynlavery/diagram-design
 # (the old chezmoi run_onchange installer is retired). That
 # installer also filtered a spurious nix-openssl "Cannot open directory
-# .../etc/ssl/certs" stderr warning; no wrapper is added here -- if the
-# warning still reproduces under the current package, handle it in Task 7.
+# .../etc/ssl/certs" stderr warning; no wrapper is added here. Add one if
+# the warning still reproduces under the current package.
 
 {
   lib,
