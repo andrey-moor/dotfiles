@@ -1,6 +1,7 @@
 # home/shell/gpg.nix -- GPG and gpg-agent configuration with Yubikey support
 
 {
+  lib,
   pkgs,
   ...
 }:
@@ -41,7 +42,7 @@
 
   services.gpg-agent = {
     enable = true;
-    enableSshSupport = true;
+    # SSH support stays off: 1Password is the SSH agent (onepassword.nix).
     # macOS: GUI pinentry, Linux: tty (curses has terminal size issues)
     pinentry.package =
       if pkgs.stdenv.hostPlatform.isDarwin then pkgs.pinentry_mac else pkgs.pinentry-tty;
@@ -55,6 +56,12 @@
     # Don't grab keyboard (can cause issues on macOS)
     grabKeyboardAndMouse = false;
   };
+
+  # gpg-agent --supervised only accepts sockets passed the systemd way, so
+  # the launchd agent home-manager declares on macOS exits with code 2 and
+  # restarts every 10 seconds. config/nushell/config.nu starts the agent
+  # with `gpgconf --launch` instead.
+  launchd.agents.gpg-agent.enable = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin (lib.mkForce false);
 
   # scdaemon config for YubiKey
   home.file.".gnupg/scdaemon.conf".text = ''

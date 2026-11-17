@@ -2,16 +2,11 @@
 # Uses 1Password for SSH auth and git commit signing instead of gpg-agent/YubiKey
 
 {
-  lib,
   pkgs,
   ...
 }:
 
 {
-  # Disable gpg-agent SSH support (1Password handles SSH now)
-  # GPG agent still runs for encryption/decryption
-  services.gpg-agent.enableSshSupport = lib.mkForce false;
-
   # 1Password CLI
   home.packages = with pkgs; [ _1password-cli ];
 
