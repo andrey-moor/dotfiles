@@ -2,10 +2,7 @@
 #
 # Imported by home/core.nix: every host is this user's.
 
-{
-  config,
-  ...
-}:
+{ pkgs, ... }:
 
 {
   config = {
@@ -16,7 +13,11 @@
       userEmail = "m@andreym.com";
       signingFormat = "ssh";
       signingKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICdtwwW6A7j8vesJzYxp06VugC0Go+q1rBCbTXbCzSfs";
-      signer = config.modules.shell.onepassword.signer;
+      signer =
+        if pkgs.stdenv.hostPlatform.isDarwin then
+          "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+        else
+          "/opt/1Password/op-ssh-sign";
     };
 
     # Per-org git identity + signing key (1Password SSH keys)
@@ -38,8 +39,5 @@
         };
       }
     ];
-
-    # Jujutsu VCS (inherits from git config or override here)
-    # modules.dev.jj is already configured with same defaults
   };
 }
