@@ -58,9 +58,6 @@ def t [name?: string] {
   tmux new-session -A -s $session
 }
 
-# bonfire: context monitor for Claude sessions
-alias bonfire = /mnt/psf/Home/Documents/Microsoft/monorepo-bonfire/bazel-bin/tools/cli/bonfire/bonfire/bonfire
-
 alias tl = tmux list-sessions
 alias ta = tmux new-session -A -s main
 alias tkill = tmux kill-session -t

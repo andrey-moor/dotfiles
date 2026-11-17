@@ -79,6 +79,7 @@ From then on, `just switch` applies changes. Only the owner runs it.
 |---|---|---|
 | VMware Fusion | No Homebrew cask. The download needs a Broadcom account. | support.broadcom.com. `hosts/stargazer/README.md` covers the VM. |
 | Xcode | Two versions are kept side by side as `Xcode-26.1.app` and `Xcode-26.3.app`. | App Store (id 497799835) or developer.apple.com |
+| Google AI Edge Foresight | No Homebrew cask, not in the App Store. On trial as a meeting note-taker. It updates itself. | developers.google.com/edge/foresight. Copy `Foresight.app` to `/Applications`. |
 
 ### Mac App Store
 
@@ -139,16 +140,12 @@ macOS asks for these once. All are under System Settings, Privacy & Security.
 | Permission | For | Why |
 |---|---|---|
 | App Management | The terminal that runs `just switch` (Ghostty) | home-manager copies Nix apps into `~/Applications/Home Manager Apps`. Without it the switch stops with a message. |
-| Accessibility | Lan Mouse | Keyboard and mouse sharing with rocinante |
 | Input Monitoring, driver extension | Karabiner-Elements | Key remapping |
 | Network extension | Little Snitch, Tailscale, Mullvad | Each app prompts on first launch |
 
-Little Snitch needs two rules of its own:
-
-- Allow UDP 4242 for Lan Mouse.
-- Allow every outgoing connection for VMware's NAT process, as a rule for all
-  users:
-  `/Library/Application Support/VMware/VMware Fusion/Services/Contents/Library/vmnet-natd`
+Little Snitch needs one rule of its own. Allow every outgoing connection for
+VMware's NAT process, as a rule for all users:
+`/Library/Application Support/VMware/VMware Fusion/Services/Contents/Library/vmnet-natd`
 
 The second rule matters more than it looks. All of stargazer's traffic leaves
 through that process. Little Snitch cannot see the VM's encrypted DNS, so it
@@ -177,6 +174,9 @@ Open OrbStack once to finish its own setup.
 | Extra SSH hosts | `~/.ssh/extra_config` | Copy by hand. It is private, and this repo is public. |
 | Codex provider config | `~/.codex/config.toml`, `~/.codex/azure.config.toml`, `~/.codex/model-catalog.json` | Copy by hand. They name a private Azure endpoint, and this repo is public. |
 | Project LaunchAgents | `~/Library/LaunchAgents/com.andreym.*.plist` | Each belongs to a project, which installs it. One of them expects an npm-installed `codex` at `/opt/homebrew/bin/codex`. |
+| npm global packages `gsd-pi` and `xcodebuildmcp` | `/opt/homebrew/lib/node_modules` | `npm install -g` by hand, from before Nix led on PATH. They sit in Homebrew's `node`, which no file declares. Homebrew installed it only as a dependency of `agent-browser` and `firebase-cli`. A new `npm install -g` goes to `~/.npm-global`, set in `config/nushell/env.nu`. |
+| OrbStack's Kubernetes | OrbStack's settings | Turn it on in OrbStack's settings. `orbctl config show` prints `k8s.enable: true` when it is on. |
+| Dock layout | macOS | Arrange it by hand. `modules/darwin/default.nix` sets the Dock's size and behaviour, not which apps are in it. |
 
 ## Lending the YubiKey to rocinante
 
@@ -247,6 +247,9 @@ Codex --profile local ──► Bifrost (container, :8080) ──► LM Studio (
    `~/.config/behemoth-containers/gateway.env`, readable by you only.
 3. `just gateway-up` applies the Compose file. `just gateway-status` checks it.
 
+On a new Mac, open LM Studio once before the first login that should start
+its server. `~/.lmstudio/bin/lms` does not exist until then.
+
 ### Using it
 
 ```bash
@@ -312,6 +315,11 @@ breaking changes. After the merge: `just switch`, then one real request,
   file still wins at every start (`source_of_truth`).
 - It listens on this Mac and on the tailnet, never on the LAN, and refuses
   requests without the key. Prompt logging is off.
+- The dashboard at port 8080 loads but can do nothing. No admin account and
+  no setup token are configured, so Bifrost refuses every management request.
+  All settings come from `config.json`. CI checks that this stays so.
+- With Tailscale off at login, the gateway serves this Mac only. Run
+  `just gateway-up` once Tailscale is connected.
 - Codex warns "Model metadata not found" for gateway models and assumes a
   default context size. Bifrost cannot yet hand Codex its model list in
   Codex's format. Bifrost pull request 10096 adds that. Once it ships, one
@@ -363,6 +371,21 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/net.mullvad.daemon.plist
 
 Unknown: whether starting Mullvad after the builder VM is already up avoids the
 problem. It was never tested to the end.
+
+## Sources pinned by hand
+
+These are pinned in the repo, and no updater watches them. The weekly lock
+pull request covers `flake.lock` only, and Renovate covers container images
+and GitHub Actions only. Bump each by hand.
+
+| Source | Pinned in | How to bump |
+|---|---|---|
+| hunk | `packages/hunk` | Update `version` and the four `sha256` values |
+| GhidraMCP extension | `overlays/ghidra-extensions/ghydramcp.nix` | Update `version` and the hash |
+| bat theme | `home/shell/bat.nix` | Update `rev` and `sha256` |
+| nu_scripts | `home/shell/nushell.nix` | Update `rev` and `sha256`, see the comment there |
+| Copilot CLI | `home/dev/copilot-pin.json` | `just bump-copilot` |
+| MCP servers (kagimcp, mcp-server-fetch, mcpvault) | `home/dev/claude.nix` | Update the version in each server's arguments |
 
 ## Things that are deliberately not reproducible
 

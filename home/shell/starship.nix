@@ -1,56 +1,48 @@
 # home/shell/starship.nix -- Starship prompt configuration
 
 {
-  lib,
-  ...
-}:
+  programs.starship = {
+    enable = true;
+    enableNushellIntegration = true;
+    enableBashIntegration = true;
+    enableZshIntegration = true;
 
-with lib;
-{
-  config = {
-    programs.starship = {
-      enable = true;
-      enableNushellIntegration = true;
-      enableBashIntegration = true;
-      enableZshIntegration = true;
+    settings = {
+      add_newline = true;
+      command_timeout = 1000;
+      format = "[$directory$git_branch$git_status]($style)$character";
 
-      settings = {
-        add_newline = true;
-        command_timeout = 1000;
-        format = "[$directory$git_branch$git_status]($style)$character";
+      character = {
+        error_symbol = "[✗](bold cyan)";
+        success_symbol = "[❯](bold cyan)";
+      };
 
-        character = {
-          error_symbol = "[✗](bold cyan)";
-          success_symbol = "[❯](bold cyan)";
-        };
+      directory = {
+        truncation_length = 2;
+        truncation_symbol = "…/";
+        repo_root_style = "bold cyan";
+        repo_root_format = "[$repo_root]($repo_root_style)[$path]($style)[$read_only]($read_only_style) ";
+      };
 
-        directory = {
-          truncation_length = 2;
-          truncation_symbol = "…/";
-          repo_root_style = "bold cyan";
-          repo_root_format = "[$repo_root]($repo_root_style)[$path]($style)[$read_only]($read_only_style) ";
-        };
+      git_branch = {
+        format = "[$branch]($style) ";
+        style = "italic cyan";
+      };
 
-        git_branch = {
-          format = "[$branch]($style) ";
-          style = "italic cyan";
-        };
-
-        git_status = {
-          format = "[$all_status]($style)";
-          style = "cyan";
-          ahead = "⇡\${count} ";
-          diverged = "⇕⇡\${ahead_count}⇣\${behind_count} ";
-          behind = "⇣\${count} ";
-          conflicted = " ";
-          up_to_date = " ";
-          untracked = "? ";
-          modified = " ";
-          stashed = "";
-          staged = "";
-          renamed = "";
-          deleted = "";
-        };
+      git_status = {
+        format = "[$all_status]($style)";
+        style = "cyan";
+        ahead = "⇡\${count} ";
+        diverged = "⇕⇡\${ahead_count}⇣\${behind_count} ";
+        behind = "⇣\${count} ";
+        conflicted = " ";
+        up_to_date = " ";
+        untracked = "? ";
+        modified = " ";
+        stashed = "";
+        staged = "";
+        renamed = "";
+        deleted = "";
       };
     };
   };

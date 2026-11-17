@@ -40,17 +40,13 @@ update:
 update-input input:
     nix flake update {{input}}
 
-# Update only the Claude Code input (leaves nixpkgs and everything else pinned)
-update-claude:
-    nix flake update claude-code-nix
-
 # Bump copilot CLI pin to the latest @github/copilot release on npm
 bump-copilot:
     scripts/bump-copilot
 
 # Delete every old generation and collect garbage (removes the rollback)
 clean:
-    nix-collect-garbage -d
+    sudo nix-collect-garbage -d
 
 # Remove result symlink
 clean-result:
@@ -63,10 +59,10 @@ fmt:
 # Check formatting + run statix/deadnix/shellcheck/actionlint (same gate as CI)
 lint:
     nix fmt -- --check $(git ls-files '*.nix')
-    nix run nixpkgs#statix -- check .
-    nix run nixpkgs#deadnix -- --fail --exclude spikes
-    nix run nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
-    nix run nixpkgs#actionlint -- -ignore SC2046
+    nix run --inputs-from . nixpkgs#statix -- check .
+    nix run --inputs-from . nixpkgs#deadnix -- --fail --exclude spikes
+    nix run --inputs-from . nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
+    nix run --inputs-from . nixpkgs#actionlint -- -ignore SC2046
 
 # Pure theme-library checks (no build)
 test-theme:
@@ -113,7 +109,7 @@ gateway-up:
 
 # Show the containers and what the gateway can reach
 gateway-status:
-    /usr/local/bin/docker compose -p behemoth ps
+    /Applications/OrbStack.app/Contents/MacOS/xbin/docker compose -p behemoth ps
     @curl -s -m 5 -o /dev/null -w "gateway /health: %{http_code}\n" http://127.0.0.1:8080/health
     @curl -s -m 5 -o /dev/null -w "LM Studio server: %{http_code}\n" http://127.0.0.1:1234/v1/models
 

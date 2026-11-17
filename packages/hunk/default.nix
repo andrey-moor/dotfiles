@@ -6,8 +6,8 @@
 # self-contained executable per platform).
 #
 # Linux binary is dynamically linked against the system glibc/ld
-# (`/lib64/ld-linux-x86-64.so.2`). Both target hosts (rocinante,
-# stargazer) are non-NixOS Arch with that path available, so we
+# (`/lib64/ld-linux-x86-64.so.2`). The only Linux host that imports
+# it is rocinante, which is non-NixOS Arch with that path available, so we
 # rely on the system loader rather than autoPatchelfHook (the
 # binary is a ~120 MB bun bundle with its own embedded runtime —
 # patching is unnecessary and risks rewriting offsets we don't

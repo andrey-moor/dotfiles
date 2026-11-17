@@ -36,17 +36,5 @@ in
         argocd # GitOps continuous deployment CLI
       ]
       ++ optional cfg.helm kubernetes-helm; # Helm package manager (opt-in)
-
-    # kubectl completion and aliases
-    programs.bash.initExtra = mkIf config.programs.bash.enable ''
-      source <(kubectl completion bash)
-      alias k=kubectl
-      complete -o default -F __start_kubectl k
-    '';
-
-    programs.zsh.initExtra = mkIf config.programs.zsh.enable ''
-      source <(kubectl completion zsh)
-      alias k=kubectl
-    '';
   };
 }

@@ -12,9 +12,9 @@ services:
     image: maximhq/bifrost:v2.5.1@sha256:5ec9873acaf1687556b6e4dd854b92b539d9debf87a5a683b66338648b84d3c8
     restart: unless-stopped
     ports:
-      # This Mac, and the tailnet. Never the LAN: 0.0.0.0 is not published.
+      # This Mac only. compose.tailnet.yaml adds the tailnet address. Never
+      # the LAN: 0.0.0.0 is not published.
       - "127.0.0.1:8080:8080"
-      - "${TAILSCALE_IP:?set by the launchd agent}:8080:8080"
     env_file:
       - ${GATEWAY_ENV_FILE:?set by the launchd agent}
     volumes:

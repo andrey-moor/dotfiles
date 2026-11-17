@@ -10,24 +10,24 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       # Mirrors `just lint`. Directory args to `nix fmt` are deprecated, so the
       # file list comes from git. spikes/ holds standalone throwaway flakes:
       # excluded from deadnix here and from statix via statix.toml.
       - name: nixfmt --check
         run: nix fmt -- --check $(git ls-files '*.nix')
       - name: statix
-        run: nix run nixpkgs#statix -- check .
+        run: nix run --inputs-from . nixpkgs#statix -- check .
       - name: deadnix
-        run: nix run nixpkgs#deadnix -- --fail --exclude spikes
+        run: nix run --inputs-from . nixpkgs#deadnix -- --fail --exclude spikes
       # Several scripts call sudo. Warnings and errors fail, style notes do not.
       - name: shellcheck
-        run: nix run nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
+        run: nix run --inputs-from . nixpkgs#shellcheck -- -S warning $(git ls-files scripts)
       # A workflow with an invalid expression does not run at all, so no check
       # goes red. This catches it. SC2046 is the deliberate word splitting above.
       - name: actionlint
-        run: nix run nixpkgs#actionlint -- -ignore SC2046
+        run: nix run --inputs-from . nixpkgs#actionlint -- -ignore SC2046
 
   # Boots config/containers/compose.yaml exactly as pinned and waits until every
   # service reports healthy. Renovate's image updates have to pass this.
@@ -40,7 +40,7 @@ jobs:
       run:
         working-directory: config/containers
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Placeholder secrets
         run: |
           GATEWAY_ENV_FILE="$RUNNER_TEMP/gateway.env"
@@ -49,42 +49,50 @@ jobs:
           # gateway cannot start without.
           sed -E 's/\{\{[^}]*\}\}//' gateway.env.tpl | grep -E '^[A-Z_]+=' > "$GATEWAY_ENV_FILE"
           sed -i -E "s/^BIFROST_VIRTUAL_KEY=.*/BIFROST_VIRTUAL_KEY=sk-bf-ci-placeholder/; s/^BIFROST_ENCRYPTION_KEY=.*/BIFROST_ENCRYPTION_KEY=$(openssl rand -hex 32)/" "$GATEWAY_ENV_FILE"
-      - name: Compose file is valid
-        run: docker compose config -q
+      - name: Compose files are valid
+        run: docker compose -f compose.yaml -f compose.tailnet.yaml config -q
       - name: Services start and become healthy
-        run: docker compose up -d --wait --wait-timeout 180
+        run: docker compose -f compose.yaml -f compose.tailnet.yaml up -d --wait --wait-timeout 180
       - name: Gateway answers, and refuses a request without a key
         run: |
           curl -fsS -o /dev/null http://127.0.0.1:8080/health
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/models)" = 401
+      - name: Management API is closed, on both addresses
+        run: |
+          # No admin account and no setup token are configured, so nobody can
+          # read or change providers and keys through the dashboard's API.
+          for host in 127.0.0.1 "$TAILSCALE_IP"; do
+            test "$(curl -s -o /dev/null -w '%{http_code}' "http://$host:8080/api/providers")" = 403
+            test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{}' "http://$host:8080/api/providers")" = 403
+          done
       - name: Logs on failure
         if: failure()
-        run: docker compose logs --no-color | tail -100
+        run: docker compose -f compose.yaml -f compose.tailnet.yaml logs --no-color | tail -100
 
   flake-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix flake check --no-build --all-systems
 
   build-behemoth:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix build .#darwinConfigurations.behemoth.system --no-link --fallback
 
   build-rocinante:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix build .#homeConfigurations.rocinante.activationPackage --no-link --fallback
 
   build-stargazer:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix build .#nixosConfigurations.stargazer.config.system.build.toplevel --no-link --fallback

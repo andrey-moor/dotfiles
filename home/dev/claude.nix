@@ -44,6 +44,9 @@ let
       # envs, which breaks OpenSSH 10.2 Match exec clauses that resolve $SHELL
       # via execvp (no PATH lookup). /usr/bin/bash exists on macOS + Linux.
       CLAUDE_CODE_SHELL = "/usr/bin/bash";
+      # The package comes from flake.lock. Without this Claude Code installs
+      # a second, self-updating copy into ~/.local/bin.
+      DISABLE_AUTOUPDATER = "1";
     };
     # Authoritative plugin set — ad-hoc installs revert on switch.
     # ralph-loop@local is intentionally unmanaged (not listed here).
@@ -84,7 +87,7 @@ let
 
   # Merge semantics (ports the retired chezmoi modify_settings.json):
   #   - alwaysThinkingEnabled, effortLevel: overwrite
-  #   - env: key-level additive (existing keys kept, CLAUDE_CODE_SHELL enforced)
+  #   - env: key-level additive (existing keys kept, declared keys enforced)
   #   - enabledPlugins, extraKnownMarketplaces: authoritative replace
   #   - all other keys: preserved verbatim
   settingsMergeScript = pkgs.writeShellScript "claude-settings-merge" ''
@@ -131,13 +134,14 @@ in
       # Pull programs.mcp.servers in via HM's synthesized `hm` personal
       # plugin (carries an .mcp.json); tools appear as
       # mcp__plugin_hm_<server>__*. Stale user-scope duplicates in
-      # ~/.claude.json are removed by scripts/agent-stack-cleanup.sh (Task 6).
+      # ~/.claude.json are removed by scripts/agent-stack-cleanup.sh.
       enableMcpIntegration = true;
     };
 
     # Declarative MCP servers. Never set `enabled = false` on any of these:
     # a disabled server lands in disabledMcpServerNames, which flips
     # settings.json to a read-only store symlink (see LANDMINE above).
+    # The server versions are pinned and bumped by hand.
     programs.mcp = {
       enable = true;
       servers = {
@@ -149,14 +153,14 @@ in
             "uvx"
             "--python"
             "3.13"
-            "kagimcp"
+            "kagimcp==1.1.0"
           ];
           # op:// reference resolved by `op run` at launch — not a secret.
           env.KAGI_API_KEY = "op://Private/Kagi/api_key";
         };
         fetch = {
           command = "uvx";
-          args = [ "mcp-server-fetch" ];
+          args = [ "mcp-server-fetch==2026.11.11" ];
         };
       }
       // optionalAttrs (cfg.obsidianVault != null) {
@@ -164,7 +168,7 @@ in
           command = "npx";
           args = [
             "-y"
-            "@bitbonsai/mcpvault@latest"
+            "@bitbonsai/mcpvault@0.18.4"
             cfg.obsidianVault
           ];
         };

@@ -22,9 +22,10 @@ let
   envFile = "${home}/.config/behemoth-containers/gateway.env";
   logFile = "${home}/Library/Logs/behemoth-containers.log";
 
-  # OrbStack links its docker CLI here. Tailscale's CLI comes with the cask.
-  docker = "/usr/local/bin/docker";
-  tailscale = "/usr/local/bin/tailscale";
+  # Both CLIs are called inside their app bundles. The links in
+  # /usr/local/bin exist only after a button in each app was clicked.
+  docker = "/Applications/OrbStack.app/Contents/MacOS/xbin/docker";
+  tailscale = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
 
   up = pkgs.writeShellScript "behemoth-containers-up" ''
     set -u
@@ -36,6 +37,7 @@ let
     fi
 
     # At login OrbStack and Tailscale start in no fixed order. Wait for both.
+    # Docker is needed. Without Tailscale the gateway still serves this Mac.
     for _ in $(seq 1 60); do
       ${docker} info >/dev/null 2>&1 && break
       sleep 5
@@ -47,11 +49,17 @@ let
       TAILSCALE_IP=$(${tailscale} ip -4 2>/dev/null | head -1) && [ -n "$TAILSCALE_IP" ] && break
       sleep 5
     done
-    [ -n "$TAILSCALE_IP" ] || { say "Tailscale has no address, giving up"; exit 1; }
     export TAILSCALE_IP GATEWAY_ENV_FILE=${envFile}
 
-    say "applying ${composeDir}/compose.yaml"
-    ${docker} compose -f ${composeDir}/compose.yaml up -d --wait --wait-timeout 180 --remove-orphans
+    set -- -f ${composeDir}/compose.yaml
+    if [ -n "$TAILSCALE_IP" ]; then
+      set -- "$@" -f ${composeDir}/compose.tailnet.yaml
+    else
+      say "Tailscale has no address. Serving this Mac only. Run 'just gateway-up' once it has one."
+    fi
+
+    say "applying $*"
+    ${docker} compose "$@" up -d --wait --wait-timeout 180 --remove-orphans
   '';
 in
 {

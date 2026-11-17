@@ -1,32 +1,28 @@
 # home/dev/rust.nix -- Rust development tools (home-manager)
 
 {
-  lib,
   pkgs,
   ...
 }:
 
-with lib;
 {
-  config = {
-    home.packages = with pkgs; [
-      # Rustup manages the toolchain (rustc, cargo, clippy, rustfmt, rust-analyzer)
-      rustup
+  home.packages = with pkgs; [
+    # Rustup manages the toolchain (rustc, cargo, clippy, rustfmt, rust-analyzer)
+    rustup
 
-      # Cargo tools
-      cargo-edit
-      cargo-audit
-      cargo-outdated
-      cargo-cross
+    # Cargo tools
+    cargo-edit
+    cargo-audit
+    cargo-outdated
+    cargo-cross
 
-      # Development tools
-      bacon
-    ];
+    # Development tools
+    bacon
+  ];
 
-    home.sessionVariables = {
-      RUST_BACKTRACE = "1";
-      CARGO_HOME = "$HOME/.cargo";
-      RUSTUP_HOME = "$HOME/.rustup";
-    };
+  home.sessionVariables = {
+    RUST_BACKTRACE = "1";
+    CARGO_HOME = "$HOME/.cargo";
+    RUSTUP_HOME = "$HOME/.rustup";
   };
 }

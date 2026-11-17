@@ -16,8 +16,10 @@
 { lib, pkgs, ... }:
 
 let
-  server = "/Applications/VirtualHereServerUniversal.app/Contents/MacOS/vhusbdosx";
+  app = "/Applications/VirtualHereServerUniversal.app";
   stateDir = "/var/db/virtualhere";
+  # Developer ID of VirtualHere Pty. Ltd.
+  vendor = "N8C8ZTN347";
 
   # Enforced on every start. The server rewrites config.ini while it runs and
   # keeps its own keys there, so the file is patched, not replaced.
@@ -41,8 +43,16 @@ let
         echo '${key}=${value}' >> "$cfg"
       '') settings
     )}
+    # Homebrew installs the app owned by the user, so any process of the user
+    # could swap the binary and have root run it. Run a copy that only root
+    # can write, and only if the vendor signed it.
+    rm -rf ${stateDir}/server.app
+    cp -R ${app} ${stateDir}/server.app
+    /usr/bin/codesign --verify --strict \
+      -R='anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${vendor}"' \
+      ${stateDir}/server.app
     # Same arguments as the vendor's own launchd plist (`vhusbdosx -b`).
-    exec ${server} -o -r /var/log/vhusbd.log -c "$cfg"
+    exec ${stateDir}/server.app/Contents/MacOS/vhusbdosx -o -r /var/log/vhusbd.log -c "$cfg"
   '';
 in
 {

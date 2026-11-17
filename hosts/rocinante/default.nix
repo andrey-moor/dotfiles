@@ -2,11 +2,6 @@
 #
 # Feature modules: the home/{core,dev,linux} bundles plus copilot, hunk,
 # lmstudio, python and linux/edge (x86_64 Edge), imported below.
-#
-# lan-mouse is deliberately NOT imported: the rolling-main daemon held an
-# input-capture overlay that stopped Wayland from seeing keyboard/mouse here
-# (2026-05-06). Re-add ../../home/shell/lan-mouse.nix here once fixed;
-# behemoth's config has this host's fingerprint.
 
 {
   config,

@@ -52,7 +52,7 @@ Layout:
 - `home/{shell,dev,linux,profiles}/*.nix` — the feature files themselves.
 - `modules/darwin/{default,containers,homebrew,yubikey-share}.nix` — macOS system-level (nix-darwin) modules, imported explicitly by `hosts/behemoth`. The macOS user is named once, as `system.primaryUser` in `default.nix`; the other darwin modules and the host read it from there.
 
-A host imports the bundles it wants plus any one-off feature files (e.g. rocinante adds `home/dev/lmstudio.nix`; behemoth deliberately gets `home/shell/lan-mouse.nix` via `home/darwin.nix` while rocinante deliberately does not import it).
+A host imports the bundles it wants plus any one-off feature files (e.g. rocinante adds `home/dev/lmstudio.nix`).
 
 **Adding a tool:**
 1. Write `home/<category>/<tool>.nix` — a plain module, no options, no `mkIf`:
@@ -81,7 +81,7 @@ under a generated `theme` table.
 
 ### Parameterized Modules
 
-These 14 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
+These 11 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
 
 | Option path | What it configures |
 |-------------|--------------------|
@@ -94,10 +94,7 @@ These 14 modules keep options, under their existing `modules.*` names. Hosts set
 | `modules.nixos.defender` | `onboardingFile` (runtime path of the tenant's `mdatp_onboard.json`, a sops secret; unset means installed but not onboarded) |
 | `modules.desktop.theme` | `name`, `cursorSize`, `wallpaperDir`, read-only `data` (the home-manager side the role modules read) |
 | `modules.shell.git` | `userName`, `userEmail`, `signingKey`, `signingFormat`, `signer` |
-| `modules.shell.lan-mouse` | `port`, `gpu`, `releaseBind`, `authorizedFingerprints`, `clients` |
-| `modules.shell.onepassword` | `signer` (op-ssh-sign path; read by the andreym profile) |
 | `modules.dev.claude` | `obsidianVault` (adds the obsidian MCP server when set) |
-| `modules.dev.jj` | `userName`, `userEmail` |
 | `modules.dev.kubernetes` | `helm` (opt-in; nixpkgs helm breaks recurrently) |
 
 ### Formatting & Lint

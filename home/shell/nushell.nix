@@ -50,8 +50,8 @@ in
 
     # On macOS, nushell defaults to ~/Library/Application Support/nushell/
     # but our config is at ~/.config/nushell/.
-    # XDG_CONFIG_HOME must be set BEFORE nushell starts, but launchctl setenv
-    # is blocked by SIP. Symlink is the cleanest solution.
+    # modules/darwin/default.nix sets XDG_CONFIG_HOME at launchd level. The
+    # symlink covers a nushell that starts without that variable.
     # On Linux, nushell already defaults to ~/.config/nushell/.
     home.file."Library/Application Support/nushell" = mkIf isDarwin {
       source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.config/nushell";
