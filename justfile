@@ -50,7 +50,7 @@ bump-copilot:
 
 # Delete every old generation and collect garbage (removes the rollback)
 clean:
-    nix-collect-garbage -d
+    sudo nix-collect-garbage -d
 
 # Remove result symlink
 clean-result:
