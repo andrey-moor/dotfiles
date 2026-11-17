@@ -1,11 +1,12 @@
 # home/dev.nix -- dev tooling every host gets
 #
 # Host-specific dev tools are imported by the host instead:
-#   copilot   behemoth, rocinante
-#   herdr     behemoth
-#   hunk      behemoth, rocinante
-#   lmstudio  rocinante
-#   python    rocinante, stargazer
+#   codex-gateway  behemoth
+#   copilot        behemoth, rocinante
+#   herdr          behemoth
+#   hunk           behemoth, rocinante
+#   lmstudio       rocinante
+#   python         rocinante, stargazer
 
 {
   imports = [

@@ -16,10 +16,9 @@
 # via home.file instead -- same target location, stays out-of-store (spec §4:
 # edits in the repo are live immediately).
 #
-# Skills: ~/.agents/skills is fanned out by modules/home/dev/claude.nix.
+# Skills: ~/.agents/skills is fanned out by home/dev/claude.nix.
 # Codex binary strings suggest it reads the vendor-neutral ~/.agents dir, but
-# skill discovery there is not conclusively verified -- confirm live in
-# Task 7. $CODEX_HOME/skills is left app-owned.
+# skill discovery there is not verified. $CODEX_HOME/skills is left app-owned.
 
 {
   lib,

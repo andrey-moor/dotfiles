@@ -6,8 +6,9 @@
 final: prev: {
   lan-mouse-app = final.callPackage ../packages/lan-mouse-app { };
 
-  # Pin lan-mouse to match the pre-built .app bundle (latest pre-release)
-  # to avoid protocol version mismatch between macOS and Linux hosts.
+  # Pin lan-mouse so the Linux daemon speaks the same protocol as the macOS
+  # .app bundle (packages/lan-mouse-app, the v0.11.0 release). The commit
+  # below predates v0.11.0 by 45 commits.
   lan-mouse = prev.lan-mouse.overrideAttrs (oldAttrs: rec {
     version = "unstable-2026-02-22";
     src = final.fetchFromGitHub {

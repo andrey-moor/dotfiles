@@ -1,7 +1,8 @@
 # Behemoth -- macOS workstation (nix-darwin + home-manager)
 #
-# Home-manager feature modules: the home/{core,dev,darwin} bundles plus copilot,
-# herdr and hunk, imported below in the home-manager user block.
+# Home-manager feature modules: the home/{core,dev,darwin} bundles plus
+# codex-gateway, copilot, herdr and hunk, imported below in the home-manager
+# user block.
 #
 # README.md in this directory is the new-Mac runbook. It lists everything this
 # file cannot declare: manual apps, sign-ins and permission prompts.
