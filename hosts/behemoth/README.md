@@ -140,16 +140,12 @@ macOS asks for these once. All are under System Settings, Privacy & Security.
 | Permission | For | Why |
 |---|---|---|
 | App Management | The terminal that runs `just switch` (Ghostty) | home-manager copies Nix apps into `~/Applications/Home Manager Apps`. Without it the switch stops with a message. |
-| Accessibility | Lan Mouse | Keyboard and mouse sharing with rocinante |
 | Input Monitoring, driver extension | Karabiner-Elements | Key remapping |
 | Network extension | Little Snitch, Tailscale, Mullvad | Each app prompts on first launch |
 
-Little Snitch needs two rules of its own:
-
-- Allow UDP 4242 for Lan Mouse.
-- Allow every outgoing connection for VMware's NAT process, as a rule for all
-  users:
-  `/Library/Application Support/VMware/VMware Fusion/Services/Contents/Library/vmnet-natd`
+Little Snitch needs one rule of its own. Allow every outgoing connection for
+VMware's NAT process, as a rule for all users:
+`/Library/Application Support/VMware/VMware Fusion/Services/Contents/Library/vmnet-natd`
 
 The second rule matters more than it looks. All of stargazer's traffic leaves
 through that process. Little Snitch cannot see the VM's encrypted DNS, so it
@@ -384,8 +380,6 @@ and GitHub Actions only. Bump each by hand.
 
 | Source | Pinned in | How to bump |
 |---|---|---|
-| Lan Mouse macOS app | `packages/lan-mouse-app` | Pick a newer release, update `version` and `sha256` |
-| Lan Mouse for Linux | the `lan-mouse` override in `overlays/default.nix` | Update `rev`, `hash` and the `cargoDeps` hash. Keep it on the same protocol as the macOS app. |
 | hunk | `packages/hunk` | Update `version` and the four `sha256` values |
 | GhidraMCP extension | `overlays/ghidra-extensions/ghydramcp.nix` | Update `version` and the hash |
 | bat theme | `home/shell/bat.nix` | Update `rev` and `sha256` |

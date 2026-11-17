@@ -159,7 +159,6 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `starship.nix` | Prompt with Nerd Font symbols | core |
 | `tmux.nix` | Terminal multiplexer (Catppuccin theme) | core |
 | `karabiner.nix` | Karabiner-Elements key remapping (config from `config/karabiner`, through the store) | darwin |
-| `lan-mouse.nix` | Keyboard/mouse sharing over LAN (**options**) | darwin |
 
 ### Dev (`home/dev/`)
 | Module | Description | Imported by |

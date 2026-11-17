@@ -9,7 +9,6 @@
 
 {
   config,
-  pkgs,
   ...
 }:
 
@@ -48,19 +47,6 @@ in
 
   networking.hostName = "behemoth";
   networking.computerName = "Behemoth";
-
-  # LAN Mouse -- keyboard/mouse sharing with Linux machines
-  # Requires: Accessibility permission (System Settings > Privacy & Security > Accessibility)
-  # Little Snitch: allow UDP 4242
-  launchd.user.agents.lan-mouse = {
-    command = "${pkgs.lan-mouse-app}/bin/lan-mouse daemon";
-    serviceConfig = {
-      KeepAlive = true;
-      RunAtLoad = true;
-      StandardOutPath = "${config.users.users.${user}.home}/Library/Logs/lan-mouse.log";
-      StandardErrorPath = "${config.users.users.${user}.home}/Library/Logs/lan-mouse.log";
-    };
-  };
 
   # Containers and the local model server: modules/darwin/containers.nix and
   # config/containers/compose.yaml. LM Studio (cask below) is the model
@@ -178,20 +164,5 @@ in
 
       # Settings for the parameterized modules
       modules.dev.claude.obsidianVault = "${config.home.homeDirectory}/Library/Mobile Documents/iCloud~md~obsidian/Documents";
-
-      modules.shell.lan-mouse = {
-        gpu = false;
-        authorizedFingerprints = {
-          "17:95:15:54:cc:74:7a:63:88:08:57:07:f1:0b:75:b1:a8:89:e2:f5:89:2b:4c:7a:25:88:2d:11:ae:fa:87:a3" =
-            "rocinante";
-        };
-        clients = [
-          {
-            position = "left";
-            ips = [ "10.0.0.6" ];
-            activateOnStartup = true;
-          }
-        ];
-      };
     };
 }
