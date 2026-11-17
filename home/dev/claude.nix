@@ -138,6 +138,7 @@ in
     # Declarative MCP servers. Never set `enabled = false` on any of these:
     # a disabled server lands in disabledMcpServerNames, which flips
     # settings.json to a read-only store symlink (see LANDMINE above).
+    # The server versions are pinned and bumped by hand.
     programs.mcp = {
       enable = true;
       servers = {
@@ -149,14 +150,14 @@ in
             "uvx"
             "--python"
             "3.13"
-            "kagimcp"
+            "kagimcp==1.1.0"
           ];
           # op:// reference resolved by `op run` at launch — not a secret.
           env.KAGI_API_KEY = "op://Private/Kagi/api_key";
         };
         fetch = {
           command = "uvx";
-          args = [ "mcp-server-fetch" ];
+          args = [ "mcp-server-fetch==2026.11.11" ];
         };
       }
       // optionalAttrs (cfg.obsidianVault != null) {
@@ -164,7 +165,7 @@ in
           command = "npx";
           args = [
             "-y"
-            "@bitbonsai/mcpvault@latest"
+            "@bitbonsai/mcpvault@0.18.4"
             cfg.obsidianVault
           ];
         };
