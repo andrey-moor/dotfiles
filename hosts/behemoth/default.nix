@@ -56,8 +56,8 @@ in
     serviceConfig = {
       KeepAlive = true;
       RunAtLoad = true;
-      StandardOutPath = "/tmp/lan-mouse.log";
-      StandardErrorPath = "/tmp/lan-mouse.log";
+      StandardOutPath = "${config.users.users.${user}.home}/Library/Logs/lan-mouse.log";
+      StandardErrorPath = "${config.users.users.${user}.home}/Library/Logs/lan-mouse.log";
     };
   };
 
@@ -162,13 +162,11 @@ in
 
       # Common packages (not tied to specific modules)
       home.packages = with pkgs; [
-        _1password-cli # op CLI for secret management
         uv # Python package runner (uvx)
         nodejs # Node.js runtime (npx)
         # goose-cli  # AI coding agent — BLOCKED: nixpkgs v1.23.2 broken, upstream flake broken (block/goose#8514)
         qemu # VM emulation (qemu-img, qemu-system-*)
         (ghidra.withExtensions (_exts: [ ghidra-extensions.ghydramcp ])) # RE toolkit with MCP bridge
-        yubikey-manager # ykman CLI for Yubikey management
         sops # this Mac holds the admin age key and is where secrets/ is edited
       ];
 

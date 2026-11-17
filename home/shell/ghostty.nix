@@ -22,7 +22,7 @@ let
 in
 {
   # Ensure ghostty terminfo is found by tmux/ncurses (e.g. when SSH-ing in)
-  home.sessionVariables.TERMINFO_DIRS = "$HOME/.nix-profile/share/terminfo:/usr/share/terminfo";
+  home.sessionVariables.TERMINFO_DIRS = "${config.home.profileDirectory}/share/terminfo:/usr/share/terminfo";
 
   # On macOS, ghostty is installed via Homebrew cask
   # On Linux, wrap with nixGL for GPU acceleration
