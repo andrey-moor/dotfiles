@@ -44,6 +44,9 @@ let
       # envs, which breaks OpenSSH 10.2 Match exec clauses that resolve $SHELL
       # via execvp (no PATH lookup). /usr/bin/bash exists on macOS + Linux.
       CLAUDE_CODE_SHELL = "/usr/bin/bash";
+      # The package comes from flake.lock. Without this Claude Code installs
+      # a second, self-updating copy into ~/.local/bin.
+      DISABLE_AUTOUPDATER = "1";
     };
     # Authoritative plugin set — ad-hoc installs revert on switch.
     # ralph-loop@local is intentionally unmanaged (not listed here).
@@ -84,7 +87,7 @@ let
 
   # Merge semantics (ports the retired chezmoi modify_settings.json):
   #   - alwaysThinkingEnabled, effortLevel: overwrite
-  #   - env: key-level additive (existing keys kept, CLAUDE_CODE_SHELL enforced)
+  #   - env: key-level additive (existing keys kept, declared keys enforced)
   #   - enabledPlugins, extraKnownMarketplaces: authoritative replace
   #   - all other keys: preserved verbatim
   settingsMergeScript = pkgs.writeShellScript "claude-settings-merge" ''

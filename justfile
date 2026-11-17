@@ -40,10 +40,6 @@ update:
 update-input input:
     nix flake update {{input}}
 
-# Update only the Claude Code input (leaves nixpkgs and everything else pinned)
-update-claude:
-    nix flake update claude-code-nix
-
 # Bump copilot CLI pin to the latest @github/copilot release on npm
 bump-copilot:
     scripts/bump-copilot

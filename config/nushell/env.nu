@@ -42,21 +42,29 @@ $env.NIX_SSL_CERT_FILE = (
     ] | where { |p| $p | path exists } | first
 )
 
+# The last prepend wins. Nix comes after everything else, so a tool that Nix
+# provides is the version in flake.lock, whatever Homebrew, OrbStack, npm or
+# an installer also put on the machine. Those directories stay on PATH for
+# what Nix does not provide.
 $env.PATH = ($env.PATH | split row (char esep)
-    | prepend '/nix/var/nix/profiles/default/bin'
-    | prepend '/run/current-system/sw/bin'
-    | prepend $"/etc/profiles/per-user/($env.USER)/bin"
-    | prepend $"($nu.home-dir)/.nix-profile/bin"
     | prepend '/usr/local/bin/'
     | prepend '/opt/homebrew/bin'
     | prepend '/Applications/Parallels Desktop.app/Contents/MacOS/'
     | prepend $"($env.HOME)/.cargo/bin"
     | prepend $"($env.HOME)/.npm-global/bin"
     | prepend $"($env.HOME)/.local/bin"
+    | prepend '/nix/var/nix/profiles/default/bin'
+    | prepend '/run/current-system/sw/bin'
+    | prepend $"/etc/profiles/per-user/($env.USER)/bin"
+    | prepend $"($nu.home-dir)/.nix-profile/bin"
     # NixOS: setuid wrappers (sudo, ...) live here and must beat the
     # non-setuid copies in /run/current-system/sw/bin. Harmless elsewhere.
     | prepend '/run/wrappers/bin'
 )
+
+# Nix's npm has its prefix in the read-only store. Global installs go here,
+# which is already on PATH above.
+$env.NPM_CONFIG_PREFIX = $"($env.HOME)/.npm-global"
 
 # GPG/SSH agent setup
 # `tty` exits non-zero with no controlling terminal (e.g. non-interactive nu);
