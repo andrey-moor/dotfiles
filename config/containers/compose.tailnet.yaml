@@ -1,0 +1,6 @@
+# Added to compose.yaml by the launchd agent when Tailscale has an address
+# (modules/darwin/containers.nix). It publishes the gateway on the tailnet.
+services:
+  bifrost:
+    ports:
+      - "${TAILSCALE_IP:?set by the launchd agent}:8080:8080"

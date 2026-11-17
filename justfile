@@ -113,7 +113,7 @@ gateway-up:
 
 # Show the containers and what the gateway can reach
 gateway-status:
-    /usr/local/bin/docker compose -p behemoth ps
+    /Applications/OrbStack.app/Contents/MacOS/xbin/docker compose -p behemoth ps
     @curl -s -m 5 -o /dev/null -w "gateway /health: %{http_code}\n" http://127.0.0.1:8080/health
     @curl -s -m 5 -o /dev/null -w "LM Studio server: %{http_code}\n" http://127.0.0.1:1234/v1/models
 

@@ -79,6 +79,7 @@ From then on, `just switch` applies changes. Only the owner runs it.
 |---|---|---|
 | VMware Fusion | No Homebrew cask. The download needs a Broadcom account. | support.broadcom.com. `hosts/stargazer/README.md` covers the VM. |
 | Xcode | Two versions are kept side by side as `Xcode-26.1.app` and `Xcode-26.3.app`. | App Store (id 497799835) or developer.apple.com |
+| Google AI Edge Foresight | No Homebrew cask, not in the App Store. On trial as a meeting note-taker. It updates itself. | developers.google.com/edge/foresight. Copy `Foresight.app` to `/Applications`. |
 
 ### Mac App Store
 
@@ -247,6 +248,9 @@ Codex --profile local ──► Bifrost (container, :8080) ──► LM Studio (
    `~/.config/behemoth-containers/gateway.env`, readable by you only.
 3. `just gateway-up` applies the Compose file. `just gateway-status` checks it.
 
+On a new Mac, open LM Studio once before the first login that should start
+its server. `~/.lmstudio/bin/lms` does not exist until then.
+
 ### Using it
 
 ```bash
@@ -312,6 +316,11 @@ breaking changes. After the merge: `just switch`, then one real request,
   file still wins at every start (`source_of_truth`).
 - It listens on this Mac and on the tailnet, never on the LAN, and refuses
   requests without the key. Prompt logging is off.
+- The dashboard at port 8080 loads but can do nothing. No admin account and
+  no setup token are configured, so Bifrost refuses every management request.
+  All settings come from `config.json`. CI checks that this stays so.
+- With Tailscale off at login, the gateway serves this Mac only. Run
+  `just gateway-up` once Tailscale is connected.
 - Codex warns "Model metadata not found" for gateway models and assumes a
   default context size. Bifrost cannot yet hand Codex its model list in
   Codex's format. Bifrost pull request 10096 adds that. Once it ships, one

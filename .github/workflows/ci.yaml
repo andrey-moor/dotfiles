@@ -49,17 +49,25 @@ jobs:
           # gateway cannot start without.
           sed -E 's/\{\{[^}]*\}\}//' gateway.env.tpl | grep -E '^[A-Z_]+=' > "$GATEWAY_ENV_FILE"
           sed -i -E "s/^BIFROST_VIRTUAL_KEY=.*/BIFROST_VIRTUAL_KEY=sk-bf-ci-placeholder/; s/^BIFROST_ENCRYPTION_KEY=.*/BIFROST_ENCRYPTION_KEY=$(openssl rand -hex 32)/" "$GATEWAY_ENV_FILE"
-      - name: Compose file is valid
-        run: docker compose config -q
+      - name: Compose files are valid
+        run: docker compose -f compose.yaml -f compose.tailnet.yaml config -q
       - name: Services start and become healthy
-        run: docker compose up -d --wait --wait-timeout 180
+        run: docker compose -f compose.yaml -f compose.tailnet.yaml up -d --wait --wait-timeout 180
       - name: Gateway answers, and refuses a request without a key
         run: |
           curl -fsS -o /dev/null http://127.0.0.1:8080/health
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/models)" = 401
+      - name: Management API is closed, on both addresses
+        run: |
+          # No admin account and no setup token are configured, so nobody can
+          # read or change providers and keys through the dashboard's API.
+          for host in 127.0.0.1 "$TAILSCALE_IP"; do
+            test "$(curl -s -o /dev/null -w '%{http_code}' "http://$host:8080/api/providers")" = 403
+            test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{}' "http://$host:8080/api/providers")" = 403
+          done
       - name: Logs on failure
         if: failure()
-        run: docker compose logs --no-color | tail -100
+        run: docker compose -f compose.yaml -f compose.tailnet.yaml logs --no-color | tail -100
 
   flake-check:
     runs-on: ubuntu-latest
