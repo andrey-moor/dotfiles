@@ -149,7 +149,9 @@ such a thing is added.
 flake inputs. `cleanup = "zap"` removes anything not declared, so a cask installed by hand
 with `brew install` disappears at the next switch. Declare it in the host file instead. An
 assertion in `modules/darwin/homebrew.nix` checks every declared cask and formula against
-the pinned taps at eval time, so an upstream rename fails CI, not the switch.
+the pinned taps at eval time, so an upstream rename fails CI, not the switch. A cask upgrade
+replaces an app that may still be running. The switch ends with a warning that names those apps
+(`scripts/stale-apps`), and each one must be quit and reopened.
 
 **Containers and the LLM gateway:** `config/containers/compose.yaml` is the one Compose project, applied from the Nix
 store by a launchd agent (`modules/darwin/containers.nix`), so an edit needs `just switch`. Images are pinned by tag
