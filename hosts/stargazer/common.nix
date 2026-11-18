@@ -22,6 +22,9 @@
     ../../modules/nixos/containers.nix
     ../../modules/nixos/defender.nix
     ../../modules/nixos/desktop-hyprland.nix
+    # Tenant facts (domain, tenant id, UPN) come from the committed,
+    # age-encrypted secrets/stargazer-tenant.yaml and are rendered at
+    # activation, so this works identically from `github:andrey-moor/dotfiles#…`.
     ../../modules/nixos/himmelblau.nix
     ../../modules/nixos/intune-identity.nix
     # Plain lanzaboote. The firmware trusts our db certificate once the VM
@@ -29,11 +32,6 @@
     # secure-boot on`, README §7). The signing key is wired below.
     ../../modules/nixos/secureboot.nix
   ];
-
-  # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
-  # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
-  # unconditional and works identically from `github:andrey-moor/dotfiles#…`.
-  modules.nixos.himmelblau.enable = true;
 
   # Intune's compliance policy requires Defender onboarded, licensed and
   # healthy (from 2026-11-09). See modules/nixos/defender.nix.
