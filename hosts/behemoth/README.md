@@ -376,7 +376,8 @@ problem. It was never tested to the end.
 
 These are pinned in the repo, and no updater watches them. The weekly lock
 pull request covers `flake.lock` only, and Renovate covers container images
-and GitHub Actions only. Bump each by hand.
+and GitHub Actions only. Bump each by hand. The Linux hosts' list is in the
+root `README.md`.
 
 | Source | Pinned in | How to bump |
 |---|---|---|
@@ -386,8 +387,6 @@ and GitHub Actions only. Bump each by hand.
 | nu_scripts | `home/shell/nushell.nix` | Update `rev` and `sha256`, see the comment there |
 | Copilot CLI | `home/dev/copilot-pin.json` | `just bump-copilot` |
 | MCP servers (kagimcp, mcp-server-fetch, mcpvault) | `home/dev/claude.nix` | Update the version in each server's arguments |
-| VirtualHere client (rocinante) | `packages/vhclient` | The URL is unversioned. A hash mismatch means upstream released a new build: update `sha256` and `version` |
-
 ## Things that are deliberately not reproducible
 
 - **Homebrew casks marked `auto_updates`.** Those apps update themselves

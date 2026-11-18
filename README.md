@@ -79,6 +79,23 @@ Homebrew is pinned too. Formulae and casks come from the `homebrew-core` and
 anything not declared (`cleanup = "zap"`). Casks marked `auto_updates` also
 update themselves in between.
 
+### Linux sources pinned by hand
+
+`just update` does not move these, and no updater watches them. Bump each by
+hand. The macOS list is in `hosts/behemoth/README.md`.
+
+| Source | Pinned in | How to bump |
+|---|---|---|
+| Defender for Endpoint (stargazer) | `packages/mdatp` | Follow the bump steps in the file header |
+| Intune Portal (rocinante) | `packages/intune-portal` | Update `version` and `sha256` from packages.microsoft.com |
+| Microsoft Identity Broker (rocinante) | `packages/microsoft-identity-broker` | Update `version` and `sha256` from packages.microsoft.com |
+| Arch `openssl` 3.3.2 and `opensc` 0.25.1 archives | `home/linux/intune.nix` | Held back on purpose, see the comments there. Change only with the Intune stack |
+| linux-entra-sso extension (stargazer) | `home/linux/firefox-entra-sso.nix` | Match the release the `himmelblau` input pins |
+| Theme wallpapers | `themes/<name>/backgrounds.json` | Update `url` and `sha256` per entry |
+| `himmelblau` flake input | `flake.nix` (tag `4.0.4`) | Change the tag, then `nix flake update himmelblau` |
+| `lanzaboote` flake input | `flake.nix` (tag `v1.1.0`) | Change the tag, then `nix flake update lanzaboote` |
+| VirtualHere client (rocinante) | `packages/vhclient` | The URL is unversioned. A hash mismatch means upstream released a new build: update `sha256` and `version` |
+
 ## Initial Setup (Linux - standalone home-manager)
 
 For non-NixOS Linux (e.g., Omarchy, Arch, Ubuntu):
