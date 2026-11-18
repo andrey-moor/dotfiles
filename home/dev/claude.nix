@@ -134,8 +134,7 @@ in
       context = "@~/.agents/AGENTS.md\n";
       # Pull programs.mcp.servers in via HM's synthesized `hm` personal
       # plugin (carries an .mcp.json); tools appear as
-      # mcp__plugin_hm_<server>__*. Stale user-scope duplicates in
-      # ~/.claude.json are removed by scripts/agent-stack-cleanup.sh.
+      # mcp__plugin_hm_<server>__*.
       enableMcpIntegration = true;
     };
 
