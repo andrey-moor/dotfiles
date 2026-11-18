@@ -5,6 +5,11 @@
     # Core dependencies
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-main.url = "github:nixos/nixpkgs/master";
+    # stargazer's patched Hyprland, its portal and Mesa come from this set
+    # (modules/nixos/vmware-guest.nix). The revision in the URL keeps
+    # `nix flake update` from moving it, so the weekly lock bump cannot break
+    # the vmwgfx patch. Bump it by hand with the patch: hosts/stargazer/README.md.
+    nixpkgs-hyprland.url = "github:nixos/nixpkgs/d5cc6833999746cffdfe0598f7bc801a57b887a9";
 
     # Essential modules
     home-manager = {

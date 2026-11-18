@@ -21,25 +21,41 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 
+let
+  # The pinned package set the patched Hyprland is built from. The weekly lock
+  # update never moves it, so only a hand bump can break the patch. The steps
+  # are in hosts/stargazer/README.md.
+  hyprPkgs = import inputs.nixpkgs-hyprland { inherit (pkgs.stdenv.hostPlatform) system; };
+in
 {
   imports = [ ./vm-guest.nix ];
 
   # Without this patch Hyprland rejects every GPU client buffer on vmwgfx
   # (alacritty, hardware-rendered ghostty, GTK4 GL apps), while shared-memory
   # clients such as waybar and mako still work. Provenance and review notes are
-  # in the patch header. The version check turns a nixpkgs Hyprland bump into
-  # an evaluation error, not a silently failing patch or an unpatched session.
+  # in the patch header. The version check turns a bump of nixpkgs-hyprland
+  # into an evaluation error, not a silently failing patch or an unpatched
+  # session.
   programs.hyprland.package =
-    lib.throwIfNot (pkgs.hyprland.version == "0.57.2")
-      "modules/nixos/vmware-guest.nix: the vmwgfx DMA-BUF patch targets Hyprland 0.57.2, but nixpkgs now has ${pkgs.hyprland.version}. Check Hyprland discussion #12966 for an upstream fix, then update or drop the patch."
+    lib.throwIfNot (hyprPkgs.hyprland.version == "0.57.2")
+      "modules/nixos/vmware-guest.nix: the vmwgfx DMA-BUF patch targets Hyprland 0.57.2, but nixpkgs-hyprland now has ${hyprPkgs.hyprland.version}. Check Hyprland discussion #12966 for an upstream fix, then update or drop the patch."
       (
-        pkgs.hyprland.overrideAttrs (old: {
+        hyprPkgs.hyprland.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [ ./patches/hyprland-0.57.2-vmwgfx-dmabuf.patch ];
         })
       );
+  # The portal speaks Hyprland's private protocols, so it ships in lockstep
+  # with the compositor.
+  programs.hyprland.portalPackage = hyprPkgs.xdg-desktop-portal-hyprland;
+  # Hyprland loads the system Mesa driver from /run/opengl-driver. A Mesa
+  # built against a newer glibc or libstdc++ than Hyprland's would fail to load
+  # into it. So Mesa comes from the same set. Newer apps loading this older
+  # Mesa is the direction glibc and libstdc++ keep working.
+  hardware.graphics.package = hyprPkgs.mesa;
 
   # Fusion reports each window size once and exactly. Measured 2026-09-14:
   # one apply per resize and no drift after a mode change. The Parallels
