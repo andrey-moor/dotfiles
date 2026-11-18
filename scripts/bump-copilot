@@ -6,9 +6,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 pin_file=home/dev/copilot-pin.json
 
-latest=$(curl -fsSL "https://registry.npmjs.org/@github/copilot/latest" |
-  python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])')
-current=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$pin_file")
+latest=$(curl -fsSL "https://registry.npmjs.org/@github/copilot/latest" | jq -r .version)
+current=$(jq -r .version "$pin_file")
 
 echo "current pin: $current"
 echo "npm latest:  $latest"
@@ -21,18 +20,8 @@ echo "prefetching tarball hash..."
 hash=$(nix-prefetch-url --type sha256 \
   "https://registry.npmjs.org/@github/copilot/-/copilot-$latest.tgz" 2>/dev/null | tail -1)
 
-# No here-document: Nix bash on macOS hangs on large ones.
-python3 -c '
-import json
-import sys
-
-path, version, digest = sys.argv[1:4]
-pin = json.load(open(path))
-pin["version"] = version
-pin["hash"] = digest
-with open(path, "w") as out:
-    json.dump(pin, out, indent=2)
-    out.write("\n")
-' "$pin_file" "$latest" "$hash"
+updated=$(jq --arg version "$latest" --arg hash "$hash" \
+  '.version = $version | .hash = $hash' "$pin_file")
+printf '%s\n' "$updated" > "$pin_file"
 
 echo "updated $pin_file -> $latest ($hash)"
