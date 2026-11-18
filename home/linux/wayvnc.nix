@@ -54,7 +54,6 @@ in
 
     address = mkOption {
       type = types.str;
-      default = "0.0.0.0";
       description = "Address to bind to";
     };
 
