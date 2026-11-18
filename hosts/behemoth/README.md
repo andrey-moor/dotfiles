@@ -198,9 +198,9 @@ How it is built:
   launchd daemon. It is stopped by default and shares YubiKeys only.
 - `scripts/yubikey` starts the daemon with `sudo` (Touch ID), then drives the
   client on rocinante over ssh.
-- On rocinante the client is one binary at `~/.local/bin/vhclientx86_64`,
-  downloaded from virtualhere.com. The script starts it as a transient systemd
-  unit. Nothing is installed permanently there.
+- On rocinante the client is one binary, `vhclientx86_64`. `packages/vhclient`
+  pins it and `home/linux/vhclient.nix` installs it into `~/.nix-profile/bin`.
+  The script starts it as a transient systemd unit.
 
 Two things to know:
 
@@ -386,6 +386,7 @@ and GitHub Actions only. Bump each by hand.
 | nu_scripts | `home/shell/nushell.nix` | Update `rev` and `sha256`, see the comment there |
 | Copilot CLI | `home/dev/copilot-pin.json` | `just bump-copilot` |
 | MCP servers (kagimcp, mcp-server-fetch, mcpvault) | `home/dev/claude.nix` | Update the version in each server's arguments |
+| VirtualHere client (rocinante) | `packages/vhclient` | The URL is unversioned. A hash mismatch means upstream released a new build: update `sha256` and `version` |
 
 ## Things that are deliberately not reproducible
 

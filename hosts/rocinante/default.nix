@@ -1,8 +1,8 @@
 # Rocinante -- x86_64 Linux workstation (Omarchy, standalone home-manager)
 #
 # Feature modules: the home/{core,dev,linux} bundles plus copilot, hunk,
-# lmstudio, python, linux/edge (x86_64 Edge) and linux/wayvnc-resolution,
-# imported below.
+# lmstudio, python, linux/edge (x86_64 Edge), linux/wayvnc-resolution and
+# linux/vhclient, imported below.
 
 {
   config,
@@ -22,6 +22,7 @@
     ../../home/dev/python.nix
     ../../home/linux/edge.nix
     ../../home/linux/wayvnc-resolution.nix
+    ../../home/linux/vhclient.nix
   ];
 
   # Home-manager state version
