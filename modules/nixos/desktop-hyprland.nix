@@ -7,9 +7,9 @@
 # colour or program name is written in Lua.
 #
 # Config format: Lua only. hyprlang (.conf) is deprecated since 0.55 and goes
-# away in 0.57, and this fleet auto-upgrades from the lockfile.
+# away in 0.57, the version modules/nixos/vmware-guest.nix pins.
 #
-# Sources (all read against the pinned v0.56.2, 2026-09-02):
+# Sources (read against v0.56.2 on 2026-09-02, before the move to 0.57.2):
 #   - https://hypr.land/news/26_lua/ -- "if you don't have a hyprland.lua config
 #     file, your old hyprland.conf will be loaded [...] if you do have one,
 #     hyprland.lua will be loaded instead", checked once at startup.

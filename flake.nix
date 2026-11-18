@@ -20,7 +20,7 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Kept for P7 (NixOS on rocinante's second NVMe).
+    # stargazer's disk layout (hosts/stargazer/disko.nix).
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -31,8 +31,8 @@
       url = "github:himmelblau-idm/himmelblau/4.0.4";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Only reached through modules/nixos/secureboot.nix, which is off by
-    # default, so a first install never needs it.
+    # Only reached through modules/nixos/secureboot.nix. Its option is off by
+    # default, and stargazer turns it on in hosts/stargazer/default.nix.
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v1.1.0";
       inputs.nixpkgs.follows = "nixpkgs";
