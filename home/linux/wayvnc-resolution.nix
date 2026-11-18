@@ -16,6 +16,10 @@ with lib;
 let
   cfg = config.modules.linux.wayvnc;
 
+  # Native 4K, and the remote-friendly mode `set-resolution remote` picks.
+  nativeResolution = "3840x2160@60";
+  remoteResolution = "1920x1080@60";
+
   # Resolution cycle script - rotates through options
   cycleResolution = pkgs.writeShellScriptBin "cycle-resolution" ''
     MONITOR="${cfg.monitor}"
@@ -23,8 +27,8 @@ let
 
     # Resolution options to cycle through
     RESOLUTIONS=(
-      "${cfg.nativeResolution}"    # Native 4K
-      "${cfg.remoteResolution}"    # Remote-friendly
+      "${nativeResolution}"    # Native 4K
+      "${remoteResolution}"    # Remote-friendly
     )
 
     # Get current index
@@ -56,8 +60,8 @@ let
     fi
 
     case "$1" in
-      native) RES="${cfg.nativeResolution}" ;;
-      remote) RES="${cfg.remoteResolution}" ;;
+      native) RES="${nativeResolution}" ;;
+      remote) RES="${remoteResolution}" ;;
       *) RES="$1" ;;
     esac
 
@@ -68,20 +72,6 @@ in
 {
   # The scripts read the monitor name from the wayvnc module.
   imports = [ ./wayvnc.nix ];
-
-  options.modules.linux.wayvnc = {
-    nativeResolution = mkOption {
-      type = types.str;
-      default = "3840x2160@60";
-      description = "Native monitor resolution";
-    };
-
-    remoteResolution = mkOption {
-      type = types.str;
-      default = "1920x1080@60";
-      description = "Preferred remote resolution (used by set-resolution remote)";
-    };
-  };
 
   config = mkIf pkgs.stdenv.hostPlatform.isLinux {
     home.packages = [

@@ -15,6 +15,10 @@ with lib;
 let
   cfg = config.modules.linux.wayvnc;
 
+  port = 5900;
+  # 120 avoids a bottleneck at 60 fps.
+  maxFps = 120;
+
   # Wrap wayvnc with nixGL for GPU support on non-NixOS systems
   # config.lib.nixGL.wrap is a no-op when nixGL isn't configured
   wayvncPkg = if cfg.gpu then config.lib.nixGL.wrap pkgs.wayvnc else pkgs.wayvnc;
@@ -29,7 +33,7 @@ let
     rm -f "$dir/config"
     {
       echo "address=${cfg.address}"
-      echo "port=${toString cfg.port}"
+      echo "port=${toString port}"
       echo "enable_auth=true"
       echo "username=${config.home.username}"
       echo "password=$(cat "${cfg.passwordFile}")"
@@ -44,12 +48,6 @@ in
     passwordFile = mkOption {
       type = types.path;
       description = "Path to a file containing the VNC password (e.g. a sops secret). Read at service start; never enters the nix store.";
-    };
-
-    port = mkOption {
-      type = types.port;
-      default = 5900;
-      description = "Port to listen on";
     };
 
     address = mkOption {
@@ -73,12 +71,6 @@ in
       type = types.bool;
       default = false;
       description = "Enable overlay cursor rendering";
-    };
-
-    maxFps = mkOption {
-      type = types.int;
-      default = 120;
-      description = "Max frame rate (120 recommended to avoid bottleneck for 60fps)";
     };
   };
 
@@ -116,7 +108,7 @@ in
           "${wayvncPkg}/bin/wayvnc"
           + optionalString cfg.gpu " --gpu"
           + optionalString cfg.renderCursor " --render-cursor"
-          + " --max-fps=${toString cfg.maxFps}";
+          + " --max-fps=${toString maxFps}";
         # wayvnc exits 0 (clean) when its captured output is removed (e.g. monitor
         # powered off), so "on-failure" never restarts it. Use "always" so it
         # self-heals once an output is available again.
