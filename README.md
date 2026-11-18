@@ -188,7 +188,7 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `codex.nix` | OpenAI Codex CLI | dev |
 | `go.nix` | Go toolchain + gopls, delve | dev |
 | `jj.nix` | Jujutsu VCS (**options**) | dev |
-| `kubernetes.nix` | kubectl, k9s, kubectx, kind, stern, kubelogin (**options**) | dev |
+| `kubernetes.nix` | kubectl, k9s, kubectx, kind, stern, kubelogin | dev |
 | `neovim.nix` | Neovim + LSP deps (config from `config/nvim`) | dev |
 | `nix.nix` | Nix development tools | dev |
 | `opencode.nix` | OpenCode AI coding agent | dev |

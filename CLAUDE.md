@@ -81,21 +81,22 @@ under a generated `theme` table.
 
 ### Parameterized Modules
 
-These 11 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling:
+These 10 modules keep options, under their existing `modules.*` names. Hosts set values, imports still do the enabling. No module has an `enable` flag:
 
 | Option path | What it configures |
 |-------------|--------------------|
 | `modules.darwin.homebrew` | `casks`, `brews`, `masApps` |
 | `modules.linux.intune` | `debug` |
-| `modules.linux.wayvnc` | `passwordFile`, `port`, `address`, `monitor`, resolutions, `gpu`, `renderCursor` |
-| `modules.nixos.containers` | `rootful` (rootless Docker by default, rootful daemon and the docker group when true) |
+| `modules.linux.wayvnc` | `passwordFile`, `address` (no default, every host states it), `monitor`, `gpu`, `renderCursor` |
 | `modules.nixos.desktop` | `monitor`, `terminal`, `launcher`, `greeting`, `extraExecOnce` (the compositor, greeter and session) |
 | `modules.nixos.desktop.theme` | `name`, `cursorSize` (the host's palette, handed to every home-manager user) |
 | `modules.nixos.defender` | `onboardingFile` (runtime path of the tenant's `mdatp_onboard.json`, a sops secret; unset means installed but not onboarded) |
-| `modules.desktop.theme` | `name`, `cursorSize`, `wallpaperDir`, read-only `data` (the home-manager side the role modules read) |
+| `modules.nixos.vmGuest` | `connector`, `followResize`, `resizePollInterval`, `resizeStablePolls`, `resizeHysteresis` |
+| `modules.desktop.theme` | `name`, `cursorSize`, read-only `data` (the home-manager side the role modules read), plus `modules.desktop.terminalDesktopEntry` |
 | `modules.shell.git` | `userName`, `userEmail`, `signingKey`, `signingFormat`, `signer` |
 | `modules.dev.claude` | `obsidianVault` (adds the obsidian MCP server when set) |
-| `modules.dev.kubernetes` | `helm` (opt-in; nixpkgs helm breaks recurrently) |
+
+A value no host sets is a `let` binding in its module, not an option.
 
 ### Formatting & Lint
 
