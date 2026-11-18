@@ -2,7 +2,7 @@
 # on the hypervisor.
 #
 # ./default.nix adds the hypervisor layer (VMware Fusion) on top: the guest
-# module, the Retina scale, the Secure Boot switch and SSH on the NAT link.
+# module, the Retina scale and SSH on the NAT link.
 #
 # Deliberately absent: Rosetta, nixGL, home/linux/intune.nix (the Arch-era
 # portal/broker stack, which stays for rocinante) and Ghostty as the terminal
@@ -24,6 +24,9 @@
     ../../modules/nixos/desktop-hyprland.nix
     ../../modules/nixos/himmelblau.nix
     ../../modules/nixos/intune-identity.nix
+    # Plain lanzaboote. The firmware trusts our db certificate once the VM
+    # definition appends it to VMware's default db (`scripts/stargazer-vm
+    # secure-boot on`, README §7). The signing key is wired below.
     ../../modules/nixos/secureboot.nix
   ];
 

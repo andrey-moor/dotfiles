@@ -31,11 +31,6 @@
   # as the fallback (modules/nixos/desktop-hyprland.nix).
   modules.nixos.desktop.terminal = "ghostty";
 
-  # Plain lanzaboote. The firmware trusts our db certificate once the VM
-  # definition appends it to VMware's default db (`scripts/stargazer-vm
-  # secure-boot on`, README §7). ./common.nix wires the signing key.
-  modules.nixos.secureboot.enable = true;
-
   # SSH on Fusion's NAT network (vmnet8, reachable only from behemoth), in
   # addition to the tailnet. VMware's guest operations need a guest password,
   # which does not exist here, so this is how behemoth reaches a fresh install
