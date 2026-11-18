@@ -15,7 +15,7 @@ x86_64 Omarchy (Arch Linux) workstation with LUKS2-encrypted NVMe + btrfs.
 # Clone dotfiles
 git clone https://github.com/andrey-moor/dotfiles ~/dotfiles
 cd ~/dotfiles
-git checkout intune-p11kit  # or main once merged
+git checkout main
 ```
 
 ### Secrets (sops-nix)
@@ -38,16 +38,16 @@ The command prints the public key. On behemoth, put it in `.sops.yaml` as
 Until that commit is pulled here, the switch fails at sops activation.
 
 ```bash
-# Install home-manager and switch (also symlinks nvim/nushell/alacritty configs from config/)
-ulimit -n 65536
-nix run home-manager -- switch --flake .#rocinante -b backup
+# Build and activate (also symlinks nvim/nushell/alacritty configs from config/)
+nix build .#homeConfigurations.rocinante.activationPackage
+HOME_MANAGER_BACKUP_EXT=backup ./result/activate
 ```
 
-The `ulimit` line matters. The default soft limit on this host is 1024 open
-files, and nix hits it while it writes the flake's inputs into its tarball
-cache. The switch then dies with `Too many open files` inside an unrelated
-looking evaluation error (seen 2026-10-06). The hard limit is 524288, so a
-user can raise it without root.
+This takes home-manager from `flake.lock`. `nix run home-manager` would take
+it from the registry instead.
+
+Keep Determinate Nix current with `sudo determinate-nixd upgrade`. Version
+3.15.2 ran out of open files at the default limit, and 3.24.2 does not.
 
 `~/.claude/skills/<name>` entries become symlinks into `agents/skills/`. A real
 folder of the same name blocks the switch, so remove any hand-installed copy
@@ -56,7 +56,7 @@ first. The repo is the source of truth for skills: edit them there.
 ## Intune Enrollment
 
 The `intune` module provides full Nix library chain to avoid ABI issues with Arch system libs.
-It auto-detects x86_64-linux and uses native packages (no Rosetta emulation needed).
+It runs Microsoft's x86_64 packages natively.
 
 ### 1. Install AUR Packages
 

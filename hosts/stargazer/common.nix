@@ -2,7 +2,7 @@
 # on the hypervisor.
 #
 # ./default.nix adds the hypervisor layer (VMware Fusion) on top: the guest
-# module, the Retina scale, the Secure Boot switch and SSH on the NAT link.
+# module, the Retina scale and SSH on the NAT link.
 #
 # Deliberately absent: Rosetta, nixGL, home/linux/intune.nix (the Arch-era
 # portal/broker stack, which stays for rocinante) and Ghostty as the terminal
@@ -22,15 +22,16 @@
     ../../modules/nixos/containers.nix
     ../../modules/nixos/defender.nix
     ../../modules/nixos/desktop-hyprland.nix
+    # Tenant facts (domain, tenant id, UPN) come from the committed,
+    # age-encrypted secrets/stargazer-tenant.yaml and are rendered at
+    # activation, so this works identically from `github:andrey-moor/dotfiles#…`.
     ../../modules/nixos/himmelblau.nix
     ../../modules/nixos/intune-identity.nix
+    # Plain lanzaboote. The firmware trusts our db certificate once the VM
+    # definition appends it to VMware's default db (`scripts/stargazer-vm
+    # secure-boot on`, README §7). The signing key is wired below.
     ../../modules/nixos/secureboot.nix
   ];
-
-  # Tenant facts (domain, tenant id, UPN) come from the committed, age-encrypted
-  # secrets/stargazer-tenant.yaml and are rendered at activation -- so this is
-  # unconditional and works identically from `github:andrey-moor/dotfiles#…`.
-  modules.nixos.himmelblau.enable = true;
 
   # Intune's compliance policy requires Defender onboarded, licensed and
   # healthy (from 2026-11-09). See modules/nixos/defender.nix.
@@ -46,11 +47,6 @@
     defaultSopsFile = ../../secrets/wayvnc.yaml;
     secrets."wayvnc-stargazer".owner = "andreym";
 
-    # Secure Boot signing key. One key pair for every stargazer instance, so
-    # the db certificate is known before a VM exists and the VM definition can
-    # carry it. The private half is age-encrypted here. The public half and
-    # sbctl's owner GUID are plain files in ./secureboot, placed by tmpfiles
-    # below. Only the db key exists: the firmware keeps VMware's PK and KEK.
     # Defender onboarding file for the tenant (mdatp_onboard.json, the payload
     # of the Intune-pushed onboarding script). Read only by root at boot.
     secrets."defender-onboarding" = {
@@ -58,6 +54,11 @@
       key = "mdatp_onboard";
     };
 
+    # Secure Boot signing key. One key pair for every stargazer instance, so
+    # the db certificate is known before a VM exists and the VM definition can
+    # carry it. The private half is age-encrypted here. The public half and
+    # sbctl's owner GUID are plain files in ./secureboot, placed by tmpfiles
+    # below. Only the db key exists: the firmware keeps VMware's PK and KEK.
     secrets."sbctl-db-key" = {
       sopsFile = ../../secrets/stargazer-sbctl.yaml;
       key = "db.key";

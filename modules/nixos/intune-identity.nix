@@ -20,59 +20,25 @@
 
 {
   lib,
-  config,
   ...
 }:
 
 with lib;
 let
-  cfg = config.modules.nixos.intune-identity;
+  cfg = {
+    # Must match one of the tenant's Allowed Distributions.
+    distroId = "ubuntu";
+    idLike = "debian";
+    # himmelblau normalises this to semver, so 24.04 -> 24.4.0 clears both of
+    # the tenant's minimums.
+    versionId = "24.04";
+    version = "24.04.3 LTS (Noble Numbat)";
+    versionCodename = "noble";
+    name = "Ubuntu";
+    prettyName = "Ubuntu 24.04.3 LTS";
+  };
 in
 {
-  options.modules.nixos.intune-identity = {
-    distroId = mkOption {
-      type = types.str;
-      default = "ubuntu";
-      description = "os-release ID. Must match one of the tenant's Allowed Distributions.";
-    };
-
-    idLike = mkOption {
-      type = types.str;
-      default = "debian";
-      description = "os-release ID_LIKE.";
-    };
-
-    versionId = mkOption {
-      type = types.str;
-      default = "24.04";
-      description = "os-release VERSION_ID. himmelblau normalises this to semver, so 24.04 -> 24.4.0 clears both of the tenant's minimums.";
-    };
-
-    version = mkOption {
-      type = types.str;
-      default = "24.04.3 LTS (Noble Numbat)";
-      description = "os-release VERSION.";
-    };
-
-    versionCodename = mkOption {
-      type = types.str;
-      default = "noble";
-      description = "os-release VERSION_CODENAME.";
-    };
-
-    name = mkOption {
-      type = types.str;
-      default = "Ubuntu";
-      description = "os-release NAME.";
-    };
-
-    prettyName = mkOption {
-      type = types.str;
-      default = "Ubuntu 24.04.3 LTS";
-      description = "os-release PRETTY_NAME.";
-    };
-  };
-
   config = {
     environment.etc."os-release".text = mkForce ''
       NAME="${cfg.name}"

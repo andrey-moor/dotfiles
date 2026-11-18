@@ -1,6 +1,6 @@
-# modules/nixos/secureboot.nix -- opt-in Secure Boot via lanzaboote
+# modules/nixos/secureboot.nix -- Secure Boot via lanzaboote
 #
-# Off by default, so a host installs with plain systemd-boot. With `enable`,
+# Importing it enables it. A host without it boots plain systemd-boot. Here
 # lanzaboote signs systemd-boot and the UKIs with the db key under pkiBundle.
 # The key is not generated here. stargazer ships one shared db key pair
 # (hosts/stargazer/common.nix, sops), and the firmware learns its certificate
@@ -25,35 +25,22 @@
 
 {
   lib,
-  config,
   pkgs,
   inputs,
   ...
 }:
 
 with lib;
-let
-  cfg = config.modules.nixos.secureboot;
-in
 {
   imports = [ inputs.lanzaboote.nixosModules.lanzaboote ];
 
-  options.modules.nixos.secureboot = {
-    enable = mkEnableOption "lanzaboote-signed boot (Secure Boot with our db key)";
-
-    pkiBundle = mkOption {
-      type = types.str;
-      default = "/var/lib/sbctl";
-      description = "Where sbctl keeps the signing keys.";
-    };
-  };
-
-  config = mkIf cfg.enable {
+  config = {
     # lanzaboote replaces systemd-boot. Both cannot own the ESP.
     boot.loader.systemd-boot.enable = mkForce false;
     boot.lanzaboote = {
       enable = true;
-      inherit (cfg) pkiBundle;
+      # Where sbctl keeps the signing keys.
+      pkiBundle = "/var/lib/sbctl";
     };
 
     environment.systemPackages = with pkgs; [

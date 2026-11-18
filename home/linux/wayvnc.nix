@@ -2,7 +2,7 @@
 #
 # Provides VNC server for wlroots-based compositors (Hyprland).
 # Uses password auth for macOS Screen Sharing compatibility.
-# Includes resolution cycle script to find best remote resolution.
+# The resolution scripts live in wayvnc-resolution.nix (rocinante only).
 
 {
   lib,
@@ -15,58 +15,13 @@ with lib;
 let
   cfg = config.modules.linux.wayvnc;
 
+  port = 5900;
+  # 120 avoids a bottleneck at 60 fps.
+  maxFps = 120;
+
   # Wrap wayvnc with nixGL for GPU support on non-NixOS systems
   # config.lib.nixGL.wrap is a no-op when nixGL isn't configured
   wayvncPkg = if cfg.gpu then config.lib.nixGL.wrap pkgs.wayvnc else pkgs.wayvnc;
-
-  # Resolution cycle script - rotates through options
-  cycleResolution = pkgs.writeShellScriptBin "cycle-resolution" ''
-    MONITOR="${cfg.monitor}"
-    STATE_FILE="$HOME/.cache/resolution-index"
-
-    # Resolution options to cycle through
-    RESOLUTIONS=(
-      "${cfg.nativeResolution}"    # Native 4K
-      "${cfg.remoteResolution}"    # Remote-friendly
-    )
-
-    # Get current index
-    INDEX=0
-    if [[ -f "$STATE_FILE" ]]; then
-      INDEX=$(cat "$STATE_FILE")
-    fi
-
-    # Next index
-    NEXT=$(( (INDEX + 1) % ''${#RESOLUTIONS[@]} ))
-    echo "$NEXT" > "$STATE_FILE"
-
-    RES="''${RESOLUTIONS[$NEXT]}"
-    echo "Switching to: $RES"
-    hyprctl keyword monitor "$MONITOR,$RES,0x0,1"
-  '';
-
-  # Set specific resolution
-  setResolution = pkgs.writeShellScriptBin "set-resolution" ''
-    MONITOR="${cfg.monitor}"
-    if [[ -z "$1" ]]; then
-      echo "Usage: set-resolution <resolution>"
-      echo "Examples:"
-      echo "  set-resolution 3840x2160@60"
-      echo "  set-resolution 1920x1080@60"
-      echo "  set-resolution native"
-      echo "  set-resolution remote"
-      exit 1
-    fi
-
-    case "$1" in
-      native) RES="${cfg.nativeResolution}" ;;
-      remote) RES="${cfg.remoteResolution}" ;;
-      *) RES="$1" ;;
-    esac
-
-    echo "Setting resolution: $RES"
-    hyprctl keyword monitor "$MONITOR,$RES,0x0,1"
-  '';
 
   # Render the wayvnc config at service start so the password never
   # enters the nix store (the config file contains it in plaintext).
@@ -78,7 +33,7 @@ let
     rm -f "$dir/config"
     {
       echo "address=${cfg.address}"
-      echo "port=${toString cfg.port}"
+      echo "port=${toString port}"
       echo "enable_auth=true"
       echo "username=${config.home.username}"
       echo "password=$(cat "${cfg.passwordFile}")"
@@ -95,15 +50,8 @@ in
       description = "Path to a file containing the VNC password (e.g. a sops secret). Read at service start; never enters the nix store.";
     };
 
-    port = mkOption {
-      type = types.port;
-      default = 5900;
-      description = "Port to listen on";
-    };
-
     address = mkOption {
       type = types.str;
-      default = "0.0.0.0";
       description = "Address to bind to";
     };
 
@@ -111,18 +59,6 @@ in
       type = types.str;
       default = "HDMI-A-1";
       description = "Monitor name from hyprctl monitors";
-    };
-
-    nativeResolution = mkOption {
-      type = types.str;
-      default = "3840x2160@60";
-      description = "Native monitor resolution";
-    };
-
-    remoteResolution = mkOption {
-      type = types.str;
-      default = "1920x1080@60";
-      description = "Preferred remote resolution (used by set-resolution remote)";
     };
 
     gpu = mkOption {
@@ -136,19 +72,11 @@ in
       default = false;
       description = "Enable overlay cursor rendering";
     };
-
-    maxFps = mkOption {
-      type = types.int;
-      default = 120;
-      description = "Max frame rate (120 recommended to avoid bottleneck for 60fps)";
-    };
   };
 
   config = mkIf pkgs.stdenv.hostPlatform.isLinux {
     home.packages = [
       wayvncPkg
-      cycleResolution
-      setResolution
     ];
 
     # Generate RSA key if missing (traditional format required by wayvnc/nettle)
@@ -170,12 +98,17 @@ in
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
+        # A hand-started wayvnc-headless.service (systemd-run) holds the
+        # control socket $XDG_RUNTIME_DIR/wayvncctl, so this unit would
+        # crash-loop. Skip the start while it runs. A skipped ExecCondition
+        # does not trigger Restart=always.
+        ExecCondition = "${pkgs.bash}/bin/sh -c '! ${pkgs.systemd}/bin/systemctl --user --quiet is-active wayvnc-headless.service'";
         ExecStartPre = "${renderConfig}";
         ExecStart =
           "${wayvncPkg}/bin/wayvnc"
           + optionalString cfg.gpu " --gpu"
           + optionalString cfg.renderCursor " --render-cursor"
-          + " --max-fps=${toString cfg.maxFps}";
+          + " --max-fps=${toString maxFps}";
         # wayvnc exits 0 (clean) when its captured output is removed (e.g. monitor
         # powered off), so "on-failure" never restarts it. Use "always" so it
         # self-heals once an output is available again.

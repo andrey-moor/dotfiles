@@ -9,7 +9,7 @@
 #   scripts/yubikey status [host]  show both ends
 #
 # host defaults to rocinante. It needs passwordless sudo and the VirtualHere
-# client at ~/.local/bin/vhclient<arch>.
+# client, which home/linux/vhclient.nix puts in ~/.nix-profile/bin.
 set -euo pipefail
 
 SERVICE=system/org.nixos.virtualhere-server
@@ -97,7 +97,7 @@ REMOTE_COMMON='
 set -euo pipefail
 port=$1; shift
 case $(uname -m) in
-  x86_64) client=$HOME/.local/bin/vhclientx86_64 ;;
+  x86_64) client=$HOME/.nix-profile/bin/vhclientx86_64 ;;
   aarch64) client=$HOME/.local/bin/vhclientarm64 ;;
   *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
 esac
@@ -116,7 +116,7 @@ key_hidraw() {
 REMOTE_TO='
 if [ ! -x "$client" ]; then
   echo "the VirtualHere client is missing at $client" >&2
-  echo "download it from https://www.virtualhere.com/usb_client_software and chmod +x it" >&2
+  echo "on x86_64, import home/linux/vhclient.nix and switch home-manager" >&2
   exit 1
 fi
 sudo modprobe vhci-hcd

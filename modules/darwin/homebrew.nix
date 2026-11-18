@@ -141,6 +141,9 @@ in
         # Homebrew 6 made `brew bundle --cleanup` a dry-run unless it is forced.
         # nix-darwin passes --force-cleanup itself for "zap".
       };
+      # The same reason holds for a hand-typed `brew install`. This sets
+      # HOMEBREW_NO_AUTO_UPDATE for every shell.
+      global.autoUpdate = false;
 
       # GUI applications
       inherit (cfg) casks;

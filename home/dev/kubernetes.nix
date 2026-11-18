@@ -9,15 +9,13 @@
 
 with lib;
 let
-  cfg = config.modules.dev.kubernetes;
-in
-{
-  options.modules.dev.kubernetes = {
+  cfg = {
     # helm's nixpkgs packaging breaks recurrently (e.g. 4.2.0 patches a
     # moved test file). Off by default; flip on once upstream is healthy.
-    helm = mkEnableOption "Helm package manager";
+    helm = false;
   };
-
+in
+{
   config = {
     # Explicit KUBECONFIG so sudo env_keep can pass it through
     home.sessionVariables.KUBECONFIG = "${config.home.homeDirectory}/.kube/config";

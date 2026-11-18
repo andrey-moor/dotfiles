@@ -1,7 +1,7 @@
 # modules/nixos/containers.nix -- Docker, rootless unless a host flips it
 #
 # The docker group is root-equivalent, so rootless is the default (spec D5).
-# A compose stack that needs the rootful daemon sets rootful = true.
+# A compose stack that needs the rootful daemon sets rootful = true below.
 {
   lib,
   config,
@@ -10,15 +10,13 @@
 
 with lib;
 let
-  cfg = config.modules.nixos.containers;
+  cfg = {
+    # true runs the rootful daemon and puts andreym in the docker group
+    # instead of rootless Docker.
+    rootful = false;
+  };
 in
 {
-  options.modules.nixos.containers.rootful = mkOption {
-    type = types.bool;
-    default = false;
-    description = "Run the rootful daemon and put andreym in the docker group instead of rootless Docker.";
-  };
-
   config = {
     virtualisation.docker.rootless = mkIf (!cfg.rootful) {
       enable = true;

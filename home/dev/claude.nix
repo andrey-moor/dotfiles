@@ -42,8 +42,9 @@ let
     env = {
       # Force full path: bare "bash" propagates to SHELL=bash in subprocess
       # envs, which breaks OpenSSH 10.2 Match exec clauses that resolve $SHELL
-      # via execvp (no PATH lookup). /usr/bin/bash exists on macOS + Linux.
-      CLAUDE_CODE_SHELL = "/usr/bin/bash";
+      # via execvp (no PATH lookup). /usr/bin/bash does not exist on macOS or
+      # NixOS, so point at the Nix store bash.
+      CLAUDE_CODE_SHELL = "${pkgs.bash}/bin/bash";
       # The package comes from flake.lock. Without this Claude Code installs
       # a second, self-updating copy into ~/.local/bin.
       DISABLE_AUTOUPDATER = "1";
@@ -133,8 +134,7 @@ in
       context = "@~/.agents/AGENTS.md\n";
       # Pull programs.mcp.servers in via HM's synthesized `hm` personal
       # plugin (carries an .mcp.json); tools appear as
-      # mcp__plugin_hm_<server>__*. Stale user-scope duplicates in
-      # ~/.claude.json are removed by scripts/agent-stack-cleanup.sh.
+      # mcp__plugin_hm_<server>__*.
       enableMcpIntegration = true;
     };
 
@@ -150,7 +150,7 @@ in
           args = [
             "run"
             "--"
-            "uvx"
+            "${pkgs.uv}/bin/uvx"
             "--python"
             "3.13"
             "kagimcp==1.1.0"
@@ -159,13 +159,13 @@ in
           env.KAGI_API_KEY = "op://Private/Kagi/api_key";
         };
         fetch = {
-          command = "uvx";
+          command = "${pkgs.uv}/bin/uvx";
           args = [ "mcp-server-fetch==2026.11.11" ];
         };
       }
       // optionalAttrs (cfg.obsidianVault != null) {
         obsidian = {
-          command = "npx";
+          command = "${pkgs.nodejs}/bin/npx";
           args = [
             "-y"
             "@bitbonsai/mcpvault@0.18.4"

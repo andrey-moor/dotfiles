@@ -17,16 +17,12 @@ let
   # are symlinks, which is why the script's find also matches -type l. The name
   # comes from the fetchurl argument, because baseNameOf a store path carries
   # string context and linkFarm rejects that.
-  dir =
-    if cfg.wallpaperDir != null then
-      cfg.wallpaperDir
-    else
-      pkgs.linkFarm "wallpapers-${cfg.data.name}" (
-        map (p: {
-          inherit (p) name;
-          path = p;
-        }) cfg.data.backgrounds
-      );
+  dir = pkgs.linkFarm "wallpapers-${cfg.data.name}" (
+    map (p: {
+      inherit (p) name;
+      path = p;
+    }) cfg.data.backgrounds
+  );
 
   next = pkgs.writeShellApplication {
     name = "desktop-wallpaper-next";

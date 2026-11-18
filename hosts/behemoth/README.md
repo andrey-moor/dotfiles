@@ -198,11 +198,11 @@ How it is built:
   launchd daemon. It is stopped by default and shares YubiKeys only.
 - `scripts/yubikey` starts the daemon with `sudo` (Touch ID), then drives the
   client on rocinante over ssh.
-- On rocinante the client is one binary at `~/.local/bin/vhclientx86_64`,
-  downloaded from virtualhere.com. The script starts it as a transient systemd
-  unit. Nothing is installed permanently there.
+- On rocinante the client is one binary, `vhclientx86_64`. `packages/vhclient`
+  pins it and `home/linux/vhclient.nix` installs it into `~/.nix-profile/bin`.
+  The script starts it as a transient systemd unit.
 
-Two things to know:
+Three things to know:
 
 - **Do not open the VirtualHere app by hand.** Started that way it runs as your
   user, cannot take the key from macOS, and shares every USB device. The
@@ -376,7 +376,8 @@ problem. It was never tested to the end.
 
 These are pinned in the repo, and no updater watches them. The weekly lock
 pull request covers `flake.lock` only, and Renovate covers container images
-and GitHub Actions only. Bump each by hand.
+and GitHub Actions only. Bump each by hand. The Linux hosts' list is in the
+root `README.md`.
 
 | Source | Pinned in | How to bump |
 |---|---|---|
@@ -386,7 +387,6 @@ and GitHub Actions only. Bump each by hand.
 | nu_scripts | `home/shell/nushell.nix` | Update `rev` and `sha256`, see the comment there |
 | Copilot CLI | `home/dev/copilot-pin.json` | `just bump-copilot` |
 | MCP servers (kagimcp, mcp-server-fetch, mcpvault) | `home/dev/claude.nix` | Update the version in each server's arguments |
-
 ## Things that are deliberately not reproducible
 
 - **Homebrew casks marked `auto_updates`.** Those apps update themselves

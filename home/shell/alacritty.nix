@@ -4,13 +4,11 @@
 # the Linux hosts). Whole-dir out-of-store symlink into the repo.
 
 {
-  lib,
   dotfilesDir,
   config,
   ...
 }:
 
-with lib;
 {
   config = {
     xdg.configFile."alacritty".source =

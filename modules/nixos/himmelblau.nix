@@ -37,7 +37,11 @@
 
 with lib;
 let
-  cfg = config.modules.nixos.himmelblau;
+  # sops file holding the tenant facts. Must define the keys `domain` (the
+  # Entra tenant's primary domain -- the domain half of the sign-in UPN),
+  # `tenant_id` (the tenant GUID, pinned per-domain so discovery cannot
+  # wander) and `upn` (the identity local user `andreym` authenticates as).
+  tenantSecretFile = ../../secrets/stargazer-tenant.yaml;
   hb = config.services.himmelblau;
 
   # Upstream's rendered [global] INI. We relocate it into the drop-in
@@ -64,23 +68,7 @@ let
   tenantRenderMode = "0444";
 in
 {
-  options.modules.nixos.himmelblau = {
-    enable = mkEnableOption "himmelblau Entra ID join and Intune enrollment";
-
-    tenantSecretFile = mkOption {
-      type = types.path;
-      default = ../../secrets/stargazer-tenant.yaml;
-      description = ''
-        sops file holding the tenant facts. Must define the keys `domain`
-        (the Entra tenant's primary domain -- the domain half of the sign-in
-        UPN), `tenant_id` (the tenant GUID, pinned per-domain so discovery
-        cannot wander) and `upn` (the identity local user `andreym`
-        authenticates as).
-      '';
-    };
-  };
-
-  config = mkIf cfg.enable {
+  config = {
     # Upstream only Wants= network-online.target; without After= the daemon's
     # first Entra probe at boot ran before the network was up, failed, and the
     # poisoned client/backoff state made every later login/sudo return
@@ -193,7 +181,7 @@ in
           "stargazer-tenant/upn"
         ]
         (name: {
-          sopsFile = cfg.tenantSecretFile;
+          sopsFile = tenantSecretFile;
           key = removePrefix "stargazer-tenant/" name;
         });
 
@@ -240,7 +228,6 @@ in
         enable_sfa_fallback = false;
         enable_kerberos_cache = true;
         ip_version = "ipv4-only";
-        # Upstream's default is /bin/bash, which does not exist on NixOS.
         # Intune policy/compliance fetch regularly takes > 10 s server-side; with the
 
         # default the tasks daemon times out ("operation timed out") and compliance is
@@ -248,6 +235,7 @@ in
         # never reported. Connect timeout is capped at 3 s regardless (login latency).
 
         request_timeout = 60;
+        # Upstream's default is /bin/bash, which does not exist on NixOS.
         shell = "/run/current-system/sw/bin/bash";
         user_map_file = config.sops.templates."himmelblau-user-map".path;
       };

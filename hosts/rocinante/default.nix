@@ -1,7 +1,8 @@
 # Rocinante -- x86_64 Linux workstation (Omarchy, standalone home-manager)
 #
 # Feature modules: the home/{core,dev,linux} bundles plus copilot, hunk,
-# lmstudio, python and linux/edge (x86_64 Edge), imported below.
+# lmstudio, python, linux/edge (x86_64 Edge), linux/wayvnc-resolution and
+# linux/vhclient, imported below.
 
 {
   config,
@@ -20,6 +21,8 @@
     ../../home/dev/lmstudio.nix
     ../../home/dev/python.nix
     ../../home/linux/edge.nix
+    ../../home/linux/wayvnc-resolution.nix
+    ../../home/linux/vhclient.nix
   ];
 
   # Home-manager state version
@@ -59,5 +62,6 @@
   modules.linux = {
     intune.debug = true; # Enable verbose logging for debugging
     wayvnc.passwordFile = config.sops.secrets."wayvnc-rocinante".path;
+    wayvnc.address = "0.0.0.0"; # every interface for now, the owner will narrow it
   };
 }
