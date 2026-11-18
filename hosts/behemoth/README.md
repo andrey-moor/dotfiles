@@ -202,7 +202,7 @@ How it is built:
   pins it and `home/linux/vhclient.nix` installs it into `~/.nix-profile/bin`.
   The script starts it as a transient systemd unit.
 
-Two things to know:
+Three things to know:
 
 - **Do not open the VirtualHere app by hand.** Started that way it runs as your
   user, cannot take the key from macOS, and shares every USB device. The
