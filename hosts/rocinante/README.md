@@ -15,7 +15,7 @@ x86_64 Omarchy (Arch Linux) workstation with LUKS2-encrypted NVMe + btrfs.
 # Clone dotfiles
 git clone https://github.com/andrey-moor/dotfiles ~/dotfiles
 cd ~/dotfiles
-git checkout intune-p11kit  # or main once merged
+git checkout main
 ```
 
 ### Secrets (sops-nix)
