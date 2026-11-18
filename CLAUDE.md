@@ -171,7 +171,8 @@ x86_64 Arch Linux (Omarchy) workstation, accessed via Tailscale SSH.
 **Build/switch:**
 ```bash
 cd ~/dotfiles
-nix run home-manager -- switch --flake .#rocinante -b backup
+nix build .#homeConfigurations.rocinante.activationPackage
+HOME_MANAGER_BACKUP_EXT=backup ./result/activate  # home-manager from flake.lock
 ```
 
 **Notes:**

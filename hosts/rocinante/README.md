@@ -38,9 +38,13 @@ The command prints the public key. On behemoth, put it in `.sops.yaml` as
 Until that commit is pulled here, the switch fails at sops activation.
 
 ```bash
-# Install home-manager and switch (also symlinks nvim/nushell/alacritty configs from config/)
-nix run home-manager -- switch --flake .#rocinante -b backup
+# Build and activate (also symlinks nvim/nushell/alacritty configs from config/)
+nix build .#homeConfigurations.rocinante.activationPackage
+HOME_MANAGER_BACKUP_EXT=backup ./result/activate
 ```
+
+This takes home-manager from `flake.lock`. `nix run home-manager` would take
+it from the registry instead.
 
 Keep Determinate Nix current with `sudo determinate-nixd upgrade`. Version
 3.15.2 ran out of open files at the default limit, and 3.24.2 does not.

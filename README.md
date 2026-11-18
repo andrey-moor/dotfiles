@@ -96,8 +96,11 @@ cd ~/dotfiles
 
 **3. Apply home-manager configuration:**
 ```bash
-nix run home-manager -- switch --flake .#rocinante
+nix build .#homeConfigurations.rocinante.activationPackage
+HOME_MANAGER_BACKUP_EXT=backup ./result/activate
 ```
+
+This uses the home-manager pinned in `flake.lock`, not the one in the registry.
 
 **4. Set nushell as default shell (one-time):**
 ```bash
