@@ -42,8 +42,9 @@ let
     env = {
       # Force full path: bare "bash" propagates to SHELL=bash in subprocess
       # envs, which breaks OpenSSH 10.2 Match exec clauses that resolve $SHELL
-      # via execvp (no PATH lookup). /usr/bin/bash exists on macOS + Linux.
-      CLAUDE_CODE_SHELL = "/usr/bin/bash";
+      # via execvp (no PATH lookup). /usr/bin/bash does not exist on macOS or
+      # NixOS, so point at the Nix store bash.
+      CLAUDE_CODE_SHELL = "${pkgs.bash}/bin/bash";
       # The package comes from flake.lock. Without this Claude Code installs
       # a second, self-updating copy into ~/.local/bin.
       DISABLE_AUTOUPDATER = "1";
