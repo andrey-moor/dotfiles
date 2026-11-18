@@ -30,12 +30,6 @@ in
       description = "Cursor size in pixels.";
     };
 
-    wallpaperDir = mkOption {
-      type = types.nullOr types.path;
-      default = null;
-      description = "Directory of wallpapers to cycle. Null means the theme's own backgrounds.";
-    };
-
     data = mkOption {
       type = types.attrs;
       readOnly = true;
