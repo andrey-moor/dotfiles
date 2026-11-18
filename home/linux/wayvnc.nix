@@ -2,7 +2,7 @@
 #
 # Provides VNC server for wlroots-based compositors (Hyprland).
 # Uses password auth for macOS Screen Sharing compatibility.
-# Includes resolution cycle script to find best remote resolution.
+# The resolution scripts live in wayvnc-resolution.nix (rocinante only).
 
 {
   lib,
@@ -18,55 +18,6 @@ let
   # Wrap wayvnc with nixGL for GPU support on non-NixOS systems
   # config.lib.nixGL.wrap is a no-op when nixGL isn't configured
   wayvncPkg = if cfg.gpu then config.lib.nixGL.wrap pkgs.wayvnc else pkgs.wayvnc;
-
-  # Resolution cycle script - rotates through options
-  cycleResolution = pkgs.writeShellScriptBin "cycle-resolution" ''
-    MONITOR="${cfg.monitor}"
-    STATE_FILE="$HOME/.cache/resolution-index"
-
-    # Resolution options to cycle through
-    RESOLUTIONS=(
-      "${cfg.nativeResolution}"    # Native 4K
-      "${cfg.remoteResolution}"    # Remote-friendly
-    )
-
-    # Get current index
-    INDEX=0
-    if [[ -f "$STATE_FILE" ]]; then
-      INDEX=$(cat "$STATE_FILE")
-    fi
-
-    # Next index
-    NEXT=$(( (INDEX + 1) % ''${#RESOLUTIONS[@]} ))
-    echo "$NEXT" > "$STATE_FILE"
-
-    RES="''${RESOLUTIONS[$NEXT]}"
-    echo "Switching to: $RES"
-    hyprctl keyword monitor "$MONITOR,$RES,0x0,1"
-  '';
-
-  # Set specific resolution
-  setResolution = pkgs.writeShellScriptBin "set-resolution" ''
-    MONITOR="${cfg.monitor}"
-    if [[ -z "$1" ]]; then
-      echo "Usage: set-resolution <resolution>"
-      echo "Examples:"
-      echo "  set-resolution 3840x2160@60"
-      echo "  set-resolution 1920x1080@60"
-      echo "  set-resolution native"
-      echo "  set-resolution remote"
-      exit 1
-    fi
-
-    case "$1" in
-      native) RES="${cfg.nativeResolution}" ;;
-      remote) RES="${cfg.remoteResolution}" ;;
-      *) RES="$1" ;;
-    esac
-
-    echo "Setting resolution: $RES"
-    hyprctl keyword monitor "$MONITOR,$RES,0x0,1"
-  '';
 
   # Render the wayvnc config at service start so the password never
   # enters the nix store (the config file contains it in plaintext).
@@ -113,18 +64,6 @@ in
       description = "Monitor name from hyprctl monitors";
     };
 
-    nativeResolution = mkOption {
-      type = types.str;
-      default = "3840x2160@60";
-      description = "Native monitor resolution";
-    };
-
-    remoteResolution = mkOption {
-      type = types.str;
-      default = "1920x1080@60";
-      description = "Preferred remote resolution (used by set-resolution remote)";
-    };
-
     gpu = mkOption {
       type = types.bool;
       default = true;
@@ -147,8 +86,6 @@ in
   config = mkIf pkgs.stdenv.hostPlatform.isLinux {
     home.packages = [
       wayvncPkg
-      cycleResolution
-      setResolution
     ];
 
     # Generate RSA key if missing (traditional format required by wayvnc/nettle)

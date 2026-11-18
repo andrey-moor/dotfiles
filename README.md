@@ -189,6 +189,7 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `wayvnc.nix` | WayVNC server for Wayland remote access (**options**) | linux |
 | `containers.nix` | Podman container services via systemd user units (**options**) | — (unused) |
 | `edge.nix` | Microsoft Edge (x86_64) | rocinante |
+| `wayvnc-resolution.nix` | `cycle-resolution` and `set-resolution` scripts | rocinante |
 | `rosetta.nix` | Rosetta x86_64 emulation for aarch64-linux | `intune.nix` |
 
 ### Profiles (`home/profiles/`)
