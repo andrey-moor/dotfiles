@@ -1,14 +1,15 @@
 # home/dev/jj.nix -- Jujutsu (jj) version control
 
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 
 {
   programs.jujutsu = {
     enable = true;
     settings = {
+      # The identity is set once, in home/profiles/andreym.nix.
       user = {
-        name = "Andrey Moor";
-        email = "m@andreym.com";
+        name = config.modules.shell.git.userName;
+        email = config.modules.shell.git.userEmail;
       };
       ui = {
         # Use delta for diffs if available
