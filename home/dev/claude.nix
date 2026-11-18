@@ -151,7 +151,7 @@ in
           args = [
             "run"
             "--"
-            "uvx"
+            "${pkgs.uv}/bin/uvx"
             "--python"
             "3.13"
             "kagimcp==1.1.0"
@@ -160,13 +160,13 @@ in
           env.KAGI_API_KEY = "op://Private/Kagi/api_key";
         };
         fetch = {
-          command = "uvx";
+          command = "${pkgs.uv}/bin/uvx";
           args = [ "mcp-server-fetch==2026.11.11" ];
         };
       }
       // optionalAttrs (cfg.obsidianVault != null) {
         obsidian = {
-          command = "npx";
+          command = "${pkgs.nodejs}/bin/npx";
           args = [
             "-y"
             "@bitbonsai/mcpvault@0.18.4"
