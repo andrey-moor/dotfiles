@@ -46,11 +46,6 @@
     defaultSopsFile = ../../secrets/wayvnc.yaml;
     secrets."wayvnc-stargazer".owner = "andreym";
 
-    # Secure Boot signing key. One key pair for every stargazer instance, so
-    # the db certificate is known before a VM exists and the VM definition can
-    # carry it. The private half is age-encrypted here. The public half and
-    # sbctl's owner GUID are plain files in ./secureboot, placed by tmpfiles
-    # below. Only the db key exists: the firmware keeps VMware's PK and KEK.
     # Defender onboarding file for the tenant (mdatp_onboard.json, the payload
     # of the Intune-pushed onboarding script). Read only by root at boot.
     secrets."defender-onboarding" = {
@@ -58,6 +53,11 @@
       key = "mdatp_onboard";
     };
 
+    # Secure Boot signing key. One key pair for every stargazer instance, so
+    # the db certificate is known before a VM exists and the VM definition can
+    # carry it. The private half is age-encrypted here. The public half and
+    # sbctl's owner GUID are plain files in ./secureboot, placed by tmpfiles
+    # below. Only the db key exists: the firmware keeps VMware's PK and KEK.
     secrets."sbctl-db-key" = {
       sopsFile = ../../secrets/stargazer-sbctl.yaml;
       key = "db.key";
