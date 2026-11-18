@@ -218,5 +218,15 @@
       devShells = forAllSystems (system: {
         default = import ./shell.nix { pkgs = mkPkgs system; };
       });
+
+      # The theme test throws while it is evaluated, so CI's
+      # `nix flake check --no-build` runs it without building anything.
+      checks = forAllSystems (system: {
+        theme =
+          let
+            pkgs = mkPkgs system;
+          in
+          pkgs.writeText "theme-test" (import ./tests/theme.nix { inherit pkgs; });
+      });
     };
 }
