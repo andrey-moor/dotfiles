@@ -20,16 +20,22 @@ git checkout intune-p11kit  # or main once merged
 
 ### Secrets (sops-nix)
 
-Before switching, copy the sops age key from the admin machine (behemoth:
-`~/Library/Application Support/sops/age/keys.txt`) to
-`~/.config/sops/age/keys.txt` (mode 600) on this host — otherwise the switch
-will fail at sops activation.
+This host has its own age key. It decrypts `secrets/wayvnc.yaml` and nothing
+else. Never copy the admin key from behemoth here: that key opens every secret
+in the repo.
+
+The key is `~/.config/sops/age/keys.txt` (mode 600). On a rebuilt host,
+generate a new one before the first switch:
 
 ```bash
 mkdir -p ~/.config/sops/age
-scp behemoth:'~/Library/Application Support/sops/age/keys.txt' ~/.config/sops/age/keys.txt
+nix shell nixpkgs#age -c age-keygen -o ~/.config/sops/age/keys.txt
 chmod 600 ~/.config/sops/age/keys.txt
 ```
+
+The command prints the public key. On behemoth, put it in `.sops.yaml` as
+`&rocinante`, run `sops updatekeys secrets/wayvnc.yaml`, and commit both files.
+Until that commit is pulled here, the switch fails at sops activation.
 
 ```bash
 # Install home-manager and switch (also symlinks nvim/nushell/alacritty configs from config/)
