@@ -202,6 +202,11 @@ patch, open-vm-tools, the copy/paste agent and its clipboard bridge, fast resize
 and the ALSA rule that stops audio breaking up.
 Another hypervisor means a new guest module that imports `vm-guest.nix`.
 
+**Pinned Hyprland:** the patched Hyprland, its portal and Mesa come from the
+`nixpkgs-hyprland` input, pinned by revision in `flake.nix`. The weekly lock update
+does not move it. A hand bump that changes the Hyprland version fails evaluation until
+the patch is ported. Bump steps are in `hosts/stargazer/README.md` §9.
+
 **Desktop layer (P9b, implemented 2026-10-09):** `modules/nixos/desktop-hyprland.nix`
 owns the compositor, greeter and session. Every other role is a plain
 home-manager module under `home/linux/desktop/`, as Desktop Roles above

@@ -1,4 +1,5 @@
-# Pure checks for lib/theme.nix. Run with `just test-theme`.
+# Pure checks for lib/theme.nix. Run with `just test-theme`. `nix flake check`
+# runs them too, as checks.<system>.theme.
 { pkgs }:
 let
   theme = import ../lib/theme.nix { inherit pkgs; };

@@ -789,6 +789,35 @@ script policies to `/etc/cron.d` and NixOS has no cron. Later himmelblau
 releases run them as systemd timers. The script would then try `apt` and flag
 the device, so check its handling before raising the himmelblau pin.
 
+**Hyprland's own nixpkgs.** Hyprland, its portal and Mesa come from the
+`nixpkgs-hyprland` input, not from `nixpkgs`. `flake.nix` pins it by revision,
+so the weekly lock update never moves it. That keeps a nixpkgs bump from breaking
+the vmwgfx patch in `modules/nixos/vmware-guest.nix`. Everything else on
+stargazer still follows `nixpkgs`. Mesa is pinned with Hyprland because the
+compositor loads the system Mesa driver, and a driver built against a newer
+glibc would not load into it. The cost is that every app on stargazer uses the
+pinned Mesa, so bump the pin every month or two. To bump it, on behemoth:
+
+```bash
+behemoth$ jq -r '.nodes[.nodes.root.inputs.nixpkgs].locked.rev' flake.lock   # the revision nixpkgs is at now
+# put that revision in nixpkgs-hyprland.url in flake.nix, then:
+behemoth$ nix flake lock
+behemoth$ nix build .#nixosConfigurations.stargazer.config.system.build.toplevel --no-link
+```
+
+If the build stops with "the vmwgfx DMA-BUF patch targets Hyprland 0.57.2",
+the new revision carries another Hyprland. Check Hyprland discussion #12966 for
+an upstream fix first. Otherwise port the patch, rename it to the new version,
+and update the version in the check. Try it on the VM with `nixos-rebuild test`
+(the command is in `CLAUDE.md`), restart greetd with no session running, and
+check that ghostty opens and `glxinfo -B` names the SVGA3D renderer.
+
+A stale pin costs Hyprland and Mesa fixes first. The mix of old Mesa and newer
+apps can also go wrong, and that shows on the VM, not in CI. A GPU app then
+fails to start, or `glxinfo -B` names llvmpipe instead of SVGA3D. The app's
+output or the journal names the library that failed to load. Bumping the pin
+fixes it.
+
 **Updates.** `system.autoUpgrade` (see `modules/nixos/base.nix`) runs
 `nixos-rebuild switch --flake github:andrey-moor/dotfiles#stargazer` daily, with
 `persistent = true` so a missed run fires on the next boot or resume. That is

@@ -5,6 +5,11 @@
     # Core dependencies
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-main.url = "github:nixos/nixpkgs/master";
+    # stargazer's patched Hyprland, its portal and Mesa come from this set
+    # (modules/nixos/vmware-guest.nix). The revision in the URL keeps
+    # `nix flake update` from moving it, so the weekly lock bump cannot break
+    # the vmwgfx patch. Bump it by hand with the patch: hosts/stargazer/README.md.
+    nixpkgs-hyprland.url = "github:nixos/nixpkgs/d5cc6833999746cffdfe0598f7bc801a57b887a9";
 
     # Essential modules
     home-manager = {
@@ -15,7 +20,7 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Kept for P7 (NixOS on rocinante's second NVMe).
+    # stargazer's disk layout (hosts/stargazer/disko.nix).
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -26,8 +31,8 @@
       url = "github:himmelblau-idm/himmelblau/4.0.4";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Only reached through modules/nixos/secureboot.nix, which is off by
-    # default, so a first install never needs it.
+    # Only reached through modules/nixos/secureboot.nix. Its option is off by
+    # default, and stargazer turns it on in hosts/stargazer/default.nix.
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v1.1.0";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -212,6 +217,16 @@
 
       devShells = forAllSystems (system: {
         default = import ./shell.nix { pkgs = mkPkgs system; };
+      });
+
+      # The theme test throws while it is evaluated, so CI's
+      # `nix flake check --no-build` runs it without building anything.
+      checks = forAllSystems (system: {
+        theme =
+          let
+            pkgs = mkPkgs system;
+          in
+          pkgs.writeText "theme-test" (import ./tests/theme.nix { inherit pkgs; });
       });
     };
 }
