@@ -2,9 +2,8 @@
 #
 # Only rocinante imports it. Stargazer is NixOS now and imports
 # linux/{firefox,wayvnc}.nix directly, because the Arch-era intune.nix
-# (portal/broker stack, x86_64 .debs under Rosetta) must not follow it there.
-# Host-specific: edge.nix (rocinante, x86_64). rosetta.nix is pulled in by
-# intune.nix.
+# (portal/broker stack, x86_64 .debs) must not follow it there.
+# Host-specific: edge.nix (rocinante, x86_64).
 
 {
   imports = [

@@ -211,7 +211,6 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `edge.nix` | Microsoft Edge (x86_64) | rocinante |
 | `wayvnc-resolution.nix` | `cycle-resolution` and `set-resolution` scripts | rocinante |
 | `vhclient.nix` | VirtualHere USB client for `scripts/yubikey` | rocinante |
-| `rosetta.nix` | Rosetta x86_64 emulation for aarch64-linux | `intune.nix` |
 
 ### Profiles (`home/profiles/`)
 | Module | Description | Imported by |

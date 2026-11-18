@@ -56,7 +56,7 @@ first. The repo is the source of truth for skills: edit them there.
 ## Intune Enrollment
 
 The `intune` module provides full Nix library chain to avoid ABI issues with Arch system libs.
-It auto-detects x86_64-linux and uses native packages (no Rosetta emulation needed).
+It runs Microsoft's x86_64 packages natively.
 
 ### 1. Install AUR Packages
 

@@ -1,9 +1,9 @@
 # home/linux/intune.nix -- Microsoft Intune Portal + Identity Brokers (Unified)
 #
-# Supports both native x86_64 and aarch64/Rosetta modes via auto-detection.
+# Runs the x86_64 packages natively on x86_64-linux and is inert elsewhere.
 # Components: intune-portal, user broker (SSO), device broker (system), gnome-keyring
 #
-# MODES: native-x86_64 | rosetta | (future) native-arm64
+# MODES: native-x86_64 | (future) native-arm64
 # CAVEATS: OpenSSL 3.3.2 required (fixes Code:1200), fake Ubuntu os-release needed
 # DEBUG: modules.linux.intune.debug = true; intune-logs; intune-status
 # See: https://github.com/recolic/microsoft-intune-archlinux
@@ -22,49 +22,23 @@ let
   # ============================================================================
   # ARCHITECTURE DETECTION
   # Detect operating mode once at top, everything downstream uses the mode.
-  # NOTE: For aarch64-linux we ASSUME Rosetta mode since native arm64 Intune
-  # packages don't exist yet. The Rosetta binary check is done at runtime by
-  # the prerequisites script, not here (builtins.pathExists runs at Nix eval
-  # time on the build machine, not the target).
+  # Microsoft ships x86_64 packages only, so other platforms get nothing.
   # ============================================================================
 
-  mode =
-    if pkgs.stdenv.hostPlatform.isx86_64 then
-      "native-x86_64"
-    else if pkgs.stdenv.hostPlatform.isAarch64 then
-      "rosetta"
-    else
-      null; # Future: native-arm64 when Microsoft ships arm64 packages
-
-  isRosetta = mode == "rosetta";
-
-  # Package source varies by mode (only import pkgsX86 when needed)
-  pkgsX86 =
-    if isRosetta then
-      import pkgs.path {
-        system = "x86_64-linux";
-        config.allowUnfree = true;
-      }
-    else
-      null;
-
-  pkgSource = if isRosetta then pkgsX86 else pkgs;
-
-  # Wrapper suffix for architecture-aware binary names
-  wrapperSuffix = if isRosetta then "-rosetta" else "";
+  mode = if pkgs.stdenv.hostPlatform.isx86_64 then "native-x86_64" else null; # Future: native-arm64 when Microsoft ships arm64 packages
 
   # ============================================================================
   # PACKAGE SOURCES
   # ============================================================================
 
   # Microsoft Identity Broker package (x86_64 binaries from Microsoft .deb)
-  brokerPkg = pkgSource.callPackage ../../packages/microsoft-identity-broker { };
+  brokerPkg = pkgs.callPackage ../../packages/microsoft-identity-broker { };
 
   # Microsoft Intune Portal package (x86_64 binaries from Microsoft .deb)
-  intunePkg = pkgSource.callPackage ../../packages/intune-portal { };
+  intunePkg = pkgs.callPackage ../../packages/intune-portal { };
 
   # Custom curl without HTTP/3 to avoid ngtcp2's OPENSSL_3.5.0 requirement
-  curlNoHttp3 = pkgSource.curl.override { http3Support = false; };
+  curlNoHttp3 = pkgs.curl.override { http3Support = false; };
 
   # ============================================================================
   # ARCH LINUX PACKAGES - WORKAROUND SECTION
@@ -124,7 +98,7 @@ let
   # OpenSSL 3.3.2 MUST be first - fixes Code:1200 error
   opensslArchPath = "${opensslArch}/lib";
 
-  glibcLibs = [ "${pkgSource.stdenv.cc.cc.lib}/lib" ];
+  glibcLibs = [ "${pkgs.stdenv.cc.cc.lib}/lib" ];
 
   # The .deb binaries are run through nixpkgs' own dynamic loader, with
   # nixpkgs' glibc on the library path. LD_LIBRARY_PATH alone leaves the loader
@@ -133,96 +107,96 @@ let
   # agent died with "/usr/lib/libm.so.6: version GLIBC_2.44 not found" on
   # every timer run. With the loader from the same nixpkgs nothing on the host
   # is involved, which is what this module always claimed.
-  nixLoader = "${pkgSource.glibc}/lib/ld-linux-x86-64.so.2";
-  viaLoader = bin: ''${nixLoader} --library-path "$LD_LIBRARY_PATH:${pkgSource.glibc}/lib" ${bin}'';
+  nixLoader = "${pkgs.glibc}/lib/ld-linux-x86-64.so.2";
+  viaLoader = bin: ''${nixLoader} --library-path "$LD_LIBRARY_PATH:${pkgs.glibc}/lib" ${bin}'';
 
   systemLibs = map (p: "${p}/lib") [
-    pkgSource.dbus.lib
-    pkgSource.glib.out
-    pkgSource.systemdLibs
-    pkgSource.util-linux.lib
-    pkgSource.zlib.out
-    pkgSource.zstd.out
-    pkgSource.icu.out
-    pkgSource.expat.out
-    pkgSource.pcre2.out
+    pkgs.dbus.lib
+    pkgs.glib.out
+    pkgs.systemdLibs
+    pkgs.util-linux.lib
+    pkgs.zlib.out
+    pkgs.zstd.out
+    pkgs.icu.out
+    pkgs.expat.out
+    pkgs.pcre2.out
   ];
 
   x11Libs = map (p: "${p}/lib") [
-    pkgSource.libx11.out
-    pkgSource.libxext.out
-    pkgSource.libxrender.out
-    pkgSource.libxi.out
-    pkgSource.libxcursor.out
-    pkgSource.libxrandr.out
-    pkgSource.libxfixes.out
-    pkgSource.libxcomposite.out
-    pkgSource.libxdamage.out
-    pkgSource.libxcb.out
-    pkgSource.libxkbcommon.out
+    pkgs.libx11.out
+    pkgs.libxext.out
+    pkgs.libxrender.out
+    pkgs.libxi.out
+    pkgs.libxcursor.out
+    pkgs.libxrandr.out
+    pkgs.libxfixes.out
+    pkgs.libxcomposite.out
+    pkgs.libxdamage.out
+    pkgs.libxcb.out
+    pkgs.libxkbcommon.out
   ];
 
   gtkLibs = map (p: "${p}/lib") [
-    pkgSource.gtk3.out
-    pkgSource.gdk-pixbuf.out
-    pkgSource.cairo.out
-    pkgSource.pango.out
-    pkgSource.harfbuzz.out
-    pkgSource.fontconfig.lib
-    pkgSource.freetype.out
-    pkgSource.atk.out
-    pkgSource.at-spi2-atk.out
-    pkgSource.at-spi2-core.out
+    pkgs.gtk3.out
+    pkgs.gdk-pixbuf.out
+    pkgs.cairo.out
+    pkgs.pango.out
+    pkgs.harfbuzz.out
+    pkgs.fontconfig.lib
+    pkgs.freetype.out
+    pkgs.atk.out
+    pkgs.at-spi2-atk.out
+    pkgs.at-spi2-core.out
   ];
 
   webkitLibs = map (p: "${p}/lib") [
-    pkgSource.webkitgtk_4_1.out
-    pkgSource.libsoup_3.out
-    pkgSource.sqlite.out
-    pkgSource.libpsl.out
-    pkgSource.libidn.out
-    pkgSource.gst_all_1.gstreamer.out
-    pkgSource.gst_all_1.gst-plugins-base.out
-    pkgSource.libxml2.out
-    pkgSource.libxslt.out
-    pkgSource.enchant.out
-    pkgSource.libnotify.out
+    pkgs.webkitgtk_4_1.out
+    pkgs.libsoup_3.out
+    pkgs.sqlite.out
+    pkgs.libpsl.out
+    pkgs.libidn.out
+    pkgs.gst_all_1.gstreamer.out
+    pkgs.gst_all_1.gst-plugins-base.out
+    pkgs.libxml2.out
+    pkgs.libxslt.out
+    pkgs.enchant.out
+    pkgs.libnotify.out
   ];
 
   tlsLibs = map (p: "${p}/lib") [
-    pkgSource.gnutls.out
-    pkgSource.nettle
-    pkgSource.libtasn1
-    pkgSource.libidn2
+    pkgs.gnutls.out
+    pkgs.nettle
+    pkgs.libtasn1
+    pkgs.libidn2
   ];
 
   pkcs11Libs = [
     "${openscArch}/lib"
-    "${pkgSource.libp11}/lib"
-    "${pkgSource.pcsclite.lib}/lib"
-    "${pkgSource.p11-kit.out}/lib"
-    "${pkgSource.libfido2}/lib"
+    "${pkgs.libp11}/lib"
+    "${pkgs.pcsclite.lib}/lib"
+    "${pkgs.p11-kit.out}/lib"
+    "${pkgs.libfido2}/lib"
   ];
 
   mediaLibs = map (p: "${p}/lib") [
-    pkgSource.libpng.out
-    pkgSource.libjpeg.out
-    pkgSource.libwebp.out
-    pkgSource.lcms2.out
+    pkgs.libpng.out
+    pkgs.libjpeg.out
+    pkgs.libwebp.out
+    pkgs.lcms2.out
   ];
 
   networkLibs = [
     "${curlNoHttp3.out}/lib"
-    "${pkgSource.libssh2.out}/lib"
-    "${pkgSource.nghttp2.lib}/lib"
-    "${pkgSource.brotli.lib}/lib"
+    "${pkgs.libssh2.out}/lib"
+    "${pkgs.nghttp2.lib}/lib"
+    "${pkgs.brotli.lib}/lib"
   ];
 
   renderingLibs = [
-    "${pkgSource.libglvnd}/lib"
-    "${pkgSource.mesa}/lib"
-    "${pkgSource.wayland}/lib"
-    "${pkgSource.libsecret.out}/lib"
+    "${pkgs.libglvnd}/lib"
+    "${pkgs.mesa}/lib"
+    "${pkgs.wayland}/lib"
+    "${pkgs.libsecret.out}/lib"
   ];
 
   # Compose final library path (used once, referenced by all wrappers)
@@ -244,16 +218,16 @@ let
   # ENVIRONMENT VARIABLE HELPERS
   # ============================================================================
 
-  # Mesa software rendering (required for Rosetta, harmless on native)
+  # Mesa software rendering (first needed under Rosetta, kept on native)
   mesaEnvVars = ''
     export LIBGL_ALWAYS_SOFTWARE=1
     export GALLIUM_DRIVER=llvmpipe
     export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
-    export __EGL_VENDOR_LIBRARY_DIRS="${pkgSource.mesa}/share/glvnd/egl_vendor.d"
-    export LIBGL_DRIVERS_PATH="${pkgSource.mesa}/lib/dri"
+    export __EGL_VENDOR_LIBRARY_DIRS="${pkgs.mesa}/share/glvnd/egl_vendor.d"
+    export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
   '';
 
-  # WebKitGTK under Rosetta (X11 mode, no DMA-BUF)
+  # WebKitGTK in X11 mode, no DMA-BUF (first needed under Rosetta, kept on native)
   webkitEnvVars = ''
     export WEBKIT_DISABLE_DMABUF_RENDERER=1
     export GDK_BACKEND=x11
@@ -261,7 +235,7 @@ let
 
   # TLS/SSL certificates and GIO modules
   tlsEnvVars = ''
-    export GIO_MODULE_DIR="${pkgSource.glib-networking}/lib/gio/modules"
+    export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules"
     export SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
     export SSL_CERT_DIR="/etc/ssl/certs"
   '';
@@ -271,7 +245,7 @@ let
     export HOME="''${HOME:-/home/$(whoami)}"
     export XDG_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
     export PCSCLITE_CSOCK_NAME="/run/pcscd/pcscd.comm"
-    export P11_KIT_MODULE_PATH="${openscArch}/lib/pkcs11:${pkgSource.p11-kit.out}/lib/pkcs11"
+    export P11_KIT_MODULE_PATH="${openscArch}/lib/pkcs11:${pkgs.p11-kit.out}/lib/pkcs11"
   '';
 
   # Debug output (when cfg.debug is true)
@@ -305,7 +279,7 @@ let
   # WRAPPERS
   # ============================================================================
 
-  intuneWrapper = pkgs.writeShellScriptBin "intune-portal${wrapperSuffix}" ''
+  intuneWrapper = pkgs.writeShellScriptBin "intune-portal" ''
     #!/usr/bin/env bash
     # intune-portal wrapper: Runs intune-portal with Nix library paths
     export LD_LIBRARY_PATH="${fullLibraryPath}:''${LD_LIBRARY_PATH:-}"
@@ -314,13 +288,13 @@ let
     ${tlsEnvVars}
     ${pkcs11EnvVars}
     export OPENSSL_CONF="${opensslConf}"
-    export OPENSSL_ENGINES="${pkgSource.libp11}/lib/engines-3"
+    export OPENSSL_ENGINES="${pkgs.libp11}/lib/engines-3"
     ${debugEnvVars}
     ${optionalString cfg.debug ''exec ${viaLoader "${intunePkg}/bin/intune-portal"} "$@" 2>&1 | tee -a /tmp/intune-portal.log''}
     ${optionalString (!cfg.debug) ''exec ${viaLoader "${intunePkg}/bin/intune-portal"} "$@"''}
   '';
 
-  intuneAgentWrapper = pkgs.writeShellScriptBin "intune-agent${wrapperSuffix}" ''
+  intuneAgentWrapper = pkgs.writeShellScriptBin "intune-agent" ''
     #!/usr/bin/env bash
     # intune-agent wrapper: Compliance reporting daemon
     export LD_LIBRARY_PATH="${fullLibraryPath}:''${LD_LIBRARY_PATH:-}"
@@ -332,7 +306,7 @@ let
     exec ${viaLoader "${intunePkg}/bin/intune-agent"} "$@"
   '';
 
-  userBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-broker${wrapperSuffix}" ''
+  userBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-broker" ''
     #!/usr/bin/env bash
     # microsoft-identity-broker wrapper: User SSO authentication
     export LD_LIBRARY_PATH="${fullLibraryPath}:''${LD_LIBRARY_PATH:-}"
@@ -343,20 +317,20 @@ let
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
     export GNOME_KEYRING_CONTROL="''${GNOME_KEYRING_CONTROL:-$XDG_RUNTIME_DIR/keyring}"
     export OPENSSL_CONF="${opensslConf}"
-    export OPENSSL_ENGINES="${pkgSource.libp11}/lib/engines-3"
+    export OPENSSL_ENGINES="${pkgs.libp11}/lib/engines-3"
     ${debugEnvVars}
     ${optionalString cfg.debug ''echo "[DEBUG] Launching user broker (${brokerPkg.version})..." >&2''}
     exec ${viaLoader "${brokerPkg}/bin/microsoft-identity-broker"} "$@"
   '';
 
-  deviceBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-device-broker${wrapperSuffix}" ''
+  deviceBrokerWrapper = pkgs.writeShellScriptBin "microsoft-identity-device-broker" ''
     #!/usr/bin/env bash
     # microsoft-identity-device-broker wrapper: Device attestation (system service)
     # NOTE: To use this wrapper for the system service:
     #   sudo systemctl edit microsoft-identity-device-broker.service
     #   [Service]
     #   ExecStart=
-    #   ExecStart=<nix-store-path>/bin/microsoft-identity-device-broker${wrapperSuffix}
+    #   ExecStart=<nix-store-path>/bin/microsoft-identity-device-broker
     export LD_LIBRARY_PATH="${fullLibraryPath}:''${LD_LIBRARY_PATH:-}"
     ${debugEnvVars}
     exec ${viaLoader "${brokerPkg}/bin/microsoft-identity-device-broker"} "$@"
@@ -369,7 +343,7 @@ let
     text = ''
       [D-BUS Service]
       Name=com.microsoft.identity.broker1
-      Exec=${userBrokerWrapper}/bin/microsoft-identity-broker${wrapperSuffix}
+      Exec=${userBrokerWrapper}/bin/microsoft-identity-broker
     '';
   };
 
@@ -539,7 +513,7 @@ let
     if [[ $CRITICAL_FAILURES -eq 0 ]]; then
       echo -e "$PASS All critical components healthy"
       echo ""
-      echo "Ready to launch: intune-portal${wrapperSuffix}"
+      echo "Ready to launch: intune-portal"
       exit 0
     else
       echo -e "$FAIL $CRITICAL_FAILURES critical failure(s)"
@@ -553,29 +527,19 @@ let
     #!/usr/bin/env bash
     # Wrapper to run intune-prerequisites.sh from dotfiles
     DOTFILES="''${DOTFILES:-$HOME/.dotfiles}"
-    # Check common mount paths for Parallels shared folders
-    if [[ ! -d "$DOTFILES" ]] && [[ -d "/mnt/psf/dotfiles" ]]; then
-      DOTFILES="/mnt/psf/dotfiles"
-    elif [[ ! -d "$DOTFILES" ]] && [[ -d "/mnt/psf/Home/Documents/dotfiles" ]]; then
-      DOTFILES="/mnt/psf/Home/Documents/dotfiles"
-    fi
     SCRIPT="$DOTFILES/scripts/intune-prerequisites.sh"
     if [[ -f "$SCRIPT" ]]; then
       exec "$SCRIPT" "$@"
     else
       echo "Error: intune-prerequisites.sh not found at $SCRIPT"
       echo "Set DOTFILES env var to your dotfiles location"
-      echo "Checked: ~/.dotfiles, /mnt/psf/dotfiles, /mnt/psf/Home/Documents/dotfiles"
+      echo "Checked: ~/.dotfiles"
       exit 1
     fi
   '';
 
 in
 {
-  # Rosetta mode needs the x86_64 binfmt/linker plumbing; rosetta.nix is inert
-  # on non-aarch64 hosts, where Intune runs natively.
-  imports = [ ./rosetta.nix ];
-
   options.modules.linux.intune = {
     debug = mkOption {
       type = types.bool;
@@ -585,7 +549,7 @@ in
   };
 
   config = mkIf (pkgs.stdenv.hostPlatform.isLinux && mode != null) {
-    home.packages = with pkgSource; [
+    home.packages = with pkgs; [
       # Tools: keyring, YubiKey, helpers, wrappers
       pkgs.gnome-keyring
       pkgs.seahorse
@@ -602,7 +566,7 @@ in
       userBrokerWrapper
       deviceBrokerWrapper
       userBrokerDbusService
-      # Libraries (pkgSource resolves based on mode)
+      # Libraries
       libglvnd
       wayland
       mesa
@@ -697,7 +661,7 @@ in
       };
       Service = {
         Type = "oneshot";
-        ExecStart = "${intuneAgentWrapper}/bin/intune-agent${wrapperSuffix}";
+        ExecStart = "${intuneAgentWrapper}/bin/intune-agent";
         # No StateDirectory: it exports STATE_DIRECTORY=~/.local/state/intune and the
         # agent then looks for its registration/account there instead of the
         # ~/.config/intune + ~/.local/share/Microsoft/OneAuth paths intune-portal
@@ -738,9 +702,6 @@ in
       else
         warnEcho "Intune: User broker D-Bus service not found"
       fi
-      ${optionalString isRosetta ''
-        noteEcho "Intune: Rosetta mode - verify binfmt with: cat /proc/sys/fs/binfmt_misc/rosetta"
-      ''}
       if ! systemctl is-active microsoft-identity-device-broker >/dev/null 2>&1; then
         noteEcho "Intune: Device broker not running - run: intune-prerequisites"
       fi
