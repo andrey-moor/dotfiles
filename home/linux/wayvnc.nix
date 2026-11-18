@@ -106,6 +106,11 @@ in
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
+        # A hand-started wayvnc-headless.service (systemd-run) holds the
+        # control socket $XDG_RUNTIME_DIR/wayvncctl, so this unit would
+        # crash-loop. Skip the start while it runs. A skipped ExecCondition
+        # does not trigger Restart=always.
+        ExecCondition = "${pkgs.bash}/bin/sh -c '! ${pkgs.systemd}/bin/systemctl --user --quiet is-active wayvnc-headless.service'";
         ExecStartPre = "${renderConfig}";
         ExecStart =
           "${wayvncPkg}/bin/wayvnc"
