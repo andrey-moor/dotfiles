@@ -220,4 +220,4 @@ from behemoth.
 
 - Uses Determinate Nix installer (`nix.enable = false` in darwin config)
 - A new `.nix` file under `home/` does nothing until something imports it — add it to a bundle or a host
-- Cross-module coupling is explicit: `home/linux/{intune,edge-rosetta}.nix` import `home/linux/rosetta.nix` directly
+- Cross-module coupling is explicit: `home/linux/intune.nix` imports `home/linux/rosetta.nix` directly
