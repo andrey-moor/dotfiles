@@ -78,7 +78,7 @@ From then on, `just switch` applies changes. Only the owner runs it.
 | App | Why manual | Where |
 |---|---|---|
 | VMware Fusion | No Homebrew cask. The download needs a Broadcom account. | support.broadcom.com. `hosts/stargazer/README.md` covers the VM. |
-| Xcode | Two versions are kept side by side as `Xcode-26.1.app` and `Xcode-26.3.app`. | App Store (id 497799835) or developer.apple.com |
+| Xcode | Installed as `Xcode-26.3.app`. | App Store (id 497799835) or developer.apple.com |
 | Google AI Edge Foresight | No Homebrew cask, not in the App Store. On trial as a meeting note-taker. It updates itself. | developers.google.com/edge/foresight. Copy `Foresight.app` to `/Applications`. |
 
 ### Mac App Store
@@ -130,7 +130,7 @@ These hold tokens that no file in this repo can supply.
 | Google Cloud, Azure | `gcloud auth login`, `az login` |
 
 App accounts and licences (Raycast, Obsidian, Craft, Fantastical, Granola,
-Things, Parallels, CrossOver, Little Snitch, Mullvad, ChatGPT) are signed in
+Things, Parallels, Little Snitch, Mullvad, ChatGPT) are signed in
 inside each app.
 
 ## Permissions

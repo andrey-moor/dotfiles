@@ -62,6 +62,6 @@
   modules.linux = {
     intune.debug = true; # Enable verbose logging for debugging
     wayvnc.passwordFile = config.sops.secrets."wayvnc-rocinante".path;
-    wayvnc.address = "0.0.0.0"; # every interface for now, the owner will narrow it
+    wayvnc.address = "127.0.0.1"; # reached through an ssh tunnel, see the README
   };
 }

@@ -114,6 +114,8 @@ log "Checking device broker systemd service..."
 
 SERVICE_DEST="/etc/systemd/system/microsoft-identity-device-broker.service"
 OVERRIDE_DIR="/etc/systemd/system/microsoft-identity-device-broker.service.d"
+# The file name dates from the Rosetta VM. It stays, because a rename would
+# leave the old drop-in in place on an installed host.
 OVERRIDE_CONF="$OVERRIDE_DIR/rosetta.conf"
 
 OVERRIDE_EXEC=$(grep '^ExecStart=/' "$OVERRIDE_CONF" 2>/dev/null | head -1 | cut -d= -f2)
@@ -135,9 +137,7 @@ else
             sudo mkdir -p "$OVERRIDE_DIR"
 
             # Use stable symlink path (not readlink -f) so it survives home-manager switch
-            if [[ -L "$HOME/.nix-profile/bin/microsoft-identity-device-broker-rosetta" ]]; then
-                WRAPPER="$HOME/.nix-profile/bin/microsoft-identity-device-broker-rosetta"
-            elif [[ -L "$HOME/.nix-profile/bin/microsoft-identity-device-broker" ]]; then
+            if [[ -L "$HOME/.nix-profile/bin/microsoft-identity-device-broker" ]]; then
                 WRAPPER="$HOME/.nix-profile/bin/microsoft-identity-device-broker"
             else
                 WRAPPER=""
@@ -146,7 +146,7 @@ else
             if [[ -z "$WRAPPER" ]]; then
                 fail "Device broker wrapper not found in Nix profile"
             else
-                # Create override with Rosetta wrapper and MSAL environment
+                # Create override with the Nix wrapper and MSAL environment
                 cat << EOF | sudo tee "$OVERRIDE_CONF" > /dev/null
 [Service]
 ExecStart=
@@ -255,7 +255,7 @@ else
         sudo mkdir -p "$PKCS11_DIR"
         sudo chmod 755 /etc/pkcs11 "$PKCS11_DIR"
 
-        # Nix OpenSC (x86_64 for Rosetta apps)
+        # Nix OpenSC (for the Nix-wrapped Microsoft apps)
         if [[ -n "$OPENSC_NIX" ]]; then
             cat << EOF | sudo tee "$OPENSC_X86_MODULE" > /dev/null
 module: $OPENSC_NIX/lib/pkcs11/opensc-pkcs11.so
@@ -570,7 +570,7 @@ else
     echo ""
     echo "Next steps:"
     echo "  1. Enable intune-agent timer: systemctl --user enable --now intune-agent.timer"
-    echo "  2. Launch portal: intune-portal-rosetta"
+    echo "  2. Launch portal: intune-portal"
     echo "  3. Check status: intune-status"
     exit 0
 fi

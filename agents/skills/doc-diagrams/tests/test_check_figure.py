@@ -144,7 +144,8 @@ class Template(unittest.TestCase):
 
     def test_leftover_shipped_color_fails_the_check(self):
         figure = self.copy_template()
-        figure.write_text(figure.read_text(encoding="utf-8").replace("</svg>", '<rect x="0" y="0" width="4" height="4" fill="#eb6c36"/></svg>'), encoding="utf-8")
+        accent = palette.shipped_roles()["accent"]
+        figure.write_text(figure.read_text(encoding="utf-8").replace("</svg>", f'<rect x="0" y="0" width="4" height="4" fill="{accent}"/></svg>'), encoding="utf-8")
         result = self.run_script("check-figure.py", str(figure))
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("shipped colors still present", result.stdout)

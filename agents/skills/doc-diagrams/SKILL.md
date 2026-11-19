@@ -52,7 +52,7 @@ Draw only when a reader learns more from the picture than from a sentence or a t
 
 Draw a figure that readers step through in diagram-design's `step` motion mode. Examples are the learn skill's worked example, a policy trace, and a comparison. Copy `assets/template-motion.html` from the plugin and keep its controller script verbatim, because the plugin linter rejects modified controllers. Tag each semantic group `data-motion-item data-step="N"` in narrative order, with at most eight steps and twelve items. Rename the template's slug-prefixed IDs to the file's slug. The static frame stays complete, so the same file still renders to PNG, and `check-figure.py` runs the motion check.
 
-In a learn page the figure keeps the plugin's 720px minimum width. On a narrow screen it scrolls sideways inside its own box, so labels stay readable. Its buttons and the lesson's step text move together in both directions. Under reduced motion the figure stays complete and the text still steps.
+In a learn page the figure keeps the plugin's minimum width, which equals the viewBox width. The template's own `.diagram-container` box scrolls sideways on a narrow screen, so labels stay readable. Its buttons and the lesson's step text move together in both directions. Under reduced motion the figure stays complete and the text still steps.
 
 ## Requirements
 

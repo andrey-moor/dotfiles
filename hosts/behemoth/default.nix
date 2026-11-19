@@ -71,17 +71,13 @@ in
       "ia-presenter"
       "libreoffice" # word-docs skill previews
       "obsidian"
-      # Communication
-      "zoom"
       # AI/ML
       "chatgpt" # includes the Codex desktop app since 2026-07
       "claude"
       "lm-studio"
       # System
       "betterdisplay"
-      "crossover"
       "karabiner-elements"
-      "monitorcontrol"
       "parallels"
       "little-snitch"
       "mullvad-vpn" # its daemon breaks the Linux builder's DNS, see README.md

@@ -53,6 +53,21 @@ Keep Determinate Nix current with `sudo determinate-nixd upgrade`. Version
 folder of the same name blocks the switch, so remove any hand-installed copy
 first. The repo is the source of truth for skills: edit them there.
 
+## Remote Desktop (VNC)
+
+WayVNC listens on `127.0.0.1:5900` only. From behemoth, open an ssh tunnel
+and point TigerVNC at the local end:
+
+```bash
+ssh -N -L 5901:127.0.0.1:5900 rocinante   # leave running
+open -a TigerVNC --args localhost:5901    # in a second terminal
+```
+
+The user is `andreym` and the password is the sops secret `wayvnc-rocinante`.
+The address is set in `hosts/rocinante/default.nix`. WayVNC reads it from
+`~/.config/wayvnc/config`, which `wayvnc.service` writes each time it starts.
+A hand-started server (`wayvnc --output=VNC`) reads the same file.
+
 ## Intune Enrollment
 
 The `intune` module provides full Nix library chain to avoid ABI issues with Arch system libs.
@@ -61,8 +76,14 @@ It runs Microsoft's x86_64 packages natively.
 ### 1. Install AUR Packages
 
 ```bash
-yay -S microsoft-identity-broker-bin intune-portal-bin microsoft-edge-stable-bin
+yay -S microsoft-identity-broker-bin intune-portal-bin
 ```
+
+Every program that runs comes from Nix: the portal, both brokers, the agent
+and Edge. The two AUR packages stay for the system files that home-manager
+cannot place on Arch. Those are the D-Bus activation file for the device
+broker, the Intune PAM module and the Intune polkit action. Edge needs no AUR
+package, because `home/linux/edge.nix` installs it.
 
 ### 2. Run Prerequisites
 

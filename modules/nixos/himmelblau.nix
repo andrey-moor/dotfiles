@@ -69,11 +69,6 @@ let
 in
 {
   config = {
-    # Upstream only Wants= network-online.target; without After= the daemon's
-    # first Entra probe at boot ran before the network was up, failed, and the
-    # poisoned client/backoff state made every later login/sudo return
-    # PAM_ABORT ("Provider online failed … TimedOut") until a restart. Seen
-    # 2026-09-02 on stargazer.
     # Keep the daemon's Entra client warm. libhimmelblau does not retry a
     # request that fails on a stale pooled connection; the first login/probe
     # after an idle period then returns "Network down" (PAM_ABORT) and the
@@ -102,6 +97,11 @@ in
     };
 
     systemd.services.himmelblaud = {
+      # Upstream only Wants= network-online.target; without After= the daemon's
+      # first Entra probe at boot ran before the network was up, failed, and the
+      # poisoned client/backoff state made every later login/sudo return
+      # PAM_ABORT ("Provider online failed … TimedOut") until a restart. Seen
+      # 2026-09-02 on stargazer.
       after = [
         "network-online.target"
         "tailscaled.service"
