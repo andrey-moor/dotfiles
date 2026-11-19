@@ -76,8 +76,14 @@ It runs Microsoft's x86_64 packages natively.
 ### 1. Install AUR Packages
 
 ```bash
-yay -S microsoft-identity-broker-bin intune-portal-bin microsoft-edge-stable-bin
+yay -S microsoft-identity-broker-bin intune-portal-bin
 ```
+
+Every program that runs comes from Nix: the portal, both brokers, the agent
+and Edge. The two AUR packages stay for the system files that home-manager
+cannot place on Arch. Those are the D-Bus activation file for the device
+broker, the Intune PAM module and the Intune polkit action. Edge needs no AUR
+package, because `home/linux/edge.nix` installs it.
 
 ### 2. Run Prerequisites
 
