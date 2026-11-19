@@ -66,6 +66,11 @@ $env.PATH = ($env.PATH | split row (char esep)
 # which is already on PATH above.
 $env.NPM_CONFIG_PREFIX = $"($env.HOME)/.npm-global"
 
+# Homebrew's taps are pinned by the flake (modules/darwin/homebrew.nix). A
+# hand-typed brew command must not update them. nix-darwin sets this for zsh
+# and bash only, and nushell does not read their environment.
+$env.HOMEBREW_NO_AUTO_UPDATE = "1"
+
 # GPG/SSH agent setup
 # `tty` exits non-zero with no controlling terminal (e.g. non-interactive nu);
 # capture via `complete` so a missing tty cannot abort env.nu.
