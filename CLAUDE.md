@@ -88,7 +88,7 @@ These 10 modules keep options, under their existing `modules.*` names. Hosts set
 | `modules.darwin.homebrew` | `casks`, `brews`, `masApps` |
 | `modules.linux.intune` | `debug` |
 | `modules.linux.wayvnc` | `passwordFile`, `address` (no default, every host states it), `monitor`, `gpu`, `renderCursor` |
-| `modules.nixos.desktop` | `monitor`, `terminal`, `launcher`, `greeting`, `extraExecOnce` (the compositor, greeter and session) |
+| `modules.nixos.desktop` | `monitor`, `terminal`, `greeting`, `extraExecOnce` (the compositor, greeter and session) |
 | `modules.nixos.desktop.theme` | `name`, `cursorSize` (the host's palette, handed to every home-manager user) |
 | `modules.nixos.defender` | `onboardingFile` (runtime path of the tenant's `mdatp_onboard.json`, a sops secret; unset means installed but not onboarded) |
 | `modules.nixos.vmGuest` | `connector`, `followResize`, `resizePollInterval`, `resizeStablePolls`, `resizeHysteresis` |

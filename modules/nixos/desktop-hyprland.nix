@@ -44,6 +44,11 @@ let
   # Lua string literal. Handles the quoting/escaping the Nix values do not.
   luaStr = builtins.toJSON;
 
+  # Command the launcher keybind runs. It reaches the Lua through the generated
+  # theme table, so bindings.lua names no program. vicinae comes from
+  # home/linux/desktop/launcher.nix, which also keeps fuzzel as the fallback.
+  launcher = "vicinae toggle";
+
   # `monitor` stays the hyprlang 4-field `output,mode,position,scale` line: it
   # is the shape vm-guest.nix's resize follower re-emits, so one option feeds
   # both.
@@ -98,7 +103,7 @@ let
         mode = ${luaStr themeData.mode},
         cursor_size = ${toString cfg.theme.cursorSize},
         terminal = ${luaStr cfg.terminal},
-        launcher = ${luaStr cfg.launcher},
+        launcher = ${luaStr launcher},
         colors = ${luaTable themeData.colors},
     }
 
@@ -152,12 +157,6 @@ in
       type = types.str;
       default = "alacritty";
       description = "Terminal the Hyprland keybind launches, reaching bindings.lua through the generated theme table. The default stays alacritty, and a host sets another terminal only once that terminal is proven on its graphics stack.";
-    };
-
-    launcher = mkOption {
-      type = types.str;
-      default = "vicinae toggle";
-      description = "Command the launcher keybind runs. Reaches the Lua through the generated theme table, so bindings.lua names no program. vicinae comes from home/linux/desktop/launcher.nix, which also keeps fuzzel installed as the fallback.";
     };
 
     extraExecOnce = mkOption {
