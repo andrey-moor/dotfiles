@@ -320,10 +320,27 @@ breaking changes. After the merge: `just switch`, then one real request,
   All settings come from `config.json`. CI checks that this stays so.
 - With Tailscale off at login, the gateway serves this Mac only. Run
   `just gateway-up` once Tailscale is connected.
-- Codex warns "Model metadata not found" for gateway models and assumes a
-  default context size. Bifrost cannot yet hand Codex its model list in
-  Codex's format. Bifrost pull request 10096 adds that. Once it ships, one
-  gateway profile with a working `/model` picker can replace the five.
+- Bifrost cannot hand Codex its model list in Codex's format, so Codex warns
+  "Model metadata not found" for a gateway model. The `local` and `openrouter`
+  profiles avoid that with a catalog file that `home/dev/codex-gateway.nix`
+  builds from the model data Codex ships. `/model` in those two profiles lists
+  only the models in that file. Add a model there to see it.
+- The `claude`, `claude-work` and `openai-api` profiles have no catalog entry
+  and still warn. They are untested: those keys are empty.
+- Bifrost pull request 10096 would serve a catalog from the gateway. Its build
+  of 2026-11-19 replaces Codex's system prompt with one sentence and gives no
+  context size for local models. Do not use it as it is.
+- Claude Code against a local model must use the provider `lmstudio-chat`, as
+  in `lmstudio-chat/qwen/qwen3.8-27b`. Through `lmstudio`, every tool call
+  arrives empty and no file is written: LM Studio streams tool arguments in a
+  form Bifrost drops on that route. Codex keeps using `lmstudio`.
+- Both local providers wait 900 seconds for the next piece of a stream. The
+  default of 60 cut requests while the model read a long prompt.
+
+The gateway choice was tested on 2026-11-19 against LiteLLM and Portkey.
+LiteLLM serves Codex a correct catalog, but it needs Postgres for a scoped
+key, uses about 650 MiB idle and had four actively exploited vulnerabilities
+in 2026. Portkey's open-source gateway checks no key at all.
 
 ## Apps upgraded while running
 
