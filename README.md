@@ -173,7 +173,7 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `gpg.nix` | GPG agent with Yubikey support | core |
 | `lazygit.nix` | Git TUI | core |
 | `nushell.nix` | Nu shell (config from `config/nushell`) | core |
-| `onepassword.nix` | 1Password SSH agent + commit signing (**options**) | core |
+| `onepassword.nix` | 1Password SSH agent + commit signing | core |
 | `openvpn.nix` | OpenVPN client | core |
 | `ssh.nix` | SSH client config (GitHub, FIDO2 keys) | core |
 | `starship.nix` | Prompt with Nerd Font symbols | core |
@@ -187,16 +187,18 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `claude.nix` | Claude Code CLI + agent-stack wiring (**options**) | dev |
 | `codex.nix` | OpenAI Codex CLI | dev |
 | `go.nix` | Go toolchain + gopls, delve | dev |
-| `jj.nix` | Jujutsu VCS (**options**) | dev |
+| `jj.nix` | Jujutsu VCS | dev |
 | `kubernetes.nix` | kubectl, k9s, kubectx, kind, stern, kubelogin | dev |
 | `neovim.nix` | Neovim + LSP deps (config from `config/nvim`) | dev |
 | `nix.nix` | Nix development tools | dev |
 | `opencode.nix` | OpenCode AI coding agent | dev |
+| `poppler.nix` | poppler-utils (`pdftoppm`) for the word-docs skill's page previews | dev |
 | `rust.nix` | Rust toolchain via rustup + cargo tools | dev |
 | `terraform.nix` | Terraform infrastructure tools | dev |
 | `vscode.nix` | VS Code with extensions | dev |
 | `codex-gateway.nix` | Codex profiles for the LLM gateway (`codex --profile local`, ...) | behemoth |
 | `copilot.nix` | GitHub Copilot CLI | behemoth, rocinante |
+| `herdr.nix` | herdr, a terminal workspace manager for AI coding agents | behemoth |
 | `hunk.nix` | Review-first terminal diff viewer | behemoth, rocinante |
 | `lmstudio.nix` | LM Studio desktop app for local LLMs | rocinante |
 | `python.nix` | Python development tools | rocinante, stargazer |
@@ -207,10 +209,12 @@ Importing a module enables it — there is no `enable` flag on ordinary modules.
 | `firefox.nix` | Firefox with privacy extensions (NUR) | linux |
 | `intune.nix` | Microsoft Intune Portal + identity brokers (**options**) | linux |
 | `wayvnc.nix` | WayVNC server for Wayland remote access (**options**) | linux |
-| `containers.nix` | Podman container services via systemd user units (**options**) | — (unused) |
 | `edge.nix` | Microsoft Edge (x86_64) | rocinante |
 | `wayvnc-resolution.nix` | `cycle-resolution` and `set-resolution` scripts | rocinante |
 | `vhclient.nix` | VirtualHere USB client for `scripts/yubikey` | rocinante |
+| `firefox-entra-sso.nix` | Entra ID device sign-in for the home-manager Firefox | stargazer |
+| `desktop.nix` | Bundle of the desktop role modules in `home/linux/desktop/` | stargazer |
+| `theme.nix` | Home-manager side of the desktop theme (**options**) | stargazer |
 
 ### Profiles (`home/profiles/`)
 | Module | Description | Imported by |
