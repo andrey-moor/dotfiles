@@ -22,10 +22,62 @@
 # with its own [model_providers.*] table works, and the key command below is
 # run instead of reading an environment variable.
 
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   envFile = "${config.home.homeDirectory}/.config/behemoth-containers/gateway.env";
+
+  # Codex knows its own models only. For any other name it warns "Model
+  # metadata not found" and guesses the context size. This file tells it about
+  # the gateway models: each entry is a copy of one model Codex ships, under
+  # the gateway's name. Bifrost cannot serve such a list itself. A profile
+  # that sets `model_catalog_json` sees only these models in `/model`.
+  catalogBase = "gpt-5.5";
+  catalogModels = [
+    {
+      slug = "lmstudio/qwen/qwen3.8-27b";
+      display_name = "Qwen3.8 27B (local)";
+      context_window = 65536;
+    }
+    {
+      slug = "openrouter/moonshotai/kimi-k3.1-pro";
+      display_name = "Kimi K3.1 Pro (OpenRouter)";
+      context_window = 1048576;
+    }
+  ];
+  # `support_verbosity` must be off: LM Studio rejects the field it adds.
+  catalog =
+    pkgs.runCommand "codex-gateway-catalog.json"
+      {
+        nativeBuildInputs = [
+          config.programs.codex.package
+          pkgs.jq
+        ];
+        models = builtins.toJSON catalogModels;
+      }
+      ''
+        export HOME="$TMPDIR" CODEX_HOME="$TMPDIR/codex"
+        mkdir -p "$CODEX_HOME"
+        codex debug models --bundled > bundled.json
+        jq --argjson models "$models" --arg base ${catalogBase} '
+          (.models | map(select(.slug == $base)) | first) as $b
+          | if $b == null then error("Codex no longer ships " + $base) else . end
+          | { models: ($models | map($b + . + {
+              description: "through the gateway",
+              default_reasoning_level: null,
+              supported_reasoning_levels: [],
+              support_verbosity: false,
+              default_verbosity: null,
+              upgrade: null,
+              priority: 0
+            })) }
+        ' bundled.json > "$out"
+      '';
 
   # Shared by every profile. Top-level keys must come before the first table.
   provider = ''
@@ -68,15 +120,20 @@ let
     + provider;
 
   profiles = {
-    # Qwen3.8-27B loaded by LM Studio. Codex compacts at this window. LM Studio
-    # must load the model with at least as much context.
+    # Qwen3.8-27B loaded by LM Studio. Codex compacts at the window in the
+    # catalog. LM Studio must load the model with at least as much context.
     local = profile {
       model = "lmstudio/qwen/qwen3.8-27b";
       extra = ''
-        model_context_window = 65536
+        model_catalog_json = "${catalog}"
       '';
     };
-    openrouter = profile { model = "openrouter/moonshotai/kimi-k3.1-pro"; };
+    openrouter = profile {
+      model = "openrouter/moonshotai/kimi-k3.1-pro";
+      extra = ''
+        model_catalog_json = "${catalog}"
+      '';
+    };
     claude = profile { model = "anthropic-personal/claude-opus-5-5"; };
     claude-work = profile { model = "anthropic-work/claude-opus-5-5"; };
     openai-api = profile { model = "openai/gpt-6.1-sol"; };

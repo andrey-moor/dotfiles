@@ -25,7 +25,8 @@
       ],
       "network_config": {
         "base_url": "http://host.docker.internal:1234",
-        "default_request_timeout_in_seconds": 900
+        "default_request_timeout_in_seconds": 900,
+        "stream_idle_timeout_in_seconds": 900
       },
       "custom_provider_config": {
         "base_provider_type": "openai",
@@ -37,6 +38,40 @@
           "chat_completion_stream": true,
           "responses": true,
           "responses_stream": true,
+          "embedding": true,
+          "speech": false,
+          "speech_stream": false,
+          "transcription": false,
+          "transcription_stream": false
+        }
+      }
+    },
+    "lmstudio-chat": {
+      "keys": [
+        {
+          "name": "local",
+          "value": "lm-studio",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "network_config": {
+        "base_url": "http://host.docker.internal:1234",
+        "default_request_timeout_in_seconds": 900,
+        "stream_idle_timeout_in_seconds": 900
+      },
+      "custom_provider_config": {
+        "base_provider_type": "openai",
+        "allowed_requests": {
+          "list_models": true,
+          "text_completion": false,
+          "text_completion_stream": false,
+          "chat_completion": true,
+          "chat_completion_stream": true,
+          "responses": false,
+          "responses_stream": false,
           "embedding": true,
           "speech": false,
           "speech_stream": false,
@@ -143,6 +178,16 @@
         "provider_configs": [
           {
             "provider": "lmstudio",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          },
+          {
+            "provider": "lmstudio-chat",
             "allowed_models": [
               "*"
             ],
