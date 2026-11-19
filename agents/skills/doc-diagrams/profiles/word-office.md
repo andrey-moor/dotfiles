@@ -3,7 +3,7 @@ name: Word Office
 slug: word-office
 source-url: none
 created: 2026-09-14
-updated: 2026-09-14
+updated: 2026-10-28
 notes: Office 2023 theme colors on white paper, for diagrams embedded in Word documents
 -->
 # Style Guide
@@ -20,22 +20,23 @@ To generate your own from a website URL, see [`onboarding.md`](onboarding.md).
 
 ### Semantic roles
 
-Every token is referred to by **semantic role**, not by its hex value. Type references (`type-*.md`) and SKILL.md say `accent`, not `#f7591f`.
+Every token is referred to by **semantic role**, not by its hex value. Type references (`type-*.md`) and SKILL.md say `accent`, not `#bf4520`.
 
 | Role | Purpose | Default (light) | Default (dark) |
 |---|---|---|---|
 | `paper` | Page background, default node fill | `#ffffff` (page-white) | `#2d3142` (jet-black) |
 | `paper-2` | Diagram container bg, secondary fill | `#f2f2f2` | `#393e53` |
 | `ink` | Primary text, primary stroke | `#0e2841` (office-navy) | `#f5f5f5` (white-smoke) |
+| `ink-strong` | High-contrast text on warm accent fills | `#111111` | `#111111` |
 | `muted` | Secondary text, default arrow stroke | `#44546a` (office-slate) | `#bfc0c0` (silver) |
-| `soft` | Sublabels, boundary labels | `#7f8a9c` | `#8e98ac` |
+| `soft` | Sublabels, boundary labels | `#697588` | `#949eb2` |
 | `rule` | Hairline borders | `rgba(14,40,65,0.12)` | `rgba(245,245,245,0.12)` |
 | `rule-solid` | Stronger borders, baselines | `#bfc0c0` (silver) | `rgba(191,192,192,0.25)` |
 | `accent` | Focal / 1–2 max per diagram | `#e97132` (office-orange) | `#f08a59` |
 | `accent-tint` | Fill for accent-bordered boxes | `rgba(233,113,50,0.08)` | `rgba(240,138,89,0.10)` |
-| `link` | HTTP/API calls, external arrows | `#156082` (office-blue) | `#6a95d8` |
+| `link` | HTTP/API calls, external arrows | `#156082` (office-blue) | `#739fdf` |
 
-> **Palette source:** the Office 2023 theme that Word documents use by default: `text2 #0e2841` (ink), `accent2 #e97132` (accent), `accent1 #156082` (link). `muted`, `soft`, and `rule` are derived from the ink. When a snippet in the plugin's SKILL.md or a type reference hardcodes the shipped defaults (arrow markers `#4f5d75`, `#eb6c36`, `#2e5aa8`; paper `#f5f5f5`), substitute the values from this table.
+> **Palette source:** the Office 2023 theme that Word documents use by default: `text2 #0e2841` (ink), `accent2 #e97132` (accent), `accent1 #156082` (link). `muted`, `soft`, and `rule` are derived from the ink. When a snippet in the plugin's SKILL.md or a type reference hardcodes the shipped defaults (arrow markers `#4f5d75`, `#bf4520`, `#2e5aa8`; paper `#f5f5f5`), substitute the values from this table.
 
 > **Note:** The pre-baked example HTML files in `assets/` were built under an earlier skin. Regenerating them against the current `style-guide.md` is a v5.1 task. New diagrams the skill produces will use the tokens above.
 
@@ -91,8 +92,14 @@ A self-contained palette for the terminal-window primitive (see [primitive-termi
 ### Font stack
 
 ```html
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
 ```
+
+### Font source
+
+The font source decides whether a diagram makes any network request. It is a skin setting, so a saved profile carries it too.
+
+Font source: `web`
 
 ### Korean labels
 
